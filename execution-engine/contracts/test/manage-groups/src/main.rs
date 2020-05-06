@@ -24,18 +24,17 @@ use types::{
 
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
 const METADATA_ACCESS_KEY: &str = "metadata_access_key";
-const CREATE_GROUPS: &str = "create_groups";
+const CREATE_GROUP: &str = "create_group";
 const REMOVE_GROUP: &str = "remove_group";
 const EXTEND_GROUP_UREFS: &str = "extend_group_urefs";
 const REMOVE_GROUP_UREFS: &str = "remove_group_urefs";
 const GROUP_NAME_ARG: &str = "group_name";
 const UREFS_ARG: &str = "urefs";
 const TOTAL_NEW_UREFS_ARG: &str = "total_new_urefs";
-const TOTAL_GROUPS_ARG: &str = "total_groups";
 const TOTAL_EXISTING_UREFS_ARG: &str = "total_existing_urefs";
 
 #[no_mangle]
-pub extern "C" fn create_groups() {
+pub extern "C" fn create_group() {
     let metadata_hash_key = runtime::get_key(METADATA_HASH_KEY)
         .unwrap_or_revert()
         .try_into()
@@ -44,7 +43,7 @@ pub extern "C" fn create_groups() {
         .unwrap_or_revert()
         .try_into()
         .unwrap();
-    let total_groups: u64 = runtime::get_named_arg(TOTAL_GROUPS_ARG)
+    let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let total_urefs: u64 = runtime::get_named_arg(TOTAL_NEW_UREFS_ARG)
@@ -55,16 +54,14 @@ pub extern "C" fn create_groups() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let existing_urefs: Vec<URef> = (0..total_existing_urefs).map(storage::new_uref).collect();
 
-    for i in 1..=total_groups {
-        let _new_urefs = storage::create_contract_user_group(
-            metadata_hash_key,
-            metadata_access_key,
-            &format!("Group {}", i),
-            total_urefs as u8,
-            BTreeSet::from_iter(existing_urefs.clone()),
-        )
-        .unwrap_or_revert();
-    }
+    let _new_urefs = storage::create_contract_user_group(
+        metadata_hash_key,
+        metadata_access_key,
+        &group_name,
+        total_urefs as u8,
+        BTreeSet::from_iter(existing_urefs),
+    )
+    .unwrap_or_revert();
 }
 
 #[no_mangle]
@@ -144,7 +141,7 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
     let mut entrypoints = BTreeMap::new();
     let restricted_session = EntryPoint::new(
         vec![
-            Parameter::new(TOTAL_GROUPS_ARG, CLType::U64),
+            Parameter::new(GROUP_NAME_ARG, CLType::String),
             Parameter::new(TOTAL_EXISTING_UREFS_ARG, CLType::U64),
             Parameter::new(TOTAL_NEW_UREFS_ARG, CLType::U64),
         ],
@@ -152,7 +149,7 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(CREATE_GROUPS.to_string(), restricted_session);
+    entrypoints.insert(CREATE_GROUP.to_string(), restricted_session);
 
     let remove_group = EntryPoint::new(
         vec![Parameter::new(GROUP_NAME_ARG, CLType::String)],

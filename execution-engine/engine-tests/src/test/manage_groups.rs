@@ -17,7 +17,7 @@ use types::{
 const CONTRACT_GROUPS: &str = "manage_groups.wasm";
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
 const METADATA_ACCESS_KEY: &str = "metadata_access_key";
-const CREATE_GROUPS: &str = "create_groups";
+const CREATE_GROUP: &str = "create_group";
 const REMOVE_GROUP: &str = "remove_group";
 const EXTEND_GROUP_UREFS: &str = "extend_group_urefs";
 const REMOVE_GROUP_UREFS: &str = "remove_group_urefs";
@@ -26,12 +26,11 @@ const UREFS_ARG: &str = "urefs";
 const NEW_UREFS_COUNT: u64 = 3;
 const GROUP_1_NAME: &str = "Group 1";
 const TOTAL_NEW_UREFS_ARG: &str = "total_new_urefs";
-const TOTAL_GROUPS_ARG: &str = "total_groups";
 const TOTAL_EXISTING_UREFS_ARG: &str = "total_existing_urefs";
 
 lazy_static! {
-    static ref DEFAULT_CREATE_GROUPS_ARGS: RuntimeArgs = runtime_args! {
-        TOTAL_GROUPS_ARG => 1u64,
+    static ref DEFAULT_CREATE_GROUP_ARGS: RuntimeArgs = runtime_args! {
+        GROUP_NAME_ARG => GROUP_1_NAME,
         TOTAL_NEW_UREFS_ARG => 1u64,
         TOTAL_EXISTING_UREFS_ARG => 1u64,
     };
@@ -76,8 +75,8 @@ fn should_create_and_remove_group() {
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
                 SemVer::V1_0_0,
-                CREATE_GROUPS,
-                DEFAULT_CREATE_GROUPS_ARGS.clone(),
+                CREATE_GROUP,
+                DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
@@ -178,8 +177,8 @@ fn should_create_and_extend_user_group() {
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
                 SemVer::V1_0_0,
-                CREATE_GROUPS,
-                DEFAULT_CREATE_GROUPS_ARGS.clone(),
+                CREATE_GROUP,
+                DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
@@ -285,8 +284,8 @@ fn should_create_and_remove_urefs_from_group() {
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
                 SemVer::V1_0_0,
-                CREATE_GROUPS,
-                DEFAULT_CREATE_GROUPS_ARGS.clone(),
+                CREATE_GROUP,
+                DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
@@ -391,8 +390,8 @@ fn should_limit_max_urefs_while_extending() {
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
                 SemVer::V1_0_0,
-                CREATE_GROUPS,
-                DEFAULT_CREATE_GROUPS_ARGS.clone(),
+                CREATE_GROUP,
+                DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
