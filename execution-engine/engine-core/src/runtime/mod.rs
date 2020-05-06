@@ -3261,11 +3261,11 @@ where
             return Ok(Err(contract_header::Error::GroupDoesNotExist.into()));
         }
 
-        // TODO: Validate group does not have access to a method in some active version of the
-        // contract
-
-        // Remove group
-        groups.remove(&group_to_remove);
+        // Remove group ensuring that it is not referenced by at least one entrypoint in active
+        // versions.
+        if !metadata.remove_group(&group_to_remove) {
+            return Ok(Err(contract_header::Error::GroupInUse.into()));
+        }
 
         // Write updated metadata to the global state
         self.context
