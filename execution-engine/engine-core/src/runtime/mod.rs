@@ -3275,6 +3275,7 @@ where
         Ok(Ok(()))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn extend_contract_user_group_urefs(
         &mut self,
         meta_key_ptr: u32,
