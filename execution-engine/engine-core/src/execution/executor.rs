@@ -20,7 +20,7 @@ use crate::{
     engine_state::{
         execution_result::ExecutionResult, system_contract_cache::SystemContractCache, EngineConfig,
     },
-    execution::{address_generator::AddressGenerator, Error, FN_STORE_ID_INITIAL},
+    execution::{address_generator::AddressGenerator, Error},
     runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
     runtime_context::{self, RuntimeContext},
     tracking_copy::TrackingCopy,
@@ -118,6 +118,7 @@ impl Executor {
             };
 
         let address_generator = AddressGenerator::new(&deploy_hash, phase);
+        let fn_store_id = AddressGenerator::new(&deploy_hash, phase);
         let gas_counter: Gas = Gas::default();
 
         // Snapshot of effects before execution, so in case of error
@@ -136,7 +137,7 @@ impl Executor {
             deploy_hash,
             gas_limit,
             gas_counter,
-            FN_STORE_ID_INITIAL,
+            Rc::new(RefCell::new(fn_store_id)),
             Rc::new(RefCell::new(address_generator)),
             protocol_version,
             correlation_id,
@@ -247,6 +248,11 @@ impl Executor {
                 extract_access_rights_from_keys(keys)
             };
 
+        let fn_store_id = {
+            let address_generator = AddressGenerator::new(&deploy_hash, phase);
+            Rc::new(RefCell::new(address_generator))
+        };
+
         let address_generator = {
             let address_generator = AddressGenerator::new(&deploy_hash, phase);
             Rc::new(RefCell::new(address_generator))
@@ -269,7 +275,7 @@ impl Executor {
             deploy_hash,
             gas_limit,
             gas_counter,
-            FN_STORE_ID_INITIAL,
+            fn_store_id,
             address_generator,
             protocol_version,
             correlation_id,
@@ -374,6 +380,7 @@ impl Executor {
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
         entry_point_type: EntryPointType,
+        fn_store_id: Rc<RefCell<AddressGenerator>>,
     ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
         R: StateReader<Key, StoredValue>,
@@ -402,7 +409,7 @@ impl Executor {
             deploy_hash,
             gas_limit,
             gas_counter,
-            FN_STORE_ID_INITIAL,
+            fn_store_id,
             address_generator,
             protocol_version,
             correlation_id,
@@ -443,6 +450,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
+        fn_store_id: Rc<RefCell<AddressGenerator>>,
     ) -> Result<T, Error>
     where
         R: StateReader<Key, StoredValue>,
@@ -467,6 +475,7 @@ impl Executor {
             protocol_data,
             system_contract_cache,
             EntryPointType::Session,
+            fn_store_id,
         )?;
 
         let error: wasmi::Error = match instance.invoke_export(entry_point_name, &[], &mut runtime)

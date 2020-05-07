@@ -21,9 +21,8 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
-    bytesrepr::{self, ToBytes},
-    AccessRights, BlockTime, CLType, CLValue, EntryPointType, Key, Phase, ProtocolVersion,
-    RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
+    bytesrepr, AccessRights, BlockTime, CLType, CLValue, EntryPointType, Key, Phase,
+    ProtocolVersion, RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::{
@@ -68,7 +67,7 @@ pub struct RuntimeContext<'a, R> {
     deploy_hash: [u8; 32],
     gas_limit: Gas,
     gas_counter: Gas,
-    fn_store_id: u32,
+    fn_store_id: Rc<RefCell<AddressGenerator>>,
     address_generator: Rc<RefCell<AddressGenerator>>,
     protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
@@ -95,7 +94,7 @@ where
         deploy_hash: [u8; 32],
         gas_limit: Gas,
         gas_counter: Gas,
-        fn_store_id: u32,
+        fn_store_id: Rc<RefCell<AddressGenerator>>,
         address_generator: Rc<RefCell<AddressGenerator>>,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
@@ -139,10 +138,6 @@ where
 
     pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
         &mut self.named_keys
-    }
-
-    pub fn fn_store_id(&self) -> u32 {
-        self.fn_store_id
     }
 
     pub fn named_keys_contains_key(&self, name: &str) -> bool {
@@ -238,6 +233,10 @@ where
         Rc::clone(&self.address_generator)
     }
 
+    pub fn fn_store_id(&self) -> Rc<RefCell<AddressGenerator>> {
+        Rc::clone(&self.fn_store_id)
+    }
+
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
         Rc::clone(&self.state)
     }
@@ -252,10 +251,6 @@ where
 
     pub fn set_gas_counter(&mut self, new_gas_counter: Gas) {
         self.gas_counter = new_gas_counter;
-    }
-
-    pub fn inc_fn_store_id(&mut self) {
-        self.fn_store_id += 1;
     }
 
     pub fn base_key(&self) -> Key {
@@ -285,11 +280,7 @@ where
     /// account's public key and deploy's nonce, then all function addresses
     /// generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
-        let mut pre_hash_bytes = Vec::with_capacity(36); //32 bytes for deploy hash + 4 bytes ID
-        pre_hash_bytes.extend_from_slice(&self.deploy_hash);
-        pre_hash_bytes.append(&mut self.fn_store_id().into_bytes()?);
-
-        self.inc_fn_store_id();
+        let pre_hash_bytes = self.fn_store_id.borrow_mut().create_address();
 
         let mut hasher = VarBlake2b::new(32).unwrap();
         hasher.input(&pre_hash_bytes);

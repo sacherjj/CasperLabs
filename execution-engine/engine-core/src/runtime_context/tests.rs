@@ -112,6 +112,7 @@ fn mock_runtime_context<'a>(
     named_keys: &'a mut BTreeMap<String, Key>,
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     address_generator: AddressGenerator,
+    fn_store_id: AddressGenerator,
 ) -> RuntimeContext<'a, InMemoryGlobalStateView> {
     let tc = mock_tc(base_key, account.clone());
     RuntimeContext::new(
@@ -126,7 +127,7 @@ fn mock_runtime_context<'a>(
         [1u8; 32],
         Gas::default(),
         Gas::default(),
-        0,
+        Rc::new(RefCell::new(fn_store_id)),
         Rc::new(RefCell::new(address_generator)),
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
@@ -165,12 +166,14 @@ where
     let (key, account) = mock_account(base_acc);
     let mut uref_map = BTreeMap::new();
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
+    let fn_store_id = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
         &account,
         key,
         &mut uref_map,
         access_rights,
         address_generator,
+        fn_store_id,
     );
     query(runtime_context)
 }
@@ -431,6 +434,7 @@ fn contract_key_addable_valid() {
     let base_acc = PublicKey::ed25519_from(base_acc_addr);
     let (account_key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(&DEPLOY_HASH, PHASE);
+    let fn_store_id = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let contract = StoredValue::Contract(Contract::new(
@@ -458,7 +462,7 @@ fn contract_key_addable_valid() {
         DEPLOY_HASH,
         Gas::default(),
         Gas::default(),
-        0,
+        Rc::new(RefCell::new(fn_store_id)),
         Rc::new(RefCell::new(address_generator)),
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
@@ -494,6 +498,7 @@ fn contract_key_addable_invalid() {
     let base_acc = PublicKey::ed25519_from(base_acc_addr);
     let (account_key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(&DEPLOY_HASH, PHASE);
+    let fn_store_id = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let other_contract_key = random_contract_key(&mut rng);
@@ -521,7 +526,7 @@ fn contract_key_addable_invalid() {
         DEPLOY_HASH,
         Gas::default(),
         Gas::default(),
-        0,
+        Rc::new(RefCell::new(fn_store_id)),
         Rc::new(RefCell::new(address_generator)),
         ProtocolVersion::V1_0_0,
         CorrelationId::new(),
@@ -906,11 +911,18 @@ fn remove_uref_works() {
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
+    let fn_store_id = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_name = "Foo".to_owned();
     let uref_key = create_uref(&mut address_generator, AccessRights::READ);
     let mut uref_map = iter::once((uref_name.clone(), uref_key)).collect();
-    let mut runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, named_keys, address_generator);
+    let mut runtime_context = mock_runtime_context(
+        &account,
+        key,
+        &mut uref_map,
+        named_keys,
+        address_generator,
+        fn_store_id,
+    );
 
     assert!(runtime_context.named_keys_contains_key(&uref_name));
     assert!(runtime_context.remove_key(&uref_name).is_ok());
@@ -935,9 +947,16 @@ fn validate_valid_purse_of_an_account() {
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account_with_purse(base_acc, mock_purse);
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
+    let fn_store_id = AddressGenerator::new(&deploy_hash, Phase::Session);
     let mut uref_map = BTreeMap::new();
-    let runtime_context =
-        mock_runtime_context(&account, key, &mut uref_map, named_keys, address_generator);
+    let runtime_context = mock_runtime_context(
+        &account,
+        key,
+        &mut uref_map,
+        named_keys,
+        address_generator,
+        fn_store_id,
+    );
 
     // URef that has the same id as purse of an account gets validated
     // successfully.

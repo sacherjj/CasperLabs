@@ -13,5 +13,3 @@ pub use self::{
 
 pub const MINT_NAME: &str = "mint";
 pub const POS_NAME: &str = "pos";
-
-pub(crate) const FN_STORE_ID_INITIAL: u32 = 0;
