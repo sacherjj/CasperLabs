@@ -21,8 +21,6 @@ use types::{
 
 use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
 
-const INIT_FN_STORE_ID: u32 = 0;
-
 /// This function allows executing the contract stored in the given `wasm_file`, while capturing the
 /// output. It is essentially the same functionality as `Executor::exec`, but the return value of
 /// the contract is returned along with the effects. The purpose of this function is to test
@@ -63,7 +61,10 @@ where
         Rc::new(RefCell::new(address_generator))
     };
     let gas_counter = Gas::default();
-    let fn_store_id = INIT_FN_STORE_ID;
+    let fn_store_id = {
+        let fn_store_id = AddressGenerator::new(&deploy_hash, phase);
+        Rc::new(RefCell::new(fn_store_id))
+    };
     let gas_limit = Gas::new(U512::from(std::u64::MAX));
     let protocol_version = ProtocolVersion::V1_0_0;
     let correlation_id = CorrelationId::new();

@@ -192,6 +192,10 @@ where
         // Updated: random number generator is seeded from genesis_config_hash from the RunGenesis
         // RPC call
 
+        let fn_store_id = {
+            let generator = AddressGenerator::new(&genesis_config_hash.value(), phase);
+            Rc::new(RefCell::new(generator))
+        };
         let address_generator = {
             let generator = AddressGenerator::new(&genesis_config_hash.value(), phase);
             Rc::new(RefCell::new(generator))
@@ -206,6 +210,7 @@ where
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let install_deploy_hash = genesis_config_hash.into();
             let address_generator = Rc::clone(&address_generator);
+            let fn_store_id = Rc::clone(&fn_store_id);
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
@@ -227,6 +232,7 @@ where
                 phase,
                 ProtocolData::default(),
                 system_contract_cache,
+                fn_store_id,
             )?
         };
 
@@ -244,6 +250,7 @@ where
 
             let tracking_copy = Rc::clone(&tracking_copy);
             let address_generator = Rc::clone(&address_generator);
+            let fn_store_id = Rc::clone(&fn_store_id);
             let install_deploy_hash = genesis_config_hash.into();
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
@@ -286,6 +293,7 @@ where
                 phase,
                 partial_protocol_data,
                 system_contract_cache,
+                fn_store_id,
             )?
         };
 
@@ -319,6 +327,7 @@ where
             let authorization_keys = BTreeSet::new();
             let install_deploy_hash = genesis_config_hash.into();
             let address_generator = Rc::clone(&address_generator);
+            let fn_store_id = Rc::clone(&fn_store_id);
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
@@ -340,6 +349,7 @@ where
                 phase,
                 protocol_data,
                 system_contract_cache,
+                fn_store_id,
             )?
         };
 
@@ -469,6 +479,7 @@ where
                         protocol_data,
                         system_contract_cache,
                         EntryPointType::Session,
+                        Rc::clone(&fn_store_id),
                     )?;
 
                     runtime
@@ -638,6 +649,10 @@ where
                     let generator = AddressGenerator::new(&pre_state_hash.value(), phase);
                     Rc::new(RefCell::new(generator))
                 };
+                let fn_store_id = {
+                    let generator = AddressGenerator::new(&pre_state_hash.value(), phase);
+                    Rc::new(RefCell::new(generator))
+                };
                 let state = Rc::clone(&tracking_copy);
                 let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
@@ -661,6 +676,7 @@ where
                     phase,
                     new_protocol_data,
                     system_contract_cache,
+                    fn_store_id,
                 )?
             }
         }
@@ -1319,6 +1335,7 @@ where
             if !self.config.use_system_contracts() && module_bytes_is_empty {
                 // let mut named_keys = account.named_keys().clone();
                 let address_generator = AddressGenerator::new(&deploy_hash, phase);
+                let fn_store_id = AddressGenerator::new(&deploy_hash, phase);
 
                 let mut runtime = match executor.create_runtime(
                     payment_module,
@@ -1338,6 +1355,7 @@ where
                     protocol_data,
                     system_contract_cache,
                     entry_point_type,
+                    Rc::new(RefCell::new(fn_store_id)),
                 ) {
                     Ok((_instance, runtime)) => runtime,
                     Err(error) => {
