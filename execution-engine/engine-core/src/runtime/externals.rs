@@ -10,7 +10,8 @@ use types::{
     api_error,
     bytesrepr::{self, ToBytes},
     contract_header::EntryPoint,
-    Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512, UREF_SERIALIZED_LENGTH,
+    ContractMetadataHash, Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512,
+    UREF_SERIALIZED_LENGTH,
 };
 
 use engine_shared::{gas::Gas, stored_value::StoredValue};
@@ -625,8 +626,8 @@ where
             }
 
             FunctionIndex::CallVersionedContract => {
-                // args(0) = pointer to key where contract is at in global state
-                // args(1) = size of key
+                // args(0) = pointer to contract_metadata_hash where contract is at in global state
+                // args(1) = size of contract_metadata_hash
                 // args(2) = pointer to contract version in wasm memory
                 // args(3) = pointer to method name in wasm memory
                 // args(4) = size of method name in wasm memory
@@ -634,8 +635,8 @@ where
                 // args(6) = size of arguments
                 // args(7) = pointer to result size (output)
                 let (
-                    key_ptr,
-                    key_size,
+                    contract_metadata_hash_ptr,
+                    contract_metadata_hash_size,
                     version_ptr,
                     method_ptr,
                     method_size,
@@ -644,7 +645,8 @@ where
                     result_size_ptr,
                 ) = Args::parse(args)?;
 
-                let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
+                let contract_metadata_hash: ContractMetadataHash =
+                    self.t_from_mem(contract_metadata_hash_ptr, contract_metadata_hash_size)?;
                 let version = {
                     let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
@@ -656,7 +658,7 @@ where
                 };
 
                 let ret = self.call_versioned_contract_host_buffer(
-                    key_contract,
+                    contract_metadata_hash,
                     version,
                     method,
                     args_bytes,

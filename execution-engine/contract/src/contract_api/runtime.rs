@@ -10,8 +10,8 @@ use casperlabs_types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, FromBytes},
-    ApiError, BlockTime, CLTyped, CLValue, Key, Phase, RuntimeArgs, SemVer, URef,
-    BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
+    ApiError, BlockTime, CLTyped, CLValue, ContractMetadataHash, Key, Phase, RuntimeArgs, SemVer,
+    URef, BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
 
 use crate::{args_parser::ArgsParser, contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
@@ -68,19 +68,22 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(contract_key: Key, a
     deserialize_contract_result(bytes_written)
 }
 
-/// Calls the given version stored contract, invoking the given method and
-/// passing the given arguments to it.
+/// Invokes the specified `entry_point_name` of stored logic at a specific `contract_metadata_hash`
+/// address, for a specific `contract_version`, passing the provided `runtime_args`
 ///
-/// The return value rules are the same as for `call_contract`.
+/// If the stored contract calls [`ret`], then that value is returned from
+/// `call_versioned_contract`.  If the stored contract calls [`revert`], then execution stops and
+/// `call_versioned_contract` doesn't return. Otherwise `call_versioned_contract` returns `()`.
 #[allow(clippy::ptr_arg)]
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
-    contract_key: Key,
-    version: SemVer,
+    contract_metadata_hash: ContractMetadataHash,
+    contract_version: SemVer,
     entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> T {
-    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
-    let (version_ptr, _version_size, _bytes2) = contract_api::to_ptr(version);
+    let (contract_metadata_hash_ptr, contract_metadata_hash_size, _bytes1) =
+        contract_api::to_ptr(contract_metadata_hash);
+    let (version_ptr, _version_size, _bytes2) = contract_api::to_ptr(contract_version);
     let (entry_point_name_ptr, entry_point_name_size, _bytes2) =
         contract_api::to_ptr(entry_point_name);
     let (runtime_args_ptr, runtime_args_size, _bytes2) = contract_api::to_ptr(runtime_args);
@@ -89,8 +92,8 @@ pub fn call_versioned_contract<T: CLTyped + FromBytes>(
         let mut bytes_written = MaybeUninit::uninit();
         let ret = unsafe {
             ext_ffi::call_versioned_contract(
-                key_ptr,
-                key_size,
+                contract_metadata_hash_ptr,
+                contract_metadata_hash_size,
                 version_ptr,
                 entry_point_name_ptr,
                 entry_point_name_size,

@@ -17,7 +17,6 @@ use types::{
     CLType, CLValue, SemVer,
 };
 
-const CONTRACT_KEY_UREF: &str = "mint";
 const HASH_KEY_NAME: &str = "mint_hash";
 const ACCESS_KEY_NAME: &str = "mint_access";
 
@@ -105,12 +104,7 @@ pub extern "C" fn install() {
         entry_points,
         named_keys,
     );
-    runtime::put_key(CONTRACT_KEY_UREF, contract_key);
 
-    let uref = storage::new_uref(contract_metadata_key);
-    // let uref_value = CLValue::from_t(uref).unwrap_or_revert();
-    // let contract_metadata_key_value = CLValue::from_t(contract_metadata_key).unwrap_or_revert();
-
-    let return_value = CLValue::from_t((uref, contract_metadata_key)).unwrap_or_revert();
+    let return_value = CLValue::from_t((contract_metadata_key, contract_key)).unwrap_or_revert();
     runtime::ret(return_value);
 }

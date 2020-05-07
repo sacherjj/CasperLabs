@@ -136,8 +136,8 @@ extern "C" {
         version_ptr: *const u8,
     ) -> i32;
     pub fn call_versioned_contract(
-        contract_metadata_key_ptr: *const u8,
-        contract_metadata_key_size: usize,
+        contract_metadata_hash_ptr: *const u8,
+        contract_metadata_hash_size: usize,
         version_ptr: *const u8,
         entry_point_name_ptr: *const u8,
         entry_point_name_size: usize,

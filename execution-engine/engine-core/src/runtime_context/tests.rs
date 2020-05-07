@@ -24,8 +24,8 @@ use types::{
     account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
-    AccessRights, BlockTime, CLValue, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
-    URef, KEY_LOCAL_SEED_LENGTH,
+    AccessRights, BlockTime, CLValue, ContractMetadataHash, EntryPointType, Phase, ProtocolVersion,
+    RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
 };
 
 use super::{attenuate_uref_for_account, Address, Error, RuntimeContext};

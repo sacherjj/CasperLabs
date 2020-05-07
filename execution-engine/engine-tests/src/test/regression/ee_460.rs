@@ -27,7 +27,7 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
     // mint uref, which should mean no new purses are created in case of
     // transfer error. This is considered sufficient cause to confirm that the
     // mint uref is left untouched.
-    let mint_contract_uref = result.builder().get_mint_contract_uref();
+    let mint_contract_uref = result.builder().get_mint_contract_hash();
 
     let transforms = &result.builder().get_transforms()[0];
     let mint_transforms = transforms

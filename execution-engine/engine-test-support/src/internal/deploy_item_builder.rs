@@ -5,7 +5,7 @@ use engine_core::{
     engine_state::{deploy_item::DeployItem, executable_deploy_item::ExecutableDeployItem},
     DeployHash,
 };
-use types::{account::PublicKey, bytesrepr::ToBytes, Hash, RuntimeArgs, SemVer, URef};
+use types::{account::PublicKey, bytesrepr::ToBytes, HashAddr, RuntimeArgs, SemVer, URef};
 
 use crate::internal::utils;
 
@@ -155,7 +155,7 @@ impl DeployItemBuilder {
 
     pub fn with_stored_versioned_contract_by_hash(
         mut self,
-        hash: Hash,
+        hash: HashAddr,
         version: SemVer,
         entry_point: &str,
         args: RuntimeArgs,
@@ -187,7 +187,7 @@ impl DeployItemBuilder {
 
     pub fn with_stored_versioned_payment_contract_by_hash(
         mut self,
-        hash: Hash,
+        hash: HashAddr,
         version: SemVer,
         entry_point: &str,
         args: RuntimeArgs,

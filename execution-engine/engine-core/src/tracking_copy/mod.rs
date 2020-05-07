@@ -342,6 +342,7 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
         path: &[String],
     ) -> Result<TrackingCopyQueryResult, R::Error> {
         let mut query = Query::new(base_key, path);
+
         loop {
             if !query.visited_keys.insert(query.current_key) {
                 return Ok(query.into_circular_ref_result());

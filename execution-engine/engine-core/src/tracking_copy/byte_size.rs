@@ -106,7 +106,7 @@ impl HeapSizeOf for String {
 mod tests {
     use std::{collections::BTreeMap, mem};
 
-    use types::Key;
+    use types::ContractMetadataHash;
 
     use super::ByteSize;
 

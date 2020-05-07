@@ -6,7 +6,8 @@ use engine_shared::{
 };
 use engine_storage::global_state::StateReader;
 use types::{
-    account::PublicKey, bytesrepr::ToBytes, CLValue, ContractMetadata, Key, SemVer, URef, U512,
+    account::PublicKey, bytesrepr::ToBytes, CLValue, ContractHash, ContractMetadata, Key, SemVer,
+    U512,
 };
 
 use crate::{execution, tracking_copy::TrackingCopy};
@@ -25,7 +26,7 @@ pub trait TrackingCopyExt<R> {
     fn get_purse_balance_key(
         &mut self,
         correlation_id: CorrelationId,
-        mint_contract_uref: URef,
+        mint_contract: ContractHash,
         purse: Key,
     ) -> Result<Key, Self::Error>;
 
@@ -77,14 +78,14 @@ where
     fn get_purse_balance_key(
         &mut self,
         correlation_id: CorrelationId,
-        mint_contract_uref: URef,
+        mint_contract: ContractHash,
         outer_key: Key,
     ) -> Result<Key, Self::Error> {
         let uref = outer_key
             .as_uref()
             .ok_or_else(|| execution::Error::URefNotFound("public purse balance".to_string()))?;
         let local_key_bytes = uref.addr().into_bytes()?;
-        let balance_mapping_key = Key::local(mint_contract_uref.addr(), &local_key_bytes);
+        let balance_mapping_key = Key::local(mint_contract, &local_key_bytes);
         match self
             .read(correlation_id, &balance_mapping_key)
             .map_err(Into::into)?

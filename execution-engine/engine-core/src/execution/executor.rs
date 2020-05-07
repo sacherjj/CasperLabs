@@ -22,7 +22,7 @@ use crate::{
     },
     execution::{address_generator::AddressGenerator, Error},
     runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
-    runtime_context::{self, RuntimeContext},
+    runtime_context::RuntimeContext,
     tracking_copy::TrackingCopy,
 };
 
@@ -89,13 +89,13 @@ impl Executor {
         base_key: Key,
         account: &Account,
         mut named_keys: BTreeMap<String, Key>,
-        authorized_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
-        tc: Rc<RefCell<TrackingCopy<R>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
@@ -108,37 +108,42 @@ impl Executor {
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
 
-        let access_rights =
-            {
-                let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-                keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
-                    Key::from(runtime_context::attenuate_uref_for_account(account, uref))
-                }));
-                extract_access_rights_from_keys(keys)
-            };
+        let access_rights = {
+            let keys: Vec<Key> = named_keys.values().cloned().collect();
+            // keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
+            //     Key::from(runtime_context::attenuate_uref_for_account(account, uref))
+            // }));
+            extract_access_rights_from_keys(keys)
+        };
 
-        let address_generator = AddressGenerator::new(&deploy_hash, phase);
-        let fn_store_id = AddressGenerator::new(&deploy_hash, phase);
+        let hash_address_generator = {
+            let generator = AddressGenerator::new(&deploy_hash, phase);
+            Rc::new(RefCell::new(generator))
+        };
+        let uref_address_generator = {
+            let generator = AddressGenerator::new(&deploy_hash, phase);
+            Rc::new(RefCell::new(generator))
+        };
         let gas_counter: Gas = Gas::default();
 
         // Snapshot of effects before execution, so in case of error
         // only nonce update can be returned.
-        let effects_snapshot = tc.borrow().effect();
+        let effects_snapshot = tracking_copy.borrow().effect();
 
         let context = RuntimeContext::new(
-            tc,
+            tracking_copy,
             &mut named_keys,
             access_rights,
             args.clone(),
-            authorized_keys,
+            authorization_keys,
             &account,
             base_key,
             blocktime,
             deploy_hash,
             gas_limit,
             gas_counter,
-            Rc::new(RefCell::new(fn_store_id)),
-            Rc::new(RefCell::new(address_generator)),
+            hash_address_generator,
+            uref_address_generator,
             protocol_version,
             correlation_id,
             phase,
@@ -225,7 +230,7 @@ impl Executor {
         gas_limit: Gas,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
-        state: Rc<RefCell<TrackingCopy<R>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
@@ -234,37 +239,35 @@ impl Executor {
         R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
-        if Some(&protocol_data.proof_of_stake()) != base_key.as_uref() {
+        if protocol_data.proof_of_stake() != base_key.into_seed() {
             panic!("exec_finalize should only be called with the proof of stake contract");
         }
 
         let mut named_keys = named_keys.clone();
-        let access_rights =
-            {
-                let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-                keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
-                    Key::from(runtime_context::attenuate_uref_for_account(account, uref))
-                }));
-                extract_access_rights_from_keys(keys)
-            };
-
-        let fn_store_id = {
-            let address_generator = AddressGenerator::new(&deploy_hash, phase);
-            Rc::new(RefCell::new(address_generator))
+        let access_rights = {
+            let keys: Vec<Key> = named_keys.values().cloned().collect();
+            // keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
+            //     Key::from(runtime_context::attenuate_uref_for_account(account, uref))
+            // }));
+            extract_access_rights_from_keys(keys)
         };
 
-        let address_generator = {
-            let address_generator = AddressGenerator::new(&deploy_hash, phase);
-            Rc::new(RefCell::new(address_generator))
+        let hash_address_generator = {
+            let generator = AddressGenerator::new(&deploy_hash, phase);
+            Rc::new(RefCell::new(generator))
+        };
+        let uref_address_generator = {
+            let generator = AddressGenerator::new(&deploy_hash, phase);
+            Rc::new(RefCell::new(generator))
         };
         let gas_counter = Gas::default(); // maybe const?
 
         // Snapshot of effects before execution, so in case of error only nonce update
         // can be returned.
-        let effects_snapshot = state.borrow().effect();
+        let effects_snapshot = tracking_copy.borrow().effect();
 
         let context = RuntimeContext::new(
-            state,
+            tracking_copy,
             &mut named_keys,
             access_rights,
             args.clone(),
@@ -275,8 +278,8 @@ impl Executor {
             deploy_hash,
             gas_limit,
             gas_counter,
-            fn_store_id,
-            address_generator,
+            hash_address_generator,
+            uref_address_generator,
             protocol_version,
             correlation_id,
             phase,
@@ -372,33 +375,32 @@ impl Executor {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        address_generator: Rc<RefCell<AddressGenerator>>,
+        hash_address_generator: Rc<RefCell<AddressGenerator>>,
+        uref_address_generator: Rc<RefCell<AddressGenerator>>,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
-        state: Rc<RefCell<TrackingCopy<R>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
         entry_point_type: EntryPointType,
-        fn_store_id: Rc<RefCell<AddressGenerator>>,
     ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
         R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
-        let access_rights =
-            {
-                let mut keys: Vec<Key> = keys.values().cloned().collect();
-                keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
-                    Key::from(runtime_context::attenuate_uref_for_account(account, uref))
-                }));
-                extract_access_rights_from_keys(keys)
-            };
+        let access_rights = {
+            let keys: Vec<Key> = keys.values().cloned().collect();
+            // keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
+            //     Key::from(runtime_context::attenuate_uref_for_account(account, uref))
+            // }));
+            extract_access_rights_from_keys(keys)
+        };
 
         let gas_counter = Gas::default();
 
         let runtime_context = RuntimeContext::new(
-            state,
+            tracking_copy,
             keys,
             access_rights,
             args,
@@ -409,8 +411,8 @@ impl Executor {
             deploy_hash,
             gas_limit,
             gas_counter,
-            fn_store_id,
-            address_generator,
+            hash_address_generator,
+            uref_address_generator,
             protocol_version,
             correlation_id,
             phase,
@@ -443,14 +445,14 @@ impl Executor {
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
-        address_generator: Rc<RefCell<AddressGenerator>>,
+        hash_address_generator: Rc<RefCell<AddressGenerator>>,
+        uref_address_generator: Rc<RefCell<AddressGenerator>>,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-        fn_store_id: Rc<RefCell<AddressGenerator>>,
     ) -> Result<T, Error>
     where
         R: StateReader<Key, StoredValue>,
@@ -467,7 +469,8 @@ impl Executor {
             blocktime,
             deploy_hash,
             gas_limit,
-            address_generator,
+            hash_address_generator,
+            uref_address_generator,
             protocol_version,
             correlation_id,
             tracking_copy,
@@ -475,7 +478,6 @@ impl Executor {
             protocol_data,
             system_contract_cache,
             EntryPointType::Session,
-            fn_store_id,
         )?;
 
         let error: wasmi::Error = match instance.invoke_export(entry_point_name, &[], &mut runtime)

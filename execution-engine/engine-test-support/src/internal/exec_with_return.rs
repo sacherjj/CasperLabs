@@ -83,9 +83,9 @@ where
     };
 
     let protocol_data = {
-        let mint = builder.get_mint_contract_uref();
-        let pos = builder.get_mint_contract_uref();
-        let standard_payment = builder.get_standard_payment_contract_uref();
+        let mint = builder.get_mint_contract_hash();
+        let pos = builder.get_mint_contract_hash();
+        let standard_payment = builder.get_standard_payment_contract_hash();
         ProtocolData::new(*DEFAULT_WASM_COSTS, mint, pos, standard_payment)
     };
 

@@ -4,7 +4,7 @@ use engine_shared::{
     newtypes::Blake2bHash,
     stored_value::{gens::stored_value_arb, StoredValue},
 };
-use types::{gens::key_arb, Key};
+use types::{gens::key_arb, ContractMetadataHash};
 
 use super::{Pointer, PointerBlock, Trie};
 

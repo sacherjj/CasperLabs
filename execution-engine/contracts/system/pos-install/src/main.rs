@@ -19,7 +19,7 @@ use types::{
     account::PublicKey,
     contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     system_contract_errors::mint,
-    CLType, CLValue, Key, NamedArg, RuntimeArgs, SemVer, URef, U512,
+    CLType, CLValue, ContractMetadataHash, Key, NamedArg, RuntimeArgs, SemVer, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -27,7 +27,7 @@ const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 
-const ARG_MINT_UREF: &str = "mint_uref";
+const ARG_MINT_METADATA_HASH: &str = "mint_contract_metadata_hash";
 const ARG_GENESIS_VALIDATORS: &str = "genesis_validators";
 const ENTRY_POINT_MINT: &str = "mint";
 
@@ -66,11 +66,7 @@ pub extern "C" fn finalize_payment() {
 
 #[no_mangle]
 pub extern "C" fn install() {
-    let mint_uref: URef = runtime::get_named_arg(ARG_MINT_UREF);
-    //let mint = Key::URef(URef::new(mint_uref.addr(), AccessRights::READ));
-    let contract_key: Key = storage::read(mint_uref)
-        .unwrap_or_revert()
-        .unwrap_or_revert();
+    let mint_metadata_hash: ContractMetadataHash = runtime::get_named_arg(ARG_MINT_METADATA_HASH);
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_named_arg(ARG_GENESIS_VALIDATORS);
@@ -86,9 +82,9 @@ pub extern "C" fn install() {
 
     let total_bonds: U512 = stakes.total_bonds();
 
-    let bonding_purse = mint_purse(contract_key, total_bonds);
-    let payment_purse = mint_purse(contract_key, U512::zero());
-    let rewards_purse = mint_purse(contract_key, U512::zero());
+    let bonding_purse = mint_purse(mint_metadata_hash, total_bonds);
+    let payment_purse = mint_purse(mint_metadata_hash, U512::zero());
+    let rewards_purse = mint_purse(mint_metadata_hash, U512::zero());
 
     // Include PoS purses in its named_keys
     [
@@ -165,10 +161,9 @@ pub extern "C" fn install() {
     runtime::put_key(HASH_KEY_NAME, contract_metadata_key);
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
-    let named_keys = BTreeMap::new();
     let version = SemVer::V1_0_0;
 
-    storage::add_contract_version(
+    let contract_key = storage::add_contract_version(
         contract_metadata_key,
         access_uref,
         version,
@@ -176,12 +171,11 @@ pub extern "C" fn install() {
         named_keys,
     );
 
-    let uref = storage::new_uref(contract_metadata_key);
-    let return_value = CLValue::from_t(uref).unwrap_or_revert();
+    let return_value = CLValue::from_t(contract_key).unwrap_or_revert();
     runtime::ret(return_value);
 }
 
-fn mint_purse(contract_key: Key, amount: U512) -> URef {
+fn mint_purse(contract_metadata_hash: ContractMetadataHash, amount: U512) -> URef {
     let runtime_args = {
         let amount = CLValue::from_t(amount).unwrap_or_revert();
         let arg_amount = NamedArg::new(ARG_AMOUNT.to_string(), amount);
@@ -189,7 +183,7 @@ fn mint_purse(contract_key: Key, amount: U512) -> URef {
     };
 
     let result: Result<URef, mint::Error> = runtime::call_versioned_contract(
-        contract_key,
+        contract_metadata_hash,
         SemVer::V1_0_0,
         ENTRY_POINT_MINT,
         runtime_args,

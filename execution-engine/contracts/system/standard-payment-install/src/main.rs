@@ -14,12 +14,12 @@ use types::{
     CLType, CLValue, SemVer,
 };
 
-const METHOD_PAY: &str = "pay";
+const METHOD_CALL: &str = "call";
 const HASH_KEY_NAME: &str = "standard_payment_hash";
 const ACCESS_KEY_NAME: &str = "standard_payment_access";
 
 #[no_mangle]
-pub extern "C" fn pay() {
+pub extern "C" fn call() {
     standard_payment::delegate();
 }
 
@@ -37,7 +37,7 @@ pub extern "C" fn install() {
             EntryPointAccess::Public,
             EntryPointType::Session,
         );
-        entry_points.insert(METHOD_PAY.to_string(), entry_point);
+        entry_points.insert(METHOD_CALL.to_string(), entry_point);
 
         entry_points
     };
@@ -49,7 +49,7 @@ pub extern "C" fn install() {
     let named_keys = BTreeMap::new();
     let version = SemVer::V1_0_0;
 
-    storage::add_contract_version(
+    let contract_key = storage::add_contract_version(
         contract_metadata_key,
         access_uref,
         version,
@@ -57,7 +57,6 @@ pub extern "C" fn install() {
         named_keys,
     );
 
-    let uref = storage::new_uref(contract_metadata_key);
-    let return_value = CLValue::from_t(uref).unwrap_or_revert();
+    let return_value = CLValue::from_t(contract_key).unwrap_or_revert();
     runtime::ret(return_value);
 }

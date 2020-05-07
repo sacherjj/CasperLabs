@@ -26,7 +26,7 @@ use types::{
 };
 
 use crate::{
-    engine_state::{execution_effect::ExecutionEffect, SYSTEM_ACCOUNT_ADDR},
+    engine_state::execution_effect::ExecutionEffect,
     execution::{AddressGenerator, Error},
     tracking_copy::{AddResult, TrackingCopy},
     Address,
@@ -34,20 +34,6 @@ use crate::{
 
 #[cfg(test)]
 mod tests;
-
-/// Attenuates given URef for a given account context.
-///
-/// System account transfers given URefs into READ_ADD_WRITE access rights,
-/// and any other URef is transformed into READ only URef.
-pub(crate) fn attenuate_uref_for_account(account: &Account, uref: URef) -> URef {
-    if account.public_key() == SYSTEM_ACCOUNT_ADDR {
-        // If the system account calls this function, it is given READ_ADD_WRITE access.
-        uref.into_read_add_write()
-    } else {
-        // If a user calls this function, they are given READ access.
-        uref.into_read()
-    }
-}
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -67,8 +53,8 @@ pub struct RuntimeContext<'a, R> {
     deploy_hash: [u8; 32],
     gas_limit: Gas,
     gas_counter: Gas,
-    fn_store_id: Rc<RefCell<AddressGenerator>>,
-    address_generator: Rc<RefCell<AddressGenerator>>,
+    hash_address_generator: Rc<RefCell<AddressGenerator>>,
+    uref_address_generator: Rc<RefCell<AddressGenerator>>,
     protocol_version: ProtocolVersion,
     correlation_id: CorrelationId,
     phase: Phase,
@@ -83,7 +69,7 @@ where
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        state: Rc<RefCell<TrackingCopy<R>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
         named_keys: &'a mut BTreeMap<String, Key>,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
         args: RuntimeArgs,
@@ -94,8 +80,8 @@ where
         deploy_hash: [u8; 32],
         gas_limit: Gas,
         gas_counter: Gas,
-        fn_store_id: Rc<RefCell<AddressGenerator>>,
-        address_generator: Rc<RefCell<AddressGenerator>>,
+        hash_address_generator: Rc<RefCell<AddressGenerator>>,
+        uref_address_generator: Rc<RefCell<AddressGenerator>>,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
         phase: Phase,
@@ -103,7 +89,7 @@ where
         entry_point_type: EntryPointType,
     ) -> Self {
         RuntimeContext {
-            state,
+            state: tracking_copy,
             named_keys,
             access_rights,
             args,
@@ -114,8 +100,8 @@ where
             base_key,
             gas_limit,
             gas_counter,
-            fn_store_id,
-            address_generator,
+            hash_address_generator,
+            uref_address_generator,
             protocol_version,
             correlation_id,
             phase,
@@ -230,11 +216,11 @@ where
     }
 
     pub fn address_generator(&self) -> Rc<RefCell<AddressGenerator>> {
-        Rc::clone(&self.address_generator)
+        Rc::clone(&self.uref_address_generator)
     }
 
     pub fn fn_store_id(&self) -> Rc<RefCell<AddressGenerator>> {
-        Rc::clone(&self.fn_store_id)
+        Rc::clone(&self.hash_address_generator)
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
@@ -280,7 +266,7 @@ where
     /// account's public key and deploy's nonce, then all function addresses
     /// generated within one deploy would have been the same.
     pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
-        let pre_hash_bytes = self.fn_store_id.borrow_mut().create_address();
+        let pre_hash_bytes = self.hash_address_generator.borrow_mut().create_address();
 
         let mut hasher = VarBlake2b::new(32).unwrap();
         hasher.input(&pre_hash_bytes);
@@ -291,7 +277,7 @@ where
 
     pub fn new_uref(&mut self, value: StoredValue) -> Result<URef, Error> {
         let uref = {
-            let addr = self.address_generator.borrow_mut().create_address();
+            let addr = self.uref_address_generator.borrow_mut().create_address();
             URef::new(addr, AccessRights::READ_ADD_WRITE)
         };
         let key = Key::URef(uref);
@@ -819,14 +805,6 @@ where
 
     pub fn protocol_data(&self) -> ProtocolData {
         self.protocol_data
-    }
-
-    /// Attenuates URef for a given account.
-    ///
-    /// If the account is system account, then given URef receives
-    /// full rights (READ_ADD_WRITE). Otherwise READ access is returned.
-    pub(crate) fn attenuate_uref(&self, uref: URef) -> URef {
-        attenuate_uref_for_account(&self.account(), uref)
     }
 
     /// Creates validated instance of `StoredValue` from `account`.

@@ -94,10 +94,10 @@ fn should_run_purse_to_account_transfer() {
     let new_purse_key = new_purse.remove_access_rights().as_string();
 
     // Obtain transforms for a mint account
-    let mint_contract_uref = builder.get_mint_contract_uref().remove_access_rights();
+    let mint_contract_hash = builder.get_mint_contract_hash();
 
     let mint_contract = builder
-        .get_contract(mint_contract_uref)
+        .get_contract(mint_contract_hash)
         .expect("should have mint contract");
 
     assert!(mint_contract.named_keys().contains_key(&new_purse_key));

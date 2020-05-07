@@ -73,8 +73,8 @@ fn should_insert_mint_add_keys_transform() {
             .commit()
             .finish();
 
-        let mint_contract_uref = result.builder().get_mint_contract_uref();
-        &result.builder().get_transforms()[0][&mint_contract_uref.remove_access_rights().into()]
+        let mint_contract_hash = result.builder().get_mint_contract_hash();
+        &result.builder().get_transforms()[0][&mint_contract_hash.into()]
     };
 
     get_purse_key_from_mint_transform(mint_transform); // <-- assert equivalent

@@ -77,9 +77,9 @@ fn should_run_purse_to_purse_transfer() {
         .remove_access_rights()
         .as_string();
 
-    let mint_contract_uref = builder.get_mint_contract_uref().remove_access_rights();
+    let mint_contract_hash = builder.get_mint_contract_hash();
     let mint_contract = builder
-        .get_contract(mint_contract_uref)
+        .get_contract(mint_contract_hash)
         .expect("should have mint contract");
 
     // Find `purse:secondary`.
@@ -167,7 +167,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
         .remove_access_rights()
         .as_string();
 
-    let mint_contract_uref = builder.get_mint_contract_uref();
+    let mint_contract_uref = builder.get_mint_contract_hash();
     let mint_contract = builder
         .get_contract(mint_contract_uref)
         .expect("should have mint contract");

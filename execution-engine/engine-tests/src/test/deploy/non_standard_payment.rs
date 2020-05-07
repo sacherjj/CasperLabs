@@ -86,8 +86,8 @@ fn should_charge_non_main_purse() {
             .to_bytes()
             .expect("should be able to serialize purse bytes");
 
-        let mint = builder.get_mint_contract_uref();
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
+        let mint = builder.get_mint_contract_hash();
+        let balance_mapping_key = Key::local(mint, &purse_bytes);
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
@@ -148,8 +148,8 @@ fn should_charge_non_main_purse() {
             .to_bytes()
             .expect("should be able to serialize purse bytes");
 
-        let mint = builder.get_mint_contract_uref();
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
+        let mint = builder.get_mint_contract_hash();
+        let balance_mapping_key = Key::local(mint, &purse_bytes);
         let balance_uref = builder
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))

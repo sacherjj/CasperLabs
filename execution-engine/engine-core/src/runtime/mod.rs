@@ -30,8 +30,9 @@ use types::{
     },
     system_contract_errors,
     system_contract_errors::mint,
-    AccessRights, ApiError, CLType, CLTyped, CLValue, EntryPointType, Key, ProtocolVersion,
-    RuntimeArgs, SemVer, SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
+    AccessRights, ApiError, CLType, CLTyped, CLValue, ContractHash, ContractMetadataHash,
+    EntryPointType, Key, ProtocolVersion, RuntimeArgs, SemVer, SystemContractType, TransferResult,
+    TransferredTo, URef, U128, U256, U512,
 };
 
 use crate::{
@@ -1691,17 +1692,11 @@ where
     }
 
     pub fn is_mint(&self, key: Key) -> bool {
-        match key {
-            Key::URef(uref) if self.protocol_data().mint().addr() == uref.addr() => true,
-            _ => false,
-        }
+        key.into_seed() == self.protocol_data().mint()
     }
 
     pub fn is_proof_of_stake(&self, key: Key) -> bool {
-        match key {
-            Key::URef(uref) if self.protocol_data().proof_of_stake().addr() == uref.addr() => true,
-            _ => false,
-        }
+        key.into_seed() == self.protocol_data().proof_of_stake()
     }
 
     fn get_argument<T: FromBytes + CLTyped>(args: &RuntimeArgs, index: usize) -> Result<T, Error> {
@@ -1734,8 +1729,8 @@ where
         let access_rights = {
             let mut keys: Vec<Key> = named_keys.values().cloned().collect();
             keys.extend(extra_urefs);
-            keys.push(self.get_mint_contract_uref().into());
-            keys.push(self.get_pos_contract_uref().into());
+            keys.push(self.get_mint_contract().into());
+            keys.push(self.get_pos_contract().into());
             extract_access_rights_from_keys(keys)
         };
         let authorization_keys = self.context.authorization_keys().to_owned();
@@ -1827,8 +1822,8 @@ where
         let access_rights = {
             let mut keys: Vec<Key> = named_keys.values().cloned().collect();
             keys.extend(extra_urefs);
-            keys.push(self.get_mint_contract_uref().into());
-            keys.push(self.get_pos_contract_uref().into());
+            keys.push(self.get_mint_contract().into());
+            keys.push(self.get_pos_contract().into());
             extract_access_rights_from_keys(keys)
         };
         let authorization_keys = self.context.authorization_keys().to_owned();
@@ -1962,18 +1957,18 @@ where
     /// types given in the contract header.
     pub fn call_versioned_contract(
         &mut self,
-        key: Key,
+        contract_metadata_hash: ContractMetadataHash,
         version: SemVer,
         entry_point_name: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
+        let key = contract_metadata_hash.into();
         let (context_key, contract, entry_point_type) = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
                     .ok_or_else(|| Error::InvalidContractVersion)?;
 
-                println!("header {:?}", header);
                 let entry_point = header
                     .get_method(&entry_point_name)
                     .ok_or_else(|| Error::NoSuchMethod)?;
@@ -2035,7 +2030,7 @@ where
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a versioned contract",
-                    key
+                    contract_metadata_hash
                 )))
             }
             None => return Err(Error::KeyNotFound(key)),
@@ -2068,16 +2063,16 @@ where
             });
         }
 
-        let mut extra_urefs = vec![];
+        let mut extra_keys = vec![];
         // A loop is needed to be able to use the '?' operator
         for arg in args.to_values() {
-            extra_urefs.extend(
+            extra_keys.extend(
                 extract_urefs(arg)?
                     .into_iter()
                     .map(<Key as From<URef>>::from),
             );
         }
-        for key in &extra_urefs {
+        for key in &extra_keys {
             self.context.validate_key(key)?;
         }
 
@@ -2087,22 +2082,19 @@ where
                     self.context.protocol_version(),
                     contract.take_named_keys(),
                     &args,
-                    &extra_urefs,
+                    &extra_keys,
                 );
             } else if self.is_proof_of_stake(key) {
                 return self.call_host_proof_of_stake(
                     self.context.protocol_version(),
                     contract.take_named_keys(),
                     &args,
-                    &extra_urefs,
+                    &extra_keys,
                 );
             }
         }
 
-        let maybe_module = match key {
-            Key::URef(uref) => self.system_contract_cache.get(&uref),
-            _ => None,
-        };
+        let maybe_module = self.system_contract_cache.get(key.into_seed());
 
         let module = match maybe_module {
             Some(module) => module,
@@ -2118,9 +2110,9 @@ where
 
         let access_rights = {
             let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-            keys.extend(extra_urefs);
-            keys.push(self.get_mint_contract_uref().into());
-            keys.push(self.get_pos_contract_uref().into());
+            keys.extend(extra_keys);
+            keys.push(self.get_mint_contract().into());
+            keys.push(self.get_pos_contract().into());
             extract_access_rights_from_keys(keys)
         };
 
@@ -2234,7 +2226,7 @@ where
 
     fn call_versioned_contract_host_buffer(
         &mut self,
-        key: Key,
+        contract_metadata_hash: ContractMetadataHash,
         version: SemVer,
         method: String,
         args_bytes: Vec<u8>,
@@ -2245,7 +2237,7 @@ where
             return Ok(Err(err));
         }
         let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
-        let result = self.call_versioned_contract(key, version, method, args)?;
+        let result = self.call_versioned_contract(contract_metadata_hash, version, method, args)?;
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
 
@@ -2796,25 +2788,22 @@ where
     /// Looks up the public mint contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_mint_contract_uref(&self) -> URef {
-        let mint = self.context.protocol_data().mint();
-        self.context.attenuate_uref(mint)
+    fn get_mint_contract(&self) -> ContractHash {
+        self.context.protocol_data().mint()
     }
 
     /// Looks up the public PoS contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_pos_contract_uref(&self) -> URef {
-        let pos = self.context.protocol_data().proof_of_stake();
-        self.context.attenuate_uref(pos)
+    fn get_pos_contract(&self) -> ContractHash {
+        self.context.protocol_data().proof_of_stake()
     }
 
     /// Looks up the public standard payment contract key in the context's protocol data.
     ///
     /// Returned URef is already attenuated depending on the calling account.
-    fn get_standard_payment_contract_uref(&self) -> URef {
-        let standard_payment = self.context.protocol_data().standard_payment();
-        self.context.attenuate_uref(standard_payment)
+    fn get_standard_payment_contract(&self) -> ContractHash {
+        self.context.protocol_data().standard_payment()
     }
 
     /// Calls the "create" method on the mint contract at the given mint
@@ -2832,7 +2821,7 @@ where
     }
 
     fn create_purse(&mut self) -> Result<URef, Error> {
-        let mint_contract_key = self.get_mint_contract_uref().into();
+        let mint_contract_key = self.get_mint_contract().into();
         self.mint_create(mint_contract_key)
     }
 
@@ -2864,7 +2853,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract_uref().into();
+        let mint_contract_key = self.get_mint_contract().into();
 
         let target_key = Key::Account(target);
 
@@ -2885,14 +2874,8 @@ where
                 // After merging in EE-704 system contracts lookup internally uses protocol data and
                 // this is used for backwards compatibility with explorer to query mint/pos urefs.
                 let named_keys = vec![
-                    (
-                        String::from(MINT_NAME),
-                        Key::from(self.get_mint_contract_uref()),
-                    ),
-                    (
-                        String::from(POS_NAME),
-                        Key::from(self.get_pos_contract_uref()),
-                    ),
+                    (String::from(MINT_NAME), Key::from(self.get_mint_contract())),
+                    (String::from(POS_NAME), Key::from(self.get_pos_contract())),
                 ]
                 .into_iter()
                 .map(|(name, key)| {
@@ -2920,7 +2903,7 @@ where
         target: URef,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract_uref().into();
+        let mint_contract_key = self.get_mint_contract().into();
 
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target);
@@ -2998,7 +2981,7 @@ where
             bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
 
-        let mint_contract_key = self.get_mint_contract_uref().into();
+        let mint_contract_key = self.get_mint_contract().into();
 
         if self
             .mint_transfer(mint_contract_key, source, target, amount)
@@ -3011,7 +2994,7 @@ where
     }
 
     fn get_balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {
-        let seed = self.get_mint_contract_uref().addr();
+        let seed = self.get_mint_contract();
 
         let key = purse.addr().into_bytes()?;
 
@@ -3128,9 +3111,9 @@ where
         _dest_size: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
         let attenuated_uref = match SystemContractType::try_from(system_contract_index) {
-            Ok(SystemContractType::Mint) => self.get_mint_contract_uref(),
-            Ok(SystemContractType::ProofOfStake) => self.get_pos_contract_uref(),
-            Ok(SystemContractType::StandardPayment) => self.get_standard_payment_contract_uref(),
+            Ok(SystemContractType::Mint) => self.get_mint_contract(),
+            Ok(SystemContractType::ProofOfStake) => self.get_pos_contract(),
+            Ok(SystemContractType::StandardPayment) => self.get_standard_payment_contract(),
             Err(error) => return Ok(Err(error)),
         };
 
@@ -3271,7 +3254,7 @@ mod tests {
         result,
     };
 
-    use types::{gens::*, CLType, CLValue, Key, URef};
+    use types::{gens::*, CLType, CLValue, ContractMetadataHash, URef};
 
     use super::extract_urefs;
 

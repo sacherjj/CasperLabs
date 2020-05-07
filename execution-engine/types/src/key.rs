@@ -44,7 +44,18 @@ fn hash(bytes: &[u8]) -> [u8; BLAKE2B_DIGEST_LENGTH] {
 }
 
 /// An alias for [`Key`]s hash variant.
-pub type Hash = [u8; KEY_HASH_LENGTH];
+pub type HashAddr = [u8; KEY_HASH_LENGTH];
+
+impl From<HashAddr> for Key {
+    fn from(addr: HashAddr) -> Self {
+        Key::Hash(addr)
+    }
+}
+
+/// An alias for [`Key`]s hash variant.
+pub type ContractHash = HashAddr;
+/// An alias for [`Key`]s hash variant.
+pub type ContractMetadataHash = HashAddr;
 
 /// The type under which data (e.g. [`CLValue`](crate::CLValue)s, smart contracts, user accounts)
 /// are indexed on the network.
@@ -55,7 +66,7 @@ pub enum Key {
     Account(PublicKey),
     /// A `Key` under which a smart contract is stored and which is the pseudo-hash of the
     /// contract.
-    Hash(Hash),
+    Hash(HashAddr),
     /// A `Key` which is a [`URef`], under which most types of data can be stored.
     URef(URef),
     /// A `Key` to data (normally a [`CLValue`](crate::CLValue)) which is held in local-storage
@@ -114,16 +125,6 @@ impl Key {
             Key::Local { hash, .. } => format!("local-{}", base16::encode_lower(hash)),
         }
     }
-    //
-    // /// Consumes and converts `self` to a [`ContractRef`] if `self` is of type [`Key::Hash`] or
-    // /// [`Key::URef`], otherwise returns `None`.
-    // pub fn to_contract_ref(self) -> Option<ContractRef> {
-    //     match self {
-    //         Key::URef(uref) => Some(ContractRef::URef(uref)),
-    //         Key::Hash(id) => Some(ContractRef::Hash(id)),
-    //         _ => None,
-    //     }
-    // }
 
     /// Returns the inner bytes of `self` if `self` is of type [`Key::Account`], otherwise returns
     /// `None`.
@@ -136,7 +137,7 @@ impl Key {
 
     /// Returns the inner bytes of `self` if `self` is of type [`Key::Hash`], otherwise returns
     /// `None`.
-    pub fn into_hash(self) -> Option<[u8; KEY_HASH_LENGTH]> {
+    pub fn into_hash(self) -> Option<HashAddr> {
         match self {
             Key::Hash(hash) => Some(hash),
             _ => None,

@@ -13,7 +13,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, URef, U512};
+use types::{account::PublicKey, ContractMetadataHash, URef, U512};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";

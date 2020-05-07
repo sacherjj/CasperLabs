@@ -55,10 +55,5 @@ pub extern "C" fn call() {
 
     // TODO version and new_purse_name come in correctly, but we are not correctly running the
     // stored contracts.
-    runtime::call_versioned_contract(
-        Key::Hash(contract_metadata_hash),
-        version,
-        ENTRY_FUNCTION_NAME,
-        args,
-    )
+    runtime::call_versioned_contract(contract_metadata_hash, version, ENTRY_FUNCTION_NAME, args)
 }

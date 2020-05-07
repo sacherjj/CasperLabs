@@ -67,7 +67,7 @@ fn should_run_successful_bond_and_unbond() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account 1");
 
-    let pos = builder.get_pos_contract_uref();
+    let pos = builder.get_pos_contract_hash();
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -90,9 +90,7 @@ fn should_run_successful_bond_and_unbond() {
         .expect("should have exec response");
     let mut genesis_gas_cost = utils::get_exec_costs(exec_response)[0];
 
-    let contract = builder
-        .get_contract(pos.remove_access_rights())
-        .expect("should have contract");
+    let contract = builder.get_contract(pos).expect("should have contract");
 
     let lookup_key = format!(
         "v_{}_{}",
@@ -149,12 +147,10 @@ fn should_run_successful_bond_and_unbond() {
         .get_account(ACCOUNT_1_ADDR)
         .expect("should get account 1");
 
-    let pos = builder.get_pos_contract_uref();
+    let pos = builder.get_pos_contract_hash();
 
     // Verify that genesis account is in validator queue
-    let contract = builder
-        .get_contract(pos.remove_access_rights())
-        .expect("should have contract");
+    let contract = builder.get_contract(pos).expect("should have contract");
 
     let lookup_key = format!(
         "v_{}_{}",

@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use contract::contract_api::system::{MINT_NAME, POS_NAME};
 use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
@@ -17,19 +16,7 @@ fn should_list_named_keys() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
-    let mint_uref = builder.get_mint_contract_uref().into_read();
-    let pos_uref = builder.get_pos_contract_uref().into_read();
-
-    let initial_named_keys = {
-        let mut named_keys = BTreeMap::new();
-        assert!(named_keys
-            .insert(MINT_NAME.to_string(), Key::URef(mint_uref))
-            .is_none());
-        assert!(named_keys
-            .insert(POS_NAME.to_string(), Key::URef(pos_uref))
-            .is_none());
-        named_keys
-    };
+    let initial_named_keys: BTreeMap<String, Key> = BTreeMap::new();
 
     let new_named_keys = {
         let public_key = PublicKey::ed25519_from([1; 32]);

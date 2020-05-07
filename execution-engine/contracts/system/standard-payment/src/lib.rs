@@ -33,6 +33,8 @@ impl MintProvider for StandardPaymentContract {
 
 impl ProofOfStakeProvider for StandardPaymentContract {
     fn get_payment_purse(&mut self) -> Result<URef, ApiError> {
+        // TODO: can't use call_contract any more; should be calling
+        // correct version of pos by hash
         let pos_pointer = system::get_proof_of_stake();
         let payment_purse = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,));
         Ok(payment_purse)

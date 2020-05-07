@@ -9,8 +9,6 @@ use alloc::{
     vec::Vec,
 };
 
-use core::convert::TryInto;
-
 use contract::contract_api::{runtime, storage};
 use types::{
     contract_header::{EntryPoint, EntryPointAccess, EntryPointType},
@@ -41,10 +39,11 @@ pub extern "C" fn contract_code_test() {
 
 #[no_mangle]
 pub extern "C" fn session_code_caller_as_session() {
-    let metadata_hash = runtime::get_key(METADATA_HASH_KEY).expect("should have metadata hash");
-    let metadata_ref = Key::Hash(metadata_hash.into_hash().unwrap());
+    let metadata_hash = runtime::get_key(METADATA_HASH_KEY)
+        .expect("should have metadata hash")
+        .into_seed();
     runtime::call_versioned_contract::<()>(
-        metadata_ref,
+        metadata_hash,
         SemVer::V1_0_0,
         SESSION_CODE,
         runtime_args! {},
@@ -59,12 +58,13 @@ pub extern "C" fn add_new_key() {
 
 #[no_mangle]
 pub extern "C" fn add_new_key_as_session() {
-    let metadata_hash = runtime::get_key(METADATA_HASH_KEY).expect("should have metadata hash");
-    let metadata_ref = Key::Hash(metadata_hash.into_hash().unwrap());
+    let metadata_hash = runtime::get_key(METADATA_HASH_KEY)
+        .expect("should have metadata hash")
+        .into_seed();
 
     assert!(runtime::get_key(NEW_KEY).is_none());
     runtime::call_versioned_contract::<()>(
-        metadata_ref,
+        metadata_hash,
         SemVer::V1_0_0,
         "add_new_key",
         runtime_args! {},
@@ -74,9 +74,10 @@ pub extern "C" fn add_new_key_as_session() {
 
 #[no_mangle]
 pub extern "C" fn session_code_caller_as_contract() {
-    let metadata_hash: Key = runtime::get_named_arg("metadata_hash");
+    let metadata_hash_key: Key = runtime::get_named_arg("metadata_hash");
+    let metadata_hash = metadata_hash_key.into_seed();
     runtime::call_versioned_contract::<()>(
-        metadata_hash.try_into().unwrap(),
+        metadata_hash,
         SemVer::V1_0_0,
         SESSION_CODE,
         runtime_args! {},

@@ -8,7 +8,7 @@ use engine_test_support::internal::{
     utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT,
     POS_INSTALL_CONTRACT, STANDARD_PAYMENT_INSTALL_CONTRACT,
 };
-use types::{account::PublicKey, Key, ProtocolVersion, U512};
+use types::{account::PublicKey, ProtocolVersion, U512};
 
 #[cfg(feature = "use-system-contracts")]
 const BAD_INSTALL: &str = "standard_payment.wasm";
@@ -88,16 +88,16 @@ fn should_run_genesis() {
     assert_eq!(account_1_balance_actual, account_1_balance.value());
     assert_eq!(account_2_balance_actual, account_2_balance.value());
 
-    let mint_contract_uref = builder.get_mint_contract_uref();
-    let pos_contract_uref = builder.get_pos_contract_uref();
+    let mint_contract_hash = builder.get_mint_contract_hash();
+    let pos_contract_hash = builder.get_pos_contract_hash();
 
-    if let Ok(StoredValue::Contract(_)) = builder.query(None, Key::URef(mint_contract_uref), &[]) {
+    if let Ok(StoredValue::Contract(_)) = builder.query(None, mint_contract_hash.into(), &[]) {
         // Contract exists at mint contract URef
     } else {
         panic!("contract not found at mint uref");
     }
 
-    if let Ok(StoredValue::Contract(_)) = builder.query(None, Key::URef(pos_contract_uref), &[]) {
+    if let Ok(StoredValue::Contract(_)) = builder.query(None, pos_contract_hash.into(), &[]) {
         // Contract exists at pos contract URef
     } else {
         panic!("contract not found at pos uref");

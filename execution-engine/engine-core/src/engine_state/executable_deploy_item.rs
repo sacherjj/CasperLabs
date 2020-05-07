@@ -1,4 +1,4 @@
-use types::{bytesrepr, CLValue, Hash, RuntimeArgs, SemVer};
+use types::{bytesrepr, CLValue, HashAddr, RuntimeArgs, SemVer};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ExecutableDeployItem {
@@ -29,7 +29,7 @@ pub enum ExecutableDeployItem {
         args: Vec<u8>,
     },
     StoredVersionedContractByHash {
-        hash: Hash,          // named key storing contract metadata hash
+        hash: HashAddr,      // named key storing contract metadata hash
         version: SemVer,     // finds active version
         entry_point: String, // finds header by entry point name
         args: Vec<u8>,

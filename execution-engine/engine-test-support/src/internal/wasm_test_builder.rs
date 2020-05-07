@@ -48,7 +48,7 @@ use engine_storage::{
 use types::{
     account::PublicKey,
     bytesrepr::{self, ToBytes},
-    CLValue, Key, URef, U512,
+    CLValue, ContractHash, Key, URef, U512,
 };
 
 use crate::internal::utils;
@@ -82,12 +82,12 @@ pub struct WasmTestBuilder<S> {
     genesis_account: Option<Account>,
     /// Genesis transforms
     genesis_transforms: Option<AdditiveMap<Key, Transform>>,
-    /// Mint contract uref
-    mint_contract_uref: Option<URef>,
-    /// PoS contract uref
-    pos_contract_uref: Option<URef>,
-    /// Standard payment contract uref
-    standard_payment_uref: Option<URef>,
+    /// Mint contract key
+    mint_contract_hash: Option<ContractHash>,
+    /// PoS contract key
+    pos_contract_hash: Option<ContractHash>,
+    /// Standard payment contract key
+    standard_payment_hash: Option<ContractHash>,
 }
 
 impl<S> WasmTestBuilder<S> {
@@ -117,9 +117,9 @@ impl Default for InMemoryWasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             genesis_transforms: None,
-            mint_contract_uref: None,
-            pos_contract_uref: None,
-            standard_payment_uref: None,
+            mint_contract_hash: None,
+            pos_contract_hash: None,
+            standard_payment_hash: None,
         }
     }
 }
@@ -138,9 +138,9 @@ impl<S> Clone for WasmTestBuilder<S> {
             bonded_validators: self.bonded_validators.clone(),
             genesis_account: self.genesis_account.clone(),
             genesis_transforms: self.genesis_transforms.clone(),
-            mint_contract_uref: self.mint_contract_uref,
-            pos_contract_uref: self.pos_contract_uref,
-            standard_payment_uref: self.standard_payment_uref,
+            mint_contract_hash: self.mint_contract_hash,
+            pos_contract_hash: self.pos_contract_hash,
+            standard_payment_hash: self.standard_payment_hash,
         }
     }
 }
@@ -206,9 +206,9 @@ impl LmdbWasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             genesis_transforms: None,
-            mint_contract_uref: None,
-            pos_contract_uref: None,
-            standard_payment_uref: None,
+            mint_contract_hash: None,
+            pos_contract_hash: None,
+            standard_payment_hash: None,
         }
     }
 
@@ -229,8 +229,8 @@ impl LmdbWasmTestBuilder {
         builder.genesis_hash = result.0.genesis_hash.clone();
         builder.post_state_hash = result.0.post_state_hash.clone();
         builder.bonded_validators = result.0.bonded_validators.clone();
-        builder.mint_contract_uref = result.0.mint_contract_uref;
-        builder.pos_contract_uref = result.0.pos_contract_uref;
+        builder.mint_contract_hash = result.0.mint_contract_hash;
+        builder.pos_contract_hash = result.0.pos_contract_hash;
         builder
     }
 
@@ -267,9 +267,9 @@ impl LmdbWasmTestBuilder {
             bonded_validators: Vec::new(),
             genesis_account: None,
             genesis_transforms: None,
-            mint_contract_uref: None,
-            pos_contract_uref: None,
-            standard_payment_uref: None,
+            mint_contract_hash: None,
+            pos_contract_hash: None,
+            standard_payment_hash: None,
         }
     }
 
@@ -302,9 +302,9 @@ where
             transforms: Vec::new(),
             bonded_validators: result.0.bonded_validators,
             genesis_account: result.0.genesis_account,
-            mint_contract_uref: result.0.mint_contract_uref,
-            pos_contract_uref: result.0.pos_contract_uref,
-            standard_payment_uref: result.0.standard_payment_uref,
+            mint_contract_hash: result.0.mint_contract_hash,
+            pos_contract_hash: result.0.pos_contract_hash,
+            standard_payment_hash: result.0.standard_payment_hash,
             genesis_transforms: result.0.genesis_transforms,
         }
     }
@@ -347,9 +347,9 @@ where
 
         self.genesis_hash = Some(state_root_hash.to_vec());
         self.post_state_hash = Some(state_root_hash.to_vec());
-        self.mint_contract_uref = Some(protocol_data.mint());
-        self.pos_contract_uref = Some(protocol_data.proof_of_stake());
-        self.standard_payment_uref = Some(protocol_data.standard_payment());
+        self.mint_contract_hash = Some(protocol_data.mint());
+        self.pos_contract_hash = Some(protocol_data.proof_of_stake());
+        self.standard_payment_hash = Some(protocol_data.standard_payment());
         self.genesis_account = Some(genesis_account);
         self.genesis_transforms = Some(transforms);
         self
@@ -535,19 +535,19 @@ where
             .expect("Unable to obtain genesis account. Please run genesis first.")
     }
 
-    pub fn get_mint_contract_uref(&self) -> URef {
-        self.mint_contract_uref
-            .expect("Unable to obtain mint contract uref. Please run genesis first.")
+    pub fn get_mint_contract_hash(&self) -> ContractHash {
+        self.mint_contract_hash
+            .expect("Unable to obtain mint contract. Please run genesis first.")
     }
 
-    pub fn get_pos_contract_uref(&self) -> URef {
-        self.pos_contract_uref
-            .expect("Unable to obtain pos contract uref. Please run genesis first.")
+    pub fn get_pos_contract_hash(&self) -> ContractHash {
+        self.pos_contract_hash
+            .expect("Unable to obtain pos contract. Please run genesis first.")
     }
 
-    pub fn get_standard_payment_contract_uref(&self) -> URef {
-        self.standard_payment_uref
-            .expect("Unable to obtain standard payment contract uref. Please run genesis first.")
+    pub fn get_standard_payment_contract_hash(&self) -> ContractHash {
+        self.standard_payment_hash
+            .expect("Unable to obtain standard payment contract. Please run genesis first.")
     }
 
     pub fn get_genesis_transforms(&self) -> &AdditiveMap<Key, engine_shared::transform::Transform> {
@@ -595,7 +595,7 @@ where
 
     pub fn get_pos_contract(&self) -> Contract {
         let pos_contract: Key = self
-            .pos_contract_uref
+            .pos_contract_hash
             .expect("should have pos contract uref")
             .into();
         self.query(None, pos_contract, &[])
@@ -604,11 +604,12 @@ where
     }
 
     pub fn get_purse_balance(&self, purse: URef) -> U512 {
-        let mint = self.get_mint_contract_uref();
+        let mint = self.get_mint_contract_hash();
         let purse_addr = purse.addr();
         let purse_bytes =
             ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
-        let balance_mapping_key = Key::local(mint.addr(), &purse_bytes);
+        let balance_mapping_key = Key::local(mint, &purse_bytes);
+
         let base_key = self
             .query(None, balance_mapping_key, &[])
             .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
@@ -633,9 +634,9 @@ where
         }
     }
 
-    pub fn get_contract(&self, contract_uref: URef) -> Option<Contract> {
+    pub fn get_contract(&self, contract_hash: ContractHash) -> Option<Contract> {
         let contract_value: StoredValue = self
-            .query(None, Key::URef(contract_uref), &[])
+            .query(None, contract_hash.into(), &[])
             .expect("should have contract value");
 
         if let StoredValue::Contract(contract) = contract_value {
