@@ -10,7 +10,7 @@ use hex_fmt::HexFmt;
 use crate::{
     account::PublicKey,
     bytesrepr::{self, Error, FromBytes, ToBytes},
-    ContractRef, URef, UREF_SERIALIZED_LENGTH,
+    URef, UREF_SERIALIZED_LENGTH,
 };
 
 const ACCOUNT_ID: u8 = 0;
@@ -114,16 +114,16 @@ impl Key {
             Key::Local { hash, .. } => format!("local-{}", base16::encode_lower(hash)),
         }
     }
-
-    /// Consumes and converts `self` to a [`ContractRef`] if `self` is of type [`Key::Hash`] or
-    /// [`Key::URef`], otherwise returns `None`.
-    pub fn to_contract_ref(self) -> Option<ContractRef> {
-        match self {
-            Key::URef(uref) => Some(ContractRef::URef(uref)),
-            Key::Hash(id) => Some(ContractRef::Hash(id)),
-            _ => None,
-        }
-    }
+    //
+    // /// Consumes and converts `self` to a [`ContractRef`] if `self` is of type [`Key::Hash`] or
+    // /// [`Key::URef`], otherwise returns `None`.
+    // pub fn to_contract_ref(self) -> Option<ContractRef> {
+    //     match self {
+    //         Key::URef(uref) => Some(ContractRef::URef(uref)),
+    //         Key::Hash(id) => Some(ContractRef::Hash(id)),
+    //         _ => None,
+    //     }
+    // }
 
     /// Returns the inner bytes of `self` if `self` is of type [`Key::Account`], otherwise returns
     /// `None`.

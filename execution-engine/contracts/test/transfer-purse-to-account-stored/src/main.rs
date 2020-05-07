@@ -13,7 +13,7 @@ use contract::{
 
 use types::{
     contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
-    ApiError, CLType, Key, URef, U512,
+    ApiError, CLType, Key, URef,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "transfer";
@@ -28,12 +28,8 @@ const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
 #[no_mangle]
 pub extern "C" fn transfer() {
     let source: URef = account::get_main_purse();
-    let destination = runtime::get_named_arg(ARG_0_NAME)
-        .map(|arg| arg.unwrap_or_revert_with(ApiError::InvalidArgument))
-        .unwrap_or_revert();
-    let amount: U512 = runtime::get_named_arg(ARG_1_NAME)
-        .map(|arg| arg.unwrap_or_revert_with(ApiError::InvalidArgument))
-        .unwrap_or_revert();
+    let destination = runtime::get_named_arg(ARG_0_NAME);
+    let amount = runtime::get_named_arg(ARG_1_NAME);
 
     let transfer_result = system::transfer_from_purse_to_account(source, destination, amount);
 
@@ -71,6 +67,5 @@ pub extern "C" fn call() {
         None,
         Some(HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),
-    )
-    .unwrap_or_revert();
+    );
 }

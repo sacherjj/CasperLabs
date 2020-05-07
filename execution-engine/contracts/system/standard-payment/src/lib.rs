@@ -10,6 +10,7 @@ use contract::{
 use types::{ApiError, URef, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
+pub const ARG_AMOUNT: &str = "amount";
 
 struct StandardPaymentContract;
 
@@ -43,9 +44,7 @@ impl StandardPayment for StandardPaymentContract {}
 pub fn delegate() {
     let mut standard_payment_contract = StandardPaymentContract;
 
-    let amount: U512 = runtime::get_arg(0)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
 
     standard_payment_contract.pay(amount).unwrap_or_revert();
 }

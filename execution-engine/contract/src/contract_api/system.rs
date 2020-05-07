@@ -4,8 +4,8 @@ use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
-    account::PublicKey, api_error, bytesrepr, ApiError, ContractRef, SystemContractType,
-    TransferResult, TransferredTo, URef, U512, UREF_SERIALIZED_LENGTH,
+    account::PublicKey, api_error, bytesrepr, ApiError, Key, SystemContractType, TransferResult,
+    TransferredTo, URef, U512, UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -19,49 +19,50 @@ pub const MINT_NAME: &str = "mint";
 /// Name of the reference to the Proof of Stake contract in the named keys.
 pub const POS_NAME: &str = "pos";
 
-fn get_system_contract(system_contract: SystemContractType) -> ContractRef {
-    let system_contract_index = system_contract.into();
-    let uref: URef = {
-        let result = {
-            let mut uref_data_raw = [0u8; UREF_SERIALIZED_LENGTH];
-            let value = unsafe {
-                ext_ffi::get_system_contract(
-                    system_contract_index,
-                    uref_data_raw.as_mut_ptr(),
-                    uref_data_raw.len(),
-                )
-            };
-            api_error::result_from(value).map(|_| uref_data_raw)
-        };
-        // Revert for any possible error that happened on host side
-        let uref_bytes = result.unwrap_or_else(|e| runtime::revert(e));
-        // Deserializes a valid URef passed from the host side
-        bytesrepr::deserialize(uref_bytes.to_vec()).unwrap_or_revert()
-    };
-    if uref.access_rights().is_none() {
-        runtime::revert(ApiError::NoAccessRights);
-    }
-    ContractRef::URef(uref)
+fn get_system_contract(_system_contract: SystemContractType) -> Key {
+    unimplemented!();
+    // let system_contract_index = system_contract.into();
+    // let uref: URef = {
+    //     let result = {
+    //         let mut uref_data_raw = [0u8; UREF_SERIALIZED_LENGTH];
+    //         let value = unsafe {
+    //             ext_ffi::get_system_contract(
+    //                 system_contract_index,
+    //                 uref_data_raw.as_mut_ptr(),
+    //                 uref_data_raw.len(),
+    //             )
+    //         };
+    //         api_error::result_from(value).map(|_| uref_data_raw)
+    //     };
+    //     // Revert for any possible error that happened on host side
+    //     let uref_bytes = result.unwrap_or_else(|e| runtime::revert(e));
+    //     // Deserializes a valid URef passed from the host side
+    //     bytesrepr::deserialize(uref_bytes.to_vec()).unwrap_or_revert()
+    // };
+    // if uref.access_rights().is_none() {
+    //     runtime::revert(ApiError::NoAccessRights);
+    // }
+    // Key::Hash(hash)
 }
 
 /// Returns a read-only pointer to the Mint contract.
 ///
 /// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
-pub fn get_mint() -> ContractRef {
+pub fn get_mint() -> Key {
     get_system_contract(SystemContractType::Mint)
 }
 
 /// Returns a read-only pointer to the Proof of Stake contract.
 ///
 /// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
-pub fn get_proof_of_stake() -> ContractRef {
+pub fn get_proof_of_stake() -> Key {
     get_system_contract(SystemContractType::ProofOfStake)
 }
 
 /// Returns a read-only pointer to the Standard Payment contract.
 ///
 /// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
-pub fn get_standard_payment() -> ContractRef {
+pub fn get_standard_payment() -> Key {
     get_system_contract(SystemContractType::StandardPayment)
 }
 

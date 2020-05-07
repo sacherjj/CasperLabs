@@ -14,8 +14,8 @@ use types::{ApiError, Key};
 
 const BAR_KEY: &str = "Bar";
 const FOO_KEY: &str = "Foo";
-const LIST_NAMED_KEYS_EXT: &str = "list_named_keys_ext";
-const LIST_NAMED_KEYS_KEY: &str = "list_named_keys";
+const _LIST_NAMED_KEYS_EXT: &str = "list_named_keys_ext";
+const _LIST_NAMED_KEYS_KEY: &str = "list_named_keys";
 const TEST_UREF: &str = "Test";
 
 #[no_mangle]
@@ -39,12 +39,14 @@ pub extern "C" fn call() {
     let uref = storage::new_uref(1i32);
     runtime::put_key(FOO_KEY, uref.clone().into());
     let _accounts_named_keys = runtime::list_named_keys();
-    let expected_urefs: BTreeMap<String, Key> =
+    let _expected_urefs: BTreeMap<String, Key> =
         iter::once((FOO_KEY.to_owned(), uref.into())).collect();
     // Test that `list_named_keys` returns correct value when called in the context of an account.
     // Store `list_named_keys_ext` to be called in the `call` part of this contract.
     // We don't have to  pass `expected_urefs` to exercise this function but
     // it adds initial known urefs to the state of the contract.
-    let pointer = storage::store_function_at_hash(LIST_NAMED_KEYS_EXT, expected_urefs);
-    runtime::put_key(LIST_NAMED_KEYS_KEY, pointer.into())
+
+    // TODO: do new style store
+    // let pointer = storage::store_function_at_hash(LIST_NAMED_KEYS_EXT, expected_urefs);
+    // runtime::put_key(LIST_NAMED_KEYS_KEY, pointer.into())
 }

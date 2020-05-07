@@ -44,8 +44,8 @@ use types::{
     bytesrepr::{self, ToBytes},
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
-    AccessRights, BlockTime, CLValue, EntryPointAccess, EntryPointType, Key, Phase,
-    ProtocolVersion, RuntimeArgs, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    AccessRights, BlockTime, CLValue, EntryPointAccess, EntryPointType, Key, NamedArg, Phase,
+    ProtocolVersion, RuntimeArgs, SemVer, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -79,7 +79,6 @@ pub const CONV_RATE: u64 = 10;
 pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
-const MINT_METHOD_NAME: &str = "mint";
 
 #[derive(Debug)]
 pub struct EngineState<S> {
@@ -199,7 +198,7 @@ where
         };
 
         // Spec #5: Execute the wasm code from the mint installer bytes
-        let mint_reference: URef = {
+        let (mint_reference, mint_metadata_key): (URef, Key) = {
             let mint_installer_bytes = ee_config.mint_installer_bytes();
             let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
             let args = RuntimeArgs::new();
@@ -213,6 +212,7 @@ where
             executor.exec_system(
                 mint_installer_module,
                 args,
+                "install",
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -229,6 +229,8 @@ where
                 system_contract_cache,
             )?
         };
+
+        println!("mint_reference: {:?}", mint_reference);
 
         // Spec #7: Execute pos installer wasm code, passing the initially bonded validators as an
         // argument
@@ -253,10 +255,15 @@ where
             let proof_of_stake_installer_module =
                 preprocessor.preprocess(proof_of_stake_installer_bytes)?;
             let args = {
-                let args = (mint_reference, bonded_validators);
-                let parsed_args =
-                    ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`");
-                parsed_args.into() // compatibility
+                let arg_mint_uref = NamedArg::new(
+                    "mint_uref".to_string(),
+                    CLValue::from_t(mint_reference).expect("should convert to `CLValue`"),
+                );
+                let arg_genesis_validators = NamedArg::new(
+                    "genesis_validators".to_string(),
+                    CLValue::from_t(bonded_validators).expect("should convert to `CLValue`"),
+                );
+                RuntimeArgs::Named(vec![arg_mint_uref, arg_genesis_validators])
             };
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
@@ -264,6 +271,7 @@ where
             executor.exec_system(
                 proof_of_stake_installer_module,
                 args,
+                "install",
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -281,6 +289,7 @@ where
             )?
         };
 
+        println!("proof_of_stake_reference: {:?}", proof_of_stake_reference);
         // Execute standard payment installer wasm code
         //
         // Note: this deviates from the implementation strategy described in the original
@@ -316,6 +325,7 @@ where
             executor.exec_system(
                 standard_payment_installer_module,
                 args,
+                "install",
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -332,6 +342,11 @@ where
                 system_contract_cache,
             )?
         };
+
+        println!(
+            "standard_payment_reference: {:?}",
+            standard_payment_reference
+        );
 
         // Spec #2: Associate given CostTable with given ProtocolVersion.
         let protocol_data = ProtocolData::new(
@@ -397,20 +412,21 @@ where
             let module = {
                 let contract = tracking_copy
                     .borrow_mut()
-                    .get_contract(correlation_id, Key::URef(mint_reference))?;
+                    .get_contract(correlation_id, mint_metadata_key)?;
                 let (bytes, _, _) = contract.destructure();
                 engine_wasm_prep::deserialize(&bytes)?
             };
-
             // For each account...
             for (account, named_keys) in accounts.into_iter() {
+                println!("{:?}", account);
                 let module = module.clone();
                 let args = {
-                    let motes = account.balance().value();
-                    let args = (MINT_METHOD_NAME, motes);
-                    let args =
-                        ArgsParser::parse(args).expect("args should convert to `Vec<CLValue>`");
-                    RuntimeArgs::from(args) // compatibility
+                    let arg_motes = NamedArg::new(
+                        "amount".to_string(),
+                        CLValue::from_t(account.balance().value())
+                            .expect("should convert to `CLValue`"),
+                    );
+                    RuntimeArgs::Named(vec![arg_motes])
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
@@ -431,7 +447,7 @@ where
                 };
                 let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-                let mint_reference = mint_reference.with_access_rights(AccessRights::READ);
+                //let mint_reference = mint_reference.with_access_rights(AccessRights::READ);
 
                 let mint_result: Result<URef, mint::Error> = {
                     // ...call the Mint's "mint" endpoint to create purse with tokens...
@@ -456,7 +472,12 @@ where
                     )?;
 
                     runtime
-                        .call_contract(mint_reference.into(), args)?
+                        .call_versioned_contract(
+                            mint_metadata_key,
+                            SemVer::V1_0_0,
+                            "mint".to_string(),
+                            args,
+                        )?
                         .into_t::<Result<URef, mint::Error>>()
                         .expect("should convert")
                 };
@@ -625,6 +646,7 @@ where
                 executor.exec_system(
                     upgrade_installer_module,
                     args,
+                    "call",
                     &mut keys,
                     initial_base_key,
                     &system_account,

@@ -9,7 +9,7 @@ use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{AccessRights, ApiError, ContractRef, URef};
+use types::{AccessRights, ApiError, Key, URef};
 
 pub const METHOD_VERSION: &str = "version";
 
@@ -45,7 +45,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::User(CustomError::InvalidMethodNameArg as u16));
 
     let purse_holder_contract_pointer =
-        ContractRef::URef(URef::new(purse_holder_uref.addr(), AccessRights::READ));
+        Key::URef(URef::new(purse_holder_uref.addr(), AccessRights::READ));
 
     match method_name.as_str() {
         METHOD_VERSION => {

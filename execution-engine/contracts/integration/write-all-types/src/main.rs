@@ -57,7 +57,8 @@ pub extern "C" fn call() {
     let u019 = storage::new_uref(v19);
     let u020 = storage::new_uref(v20);
     let u021 = storage::new_uref(v21);
-    let u022 = storage::store_function_at_hash("do_nothing", BTreeMap::new());
+    // TODO: new store version
+    //let u022 = storage::store_function_at_hash("do_nothing", BTreeMap::new());
 
     runtime::put_key("v01", u001.into());
     runtime::put_key("v02", u002.into());
@@ -80,5 +81,5 @@ pub extern "C" fn call() {
     runtime::put_key("v19", u019.into());
     runtime::put_key("v20", u020.into());
     runtime::put_key("v21", u021.into());
-    runtime::put_key("v22", u022.into());
+    //runtime::put_key("v22", u022.into());
 }

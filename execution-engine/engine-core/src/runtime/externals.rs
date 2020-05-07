@@ -554,22 +554,26 @@ where
                 // args(1) = size of metadata key in wasm memory
                 // args(2) = pointer to access key in wasm memory
                 // args(3) = pointer to contract version in wasm memory
-                // args(4) = pointer to contract header in wasm memory
-                // args(5) = size of contract header in wasm memory
+                // args(4) = pointer to entrypoints in wasm memory
+                // args(5) = size of entrypoints in wasm memory
                 // args(6) = pointer to named keys in wasm memory
                 // args(7) = size of named keys in wasm memory
-                // args(8) = pointer to contract header key memory
-                // args(9) = pointer to contract header key size
+                // args(8) = pointer to output buffer for serialized key
+                // args(9) = size of output buffer
+                // args(10) = pointer to bytes written
                 let (
                     meta_key_ptr,
                     meta_key_size,
                     access_key_ptr,
                     version_ptr,
-                    methods_ptr,
-                    methods_size,
+                    entrypoints_ptr,
+                    entrypoints_size,
                     named_keys_ptr,
                     named_keys_size,
-                ) = Args::parse(args)?;
+                    output_ptr,
+                    output_size,
+                    bytes_written_ptr,
+                ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
 
                 let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
                 let access_key = {
@@ -580,8 +584,8 @@ where
                     let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let methods: BTreeMap<String, EntryPoint> =
-                    self.t_from_mem(methods_ptr, methods_size)?;
+                let entry_points: BTreeMap<String, EntryPoint> =
+                    self.t_from_mem(entrypoints_ptr, entrypoints_size)?;
                 let named_keys: BTreeMap<String, Key> =
                     self.t_from_mem(named_keys_ptr, named_keys_size)?;
 
@@ -589,8 +593,11 @@ where
                     metadata_key,
                     access_key,
                     version,
-                    methods,
+                    entry_points,
                     named_keys,
+                    output_ptr,
+                    output_size as usize,
+                    bytes_written_ptr,
                 )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }

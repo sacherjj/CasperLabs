@@ -3,12 +3,16 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String};
+use alloc::string::String;
 
-use contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+
+// use alloc::{collections::BTreeMap, string::String};
+
+// use contract::{
+//     contract_api::{runtime, storage},
+//     unwrap_or_revert::UnwrapOrRevert,
+// };
 use types::ApiError;
 
 // This is making use of the undocumented "FFI" function `gas()` which is used by the Wasm
@@ -18,7 +22,7 @@ extern "C" {
     pub fn gas(amount: i32);
 }
 
-const SUBCALL_NAME: &str = "add_gas";
+const _SUBCALL_NAME: &str = "add_gas";
 const ADD_GAS_FROM_SESSION: &str = "add-gas-from-session";
 const ADD_GAS_VIA_SUBCALL: &str = "add-gas-via-subcall";
 
@@ -53,8 +57,8 @@ pub extern "C" fn call() {
             gas(amount);
         },
         ADD_GAS_VIA_SUBCALL => {
-            let reference = storage::store_function_at_hash(SUBCALL_NAME, BTreeMap::new());
-            runtime::call_contract::<_, ()>(reference, (amount,));
+            // let reference = storage::store_function_at_hash(SUBCALL_NAME, BTreeMap::new());
+            // runtime::call_contract::<_, ()>(reference, (amount,));
         }
         _ => runtime::revert(ApiError::InvalidArgument),
     }

@@ -1,5 +1,7 @@
 #![no_std]
 #![no_main]
+#![allow(dead_code)]
+#![allow(unused_imports)]
 
 extern crate alloc;
 
@@ -112,52 +114,50 @@ fn transfer_funds_ext() {
 
 /// Registers a function and saves it in callers named keys
 fn delegate() -> Result<(), ApiError> {
-    let method: String = runtime::get_arg(DelegateArg::Method as u32)
-        .ok_or(ApiError::MissingArgument)?
-        .map_err(|_| ApiError::InvalidArgument)?;
-    match method.as_str() {
-        METHOD_INSTALL => {
-            // Create a purse that should be known to the contract regardless of the
-            // calling context still owned by the account that deploys the contract
-            let purse = system::create_purse();
-            let maintainer = runtime::get_caller();
-            // Keys below will make it possible to use within the called contract
-            let known_keys = {
-                let mut keys = BTreeMap::new();
-                // "donation_purse" is the purse owner of the contract can transfer funds from
-                // callers
-                keys.insert(DONATION_PURSE.into(), purse.into());
-                // "maintainer" is the person who installed this contract
-                keys.insert(MAINTAINER.into(), Key::Account(maintainer));
-                keys
-            };
-            // Install the contract with associated owner-related keys
-            let contract_ref = storage::store_function_at_hash(TRANSFER_FUNDS_EXT, known_keys);
-            runtime::put_key(TRANSFER_FUNDS_KEY, contract_ref.into());
-            // For easy access in outside world here `donation` purse is also attached
-            // to the account
-            runtime::put_key(DONATION_PURSE_COPY, purse.into());
-        }
-        METHOD_CALL => {
-            // This comes from outside i.e. after deploying the contract, this key is queried, and
-            // then passed into the call
-            let contract_key: Key = runtime::get_arg(DelegateArg::ContractKey as u32)
-                .ok_or(ApiError::MissingArgument)?
-                .map_err(|_| ApiError::InvalidArgument)?;
-            let contract_ref = contract_key
-                .to_contract_ref()
-                .ok_or(ApiError::UnexpectedKeyVariant)?;
-            // This is a method that's gets forwarded into the sub contract
-            let subcontract_method: String =
-                runtime::get_arg(DelegateArg::SubContractMethodFwd as u32)
-                    .ok_or(ApiError::MissingArgument)?
-                    .map_err(|_| ApiError::InvalidArgument)?;
-
-            let subcontract_args = (subcontract_method,);
-            runtime::call_contract::<_, ()>(contract_ref, subcontract_args);
-        }
-        _ => return Err(ContractError::InvalidDelegateMethod.into()),
-    }
+    // let method: String = runtime::get_arg(DelegateArg::Method as u32)
+    //     .ok_or(ApiError::MissingArgument)?
+    //     .map_err(|_| ApiError::InvalidArgument)?;
+    // match method.as_str() {
+    //     METHOD_INSTALL => {
+    //         // Create a purse that should be known to the contract regardless of the
+    //         // calling context still owned by the account that deploys the contract
+    //         let purse = system::create_purse();
+    //         let maintainer = runtime::get_caller();
+    //         // Keys below will make it possible to use within the called contract
+    //         let known_keys = {
+    //             let mut keys = BTreeMap::new();
+    //             // "donation_purse" is the purse owner of the contract can transfer funds from
+    //             // callers
+    //             keys.insert(DONATION_PURSE.into(), purse.into());
+    //             // "maintainer" is the person who installed this contract
+    //             keys.insert(MAINTAINER.into(), Key::Account(maintainer));
+    //             keys
+    //         };
+    //         // Install the contract with associated owner-related keys
+    //         let contract_ref = storage::store_function_at_hash(TRANSFER_FUNDS_EXT, known_keys);
+    //         runtime::put_key(TRANSFER_FUNDS_KEY, contract_ref.into());
+    //         // For easy access in outside world here `donation` purse is also attached
+    //         // to the account
+    //         runtime::put_key(DONATION_PURSE_COPY, purse.into());
+    //     }
+    //     METHOD_CALL => {
+    //         // This comes from outside i.e. after deploying the contract, this key is queried,
+    // and         // then passed into the call
+    //         let contract_key: Key = runtime::get_arg(DelegateArg::ContractKey as u32)
+    //             .ok_or(ApiError::MissingArgument)?
+    //             .map_err(|_| ApiError::InvalidArgument)?;
+    //
+    //         // This is a method that's gets forwarded into the sub contract
+    //         let subcontract_method: String =
+    //             runtime::get_arg(DelegateArg::SubContractMethodFwd as u32)
+    //                 .ok_or(ApiError::MissingArgument)?
+    //                 .map_err(|_| ApiError::InvalidArgument)?;
+    //
+    //         let subcontract_args = (subcontract_method,);
+    //         runtime::call_contract::<_, ()>(contract_key, subcontract_args);
+    //     }
+    //     _ => return Err(ContractError::InvalidDelegateMethod.into()),
+    // }
     Ok(())
 }
 

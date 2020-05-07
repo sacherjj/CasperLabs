@@ -48,13 +48,12 @@ pub extern "C" fn call() {
         .try_into()
         .unwrap_or_revert();
 
-    storage::add_contract_version(
+    let key = storage::add_contract_version(
         do_nothing_hash,
         do_nothing_uref,
         UPGRADED_VERSION,
         methods,
         BTreeMap::new(),
-    )
-    .unwrap_or_revert();
-    runtime::put_key("end of upgrade", Key::Hash([1u8; 32]));
+    );
+    runtime::put_key("end of upgrade", key);
 }

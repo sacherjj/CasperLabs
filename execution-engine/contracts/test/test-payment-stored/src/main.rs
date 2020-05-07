@@ -5,7 +5,7 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::ToString, vec};
 
-use contract::{contract_api::storage, unwrap_or_revert::UnwrapOrRevert};
+use contract::contract_api::storage;
 use types::{
     contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     CLType,
@@ -40,6 +40,5 @@ pub extern "C" fn call() {
         None,
         Some(HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),
-    )
-    .unwrap_or_revert();
+    );
 }

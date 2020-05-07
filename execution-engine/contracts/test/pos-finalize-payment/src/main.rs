@@ -5,29 +5,29 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, ContractRef, Key, URef, U512};
+use types::{account::PublicKey, ApiError, Key, URef, U512};
 
-fn set_refund_purse(pos: &ContractRef, p: &URef) {
-    runtime::call_contract(pos.clone(), ("set_refund_purse", *p))
+fn set_refund_purse(contract_key: Key, p: &URef) {
+    runtime::call_contract(contract_key, ("set_refund_purse", *p))
 }
 
-fn get_payment_purse(pos: &ContractRef) -> URef {
-    runtime::call_contract(pos.clone(), ("get_payment_purse",))
+fn get_payment_purse(contract_key: Key) -> URef {
+    runtime::call_contract(contract_key, ("get_payment_purse",))
 }
 
-fn submit_payment(pos: &ContractRef, amount: U512) {
-    let payment_purse = get_payment_purse(pos);
+fn submit_payment(contract_key: Key, amount: U512) {
+    let payment_purse = get_payment_purse(contract_key);
     let main_purse = account::get_main_purse();
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
 }
 
-fn finalize_payment(pos: &ContractRef, amount_spent: U512, account: PublicKey) {
-    runtime::call_contract(pos.clone(), ("finalize_payment", amount_spent, account))
+fn finalize_payment(contract_key: Key, amount_spent: U512, account: PublicKey) {
+    runtime::call_contract(contract_key, ("finalize_payment", amount_spent, account))
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = system::get_proof_of_stake();
+    let contract_key = system::get_proof_of_stake();
 
     let payment_amount: U512 = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
@@ -42,14 +42,14 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    submit_payment(&pos_pointer, payment_amount);
+    submit_payment(contract_key, payment_amount);
     if refund_purse_flag != 0 {
         let refund_purse = system::create_purse();
         runtime::put_key("local_refund_purse", Key::URef(refund_purse));
-        set_refund_purse(&pos_pointer, &refund_purse);
+        set_refund_purse(contract_key, &refund_purse);
     }
 
     if let (Some(amount_spent), Some(account)) = (maybe_amount_spent, maybe_account) {
-        finalize_payment(&pos_pointer, amount_spent, account);
+        finalize_payment(contract_key, amount_spent, account);
     }
 }

@@ -11,13 +11,10 @@ use alloc::{
 
 use core::convert::TryInto;
 
-use contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::{runtime, storage};
 use types::{
     contract_header::{EntryPoint, EntryPointAccess, EntryPointType},
-    runtime_args, ApiError, CLType, ContractRef, Key, RuntimeArgs, SemVer, URef,
+    runtime_args, CLType, Key, RuntimeArgs, SemVer, URef,
 };
 
 const VERSION_1_0_0: SemVer = SemVer::new(1, 0, 0);
@@ -45,7 +42,7 @@ pub extern "C" fn contract_code_test() {
 #[no_mangle]
 pub extern "C" fn session_code_caller_as_session() {
     let metadata_hash = runtime::get_key(METADATA_HASH_KEY).expect("should have metadata hash");
-    let metadata_ref = ContractRef::Hash(metadata_hash.into_hash().unwrap());
+    let metadata_ref = Key::Hash(metadata_hash.into_hash().unwrap());
     runtime::call_versioned_contract::<()>(
         metadata_ref,
         SemVer::V1_0_0,
@@ -63,7 +60,7 @@ pub extern "C" fn add_new_key() {
 #[no_mangle]
 pub extern "C" fn add_new_key_as_session() {
     let metadata_hash = runtime::get_key(METADATA_HASH_KEY).expect("should have metadata hash");
-    let metadata_ref = ContractRef::Hash(metadata_hash.into_hash().unwrap());
+    let metadata_ref = Key::Hash(metadata_hash.into_hash().unwrap());
 
     assert!(runtime::get_key(NEW_KEY).is_none());
     runtime::call_versioned_contract::<()>(
@@ -77,9 +74,7 @@ pub extern "C" fn add_new_key_as_session() {
 
 #[no_mangle]
 pub extern "C" fn session_code_caller_as_contract() {
-    let metadata_hash: Key = runtime::get_named_arg("metadata_hash")
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let metadata_hash: Key = runtime::get_named_arg("metadata_hash");
     runtime::call_versioned_contract::<()>(
         metadata_hash.try_into().unwrap(),
         SemVer::V1_0_0,
@@ -146,7 +141,7 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
     entrypoints
 }
 
-fn install_version_1(metadata_hash: Key, access_uref: URef) {
+fn install_version_1(metadata_hash: Key, access_uref: URef) -> Key {
     let contract_named_keys = {
         let contract_variable = storage::new_uref(0);
 
@@ -163,7 +158,6 @@ fn install_version_1(metadata_hash: Key, access_uref: URef) {
         entrypoints,
         contract_named_keys,
     )
-    .unwrap_or_revert();
 }
 
 #[no_mangle]

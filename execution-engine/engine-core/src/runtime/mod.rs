@@ -1960,20 +1960,22 @@ where
     /// Calls `version` of the contract living at `key`, invoking `method` with
     /// supplied `args`. This function also checks the args conform with the
     /// types given in the contract header.
-    fn call_versioned_contract(
+    pub fn call_versioned_contract(
         &mut self,
         key: Key,
         version: SemVer,
-        method: String,
+        entry_point_name: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
-        let (contract, context, entry_point_type) = match self.context.read_gs(&key)? {
+        let (context_key, contract, entry_point_type) = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
                     .ok_or_else(|| Error::InvalidContractVersion)?;
+
+                println!("header {:?}", header);
                 let entry_point = header
-                    .get_method(&method)
+                    .get_method(&entry_point_name)
                     .ok_or_else(|| Error::NoSuchMethod)?;
 
                 if let EntryPointAccess::Groups(groups) = entry_point.access() {
@@ -2010,7 +2012,7 @@ where
                     .and_then(|sv| sv.as_contract().cloned())
                     .ok_or_else(|| Error::InvalidContractVersion)?;
 
-                let (context, entry_point_type) = match entry_point.entry_point_type() {
+                let (context_key, entry_point_type) = match entry_point.entry_point_type() {
                     EntryPointType::Session
                         if self.context.entry_point_type() == EntryPointType::Contract =>
                     {
@@ -2028,7 +2030,7 @@ where
                     }
                 };
 
-                (contract, context, entry_point_type)
+                (context_key, contract, entry_point_type)
             }
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
@@ -2038,7 +2040,14 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
-        self.execute_contract(context, contract, args, method.as_str(), entry_point_type)
+        let entry_point_name = entry_point_name.as_str();
+        self.execute_contract(
+            context_key,
+            contract,
+            args,
+            entry_point_name,
+            entry_point_type,
+        )
     }
 
     fn execute_contract(
@@ -2046,7 +2055,7 @@ where
         key: Key,
         contract: Contract,
         args: RuntimeArgs,
-        entry_point: &str,
+        entry_point_name: &str,
         entry_point_type: EntryPointType,
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
@@ -2151,7 +2160,7 @@ where
             context,
         };
 
-        let result = instance.invoke_export(entry_point, &[], &mut runtime);
+        let result = instance.invoke_export(entry_point_name, &[], &mut runtime);
 
         // The `runtime`'s context was initialized with our counter from before the call and any gas
         // charged by the sub-call was added to its counter - so let's copy the correct value of the
@@ -2446,8 +2455,11 @@ where
         metadata_key: Key,
         access_key: URef,
         version: SemVer,
-        methods: BTreeMap<String, EntryPoint>,
+        entry_points: BTreeMap<String, EntryPoint>,
         named_keys: BTreeMap<String, Key>,
+        output_ptr: u32,
+        output_size: usize,
+        bytes_written_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
@@ -2460,7 +2472,32 @@ where
 
         let contract_key = Key::Hash(self.context.new_function_address()?);
 
-        let header = ContractHeader::new(methods, contract_key, self.context.protocol_version());
+        {
+            let key_bytes = match contract_key.to_bytes() {
+                Ok(bytes) => bytes,
+                Err(error) => return Ok(Err(error.into())),
+            };
+
+            // `output_size` must be >= actual length of serialized Key bytes
+            if output_size < key_bytes.len() {
+                return Ok(Err(ApiError::BufferTooSmall));
+            }
+
+            // Set serialized Key bytes into the output buffer
+            if let Err(error) = self.memory.set(output_ptr, &key_bytes) {
+                return Err(Error::Interpreter(error.into()).into());
+            }
+
+            // Following cast is assumed to be safe
+            let bytes_size = key_bytes.len() as u32;
+            let size_bytes = bytes_size.to_le_bytes(); // Wasm is little-endian
+            if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
+                return Err(Error::Interpreter(error.into()).into());
+            }
+        }
+
+        let header =
+            ContractHeader::new(entry_points, contract_key, self.context.protocol_version());
 
         if let Err(err) = metadata.add_version(version, header.clone()) {
             return Ok(Err(err.into()));
@@ -3181,8 +3218,8 @@ where
             Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
                 return Ok(Err(ApiError::OutOfMemory))
             }
-            None => return Ok(Err(ApiError::MissingArgument)),
             Some(arg) => arg.inner_bytes().len() as u32,
+            None => return Ok(Err(ApiError::MissingArgument)),
         };
 
         let arg_size_bytes = arg_size.to_le_bytes(); // Wasm is little-endian

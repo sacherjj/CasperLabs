@@ -1,16 +1,8 @@
 #![no_std]
 #![no_main]
 
-use contract::{
-    contract_api::{runtime, system},
-    unwrap_or_revert::UnwrapOrRevert,
-};
-use types::{ApiError, ContractRef};
-
-#[repr(u16)]
-enum CustomError {
-    ContractPointerHash = 1,
-}
+use contract::contract_api::system;
+use types::Key;
 
 pub const MODIFIED_MINT_EXT_FUNCTION_NAME: &str = "modified_mint_ext";
 pub const POS_EXT_FUNCTION_NAME: &str = "pos_ext";
@@ -23,7 +15,8 @@ pub extern "C" fn modified_mint_ext() {
 
 #[no_mangle]
 pub extern "C" fn pos_ext() {
-    pos::delegate();
+    unimplemented!();
+    // pos::delegate();
 }
 
 #[no_mangle]
@@ -31,12 +24,10 @@ pub extern "C" fn pay() {
     standard_payment::delegate();
 }
 
-fn upgrade_uref(name: &str, contract_ref: ContractRef) {
-    let uref = contract_ref
-        .into_uref()
-        .ok_or(ApiError::User(CustomError::ContractPointerHash as u16))
-        .unwrap_or_revert();
-    runtime::upgrade_contract_at_uref(name, uref);
+fn upgrade_uref(_name: &str, _key: Key) {
+    // TODO use new upgrade functionality
+    unimplemented!();
+    //    runtime::upgrade_contract_at_uref(name, uref);
 }
 
 fn upgrade_mint() {

@@ -10,7 +10,7 @@ use casperlabs_types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, FromBytes},
-    ApiError, BlockTime, CLTyped, CLValue, ContractRef, Key, Phase, RuntimeArgs, SemVer, URef,
+    ApiError, BlockTime, CLTyped, CLValue, Key, Phase, RuntimeArgs, SemVer, URef,
     BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
 
@@ -44,8 +44,7 @@ pub fn revert<T: Into<ApiError>>(error: T) -> ! {
 /// stored contract calls [`revert`], then execution stops and `call_contract` doesn't return.
 /// Otherwise `call_contract` returns `()`.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, args: A) -> T {
-    let contract_key: Key = c_ptr.into();
+pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(contract_key: Key, args: A) -> T {
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
     let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
         .map(contract_api::to_ptr)
@@ -75,15 +74,15 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(c_ptr: ContractRef, 
 /// The return value rules are the same as for `call_contract`.
 #[allow(clippy::ptr_arg)]
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
-    c_ptr: ContractRef,
+    contract_key: Key,
     version: SemVer,
-    method: &str,
+    entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> T {
-    let contract_key: Key = c_ptr.into();
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
     let (version_ptr, _version_size, _bytes2) = contract_api::to_ptr(version);
-    let (method_ptr, method_size, _bytes2) = contract_api::to_ptr(method);
+    let (entry_point_name_ptr, entry_point_name_size, _bytes2) =
+        contract_api::to_ptr(entry_point_name);
     let (runtime_args_ptr, runtime_args_size, _bytes2) = contract_api::to_ptr(runtime_args);
 
     let bytes_written = {
@@ -93,8 +92,8 @@ pub fn call_versioned_contract<T: CLTyped + FromBytes>(
                 key_ptr,
                 key_size,
                 version_ptr,
-                method_ptr,
-                method_size,
+                entry_point_name_ptr,
+                entry_point_name_size,
                 runtime_args_ptr,
                 runtime_args_size,
                 bytes_written.as_mut_ptr(),
@@ -196,8 +195,9 @@ fn get_named_arg_size(name: &str) -> Option<usize> {
 ///
 /// Note that this is only relevant to contracts stored on-chain since a contract deployed directly
 /// is not invoked with any arguments.
-pub fn get_named_arg<T: FromBytes>(name: &str) -> Option<Result<T, bytesrepr::Error>> {
-    let arg_size = get_named_arg_size(name)?;
+pub fn get_named_arg<T: FromBytes>(name: &str) -> T {
+    //Option<Result<T, bytesrepr::Error>> {
+    let arg_size = get_named_arg_size(name).unwrap_or_revert_with(ApiError::MissingArgument);
     let arg_bytes = if arg_size > 0 {
         let res = {
             let data_non_null_ptr = contract_api::alloc_bytes(arg_size);
@@ -219,7 +219,7 @@ pub fn get_named_arg<T: FromBytes>(name: &str) -> Option<Result<T, bytesrepr::Er
         // Avoids allocation with 0 bytes and a call to get_arg
         Vec::new()
     };
-    Some(bytesrepr::deserialize(arg_bytes))
+    bytesrepr::deserialize(arg_bytes).unwrap_or_revert()
 }
 
 /// Returns the caller of the current context, i.e. the [`PublicKey`] of the account which made the

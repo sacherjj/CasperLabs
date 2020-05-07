@@ -428,6 +428,7 @@ impl Executor {
         &self,
         module: Module,
         args: RuntimeArgs,
+        entry_point_name: &str,
         keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
@@ -438,7 +439,7 @@ impl Executor {
         address_generator: Rc<RefCell<AddressGenerator>>,
         protocol_version: ProtocolVersion,
         correlation_id: CorrelationId,
-        state: Rc<RefCell<TrackingCopy<R>>>,
+        tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
@@ -461,14 +462,15 @@ impl Executor {
             address_generator,
             protocol_version,
             correlation_id,
-            state,
+            tracking_copy,
             phase,
             protocol_data,
             system_contract_cache,
             EntryPointType::Session,
         )?;
 
-        let error: wasmi::Error = match instance.invoke_export("call", &[], &mut runtime) {
+        let error: wasmi::Error = match instance.invoke_export(entry_point_name, &[], &mut runtime)
+        {
             Err(error) => error,
             Ok(_) => {
                 // This duplicates the behavior of sub_call, but is admittedly rather questionable.

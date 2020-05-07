@@ -13,10 +13,7 @@ pub extern "C" fn call() {
     let mint = Key::Hash([
         164, 102, 153, 51, 236, 214, 169, 167, 126, 44, 250, 247, 179, 214, 203, 229, 239, 69, 145,
         25, 5, 153, 113, 55, 255, 188, 176, 201, 7, 4, 42, 100,
-    ])
-    .to_contract_ref()
-    .unwrap();
-    //let x = contract_api::get_uref("mint");
+    ]);
 
     let amount1 = U512::from(100);
     let purse1: Key = runtime::call_contract(mint.clone(), ("create", amount1));

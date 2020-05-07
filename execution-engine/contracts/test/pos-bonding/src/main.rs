@@ -9,7 +9,8 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, ContractRef, URef, U512};
+
+use types::{account::PublicKey, ApiError, Key, U512};
 
 #[repr(u16)]
 enum Error {
@@ -17,12 +18,12 @@ enum Error {
     UnknownCommand,
 }
 
-fn bond(pos: &ContractRef, amount: &U512, source: URef) {
-    runtime::call_contract::<_, ()>(pos.clone(), (POS_BOND, *amount, source));
+fn bond(pos: Key, amount: U512, source: Key) {
+    runtime::call_contract::<_, ()>(pos, (POS_BOND, amount, source));
 }
 
-fn unbond(pos: &ContractRef, amount: Option<U512>) {
-    runtime::call_contract::<_, ()>(pos.clone(), (POS_UNBOND, amount));
+fn unbond(pos: Key, amount: Option<U512>) {
+    runtime::call_contract::<_, ()>(pos, (POS_UNBOND, amount));
 }
 
 const POS_BOND: &str = "bond";
@@ -51,13 +52,13 @@ pub extern "C" fn call() {
         system::transfer_from_purse_to_purse(account::get_main_purse(), p1, amount)
             .unwrap_or_revert();
 
-        bond(&pos_pointer, &amount, p1);
+        bond(pos_pointer, amount, p1.into());
     } else if command == TEST_BOND_FROM_MAIN_PURSE {
         let amount = runtime::get_arg(1)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-        bond(&pos_pointer, &amount, account::get_main_purse());
+        bond(pos_pointer, amount, account::get_main_purse().into());
     } else if command == TEST_SEED_NEW_ACCOUNT {
         let account: PublicKey = runtime::get_arg(1)
             .unwrap_or_revert_with(ApiError::MissingArgument)
@@ -71,7 +72,7 @@ pub extern "C" fn call() {
         let maybe_amount: Option<U512> = runtime::get_arg(1)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
-        unbond(&pos_pointer, maybe_amount);
+        unbond(pos_pointer, maybe_amount);
     } else {
         runtime::revert(ApiError::User(Error::UnknownCommand as u16));
     }

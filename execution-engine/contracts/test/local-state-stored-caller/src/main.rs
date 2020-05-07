@@ -2,7 +2,7 @@
 #![no_main]
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{AccessRights, ApiError, ContractRef, URef};
+use types::{AccessRights, ApiError, Key, URef};
 
 #[repr(u32)]
 enum Args {
@@ -21,7 +21,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     let local_state_contract_pointer =
-        ContractRef::URef(URef::new(local_state_uref.addr(), AccessRights::READ));
+        Key::URef(URef::new(local_state_uref.addr(), AccessRights::READ));
 
     // call do_nothing_stored
     runtime::call_contract(local_state_contract_pointer, ())

@@ -5,7 +5,9 @@ use engine_shared::{
     stored_value::StoredValue, TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, ContractMetadata, Key, URef, U512};
+use types::{
+    account::PublicKey, bytesrepr::ToBytes, CLValue, ContractMetadata, Key, SemVer, URef, U512,
+};
 
 use crate::{execution, tracking_copy::TrackingCopy};
 
@@ -129,6 +131,12 @@ where
             .get(correlation_id, &key.normalize())
             .map_err(Into::into)?
         {
+            Some(StoredValue::ContractMetadata(metadata)) => {
+                let contract_header = metadata
+                    .get_version(&SemVer::V1_0_0)
+                    .ok_or_else(|| execution::Error::KeyNotFound(key))?;
+                self.get_contract(correlation_id, contract_header.contract_key())
+            }
             Some(StoredValue::Contract(contract)) => Ok(contract),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
                 "Contract".to_string(),

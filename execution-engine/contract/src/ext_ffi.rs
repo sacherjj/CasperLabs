@@ -106,40 +106,43 @@ extern "C" {
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
     pub fn create_contract_metadata_at_hash(hash_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
     pub fn create_contract_user_group(
-        meta_ptr: *const u8,
-        meta_size: usize,
+        contract_metadata_key_ptr: *const u8,
+        contract_metadata_key_size: usize,
         access_ptr: *const u8,
         label_ptr: *const u8,
-        leabel_size: usize,
+        label_size: usize,
         num_new_urefs: u8,
         existing_urefs_ptr: *const u8,
         existing_urefs_size: usize,
         output_size_ptr: *mut usize,
     ) -> i32;
     pub fn add_contract_version(
-        meta_ptr: *const u8,
-        meta_size: usize,
+        contract_metadata_key_ptr: *const u8,
+        contract_metadata_key_size: usize,
         access_ptr: *const u8,
         version_ptr: *const u8,
-        header_ptr: *const u8,
-        header_size: usize,
+        entry_points_ptr: *const u8,
+        entry_points_size: usize,
         named_keys_ptr: *const u8,
         named_keys_size: usize,
+        output_ptr: *mut u8,
+        output_size: usize,
+        bytes_written_ptr: *mut usize,
     ) -> i32;
     pub fn remove_contract_version(
-        meta_ptr: *const u8,
-        meta_size: usize,
+        contract_metadata_key_ptr: *const u8,
+        contract_metadata_key_size: usize,
         access_ptr: *const u8,
         version_ptr: *const u8,
     ) -> i32;
     pub fn call_versioned_contract(
-        key_ptr: *const u8,
-        key_size: usize,
+        contract_metadata_key_ptr: *const u8,
+        contract_metadata_key_size: usize,
         version_ptr: *const u8,
-        method_ptr: *const u8,
-        method_size: usize,
-        named_args_ptr: *const u8,
-        named_args_size: usize,
+        entry_point_name_ptr: *const u8,
+        entry_point_name_size: usize,
+        runtime_args_ptr: *const u8,
+        runtime_args_size: usize,
         result_size: *mut usize,
     ) -> i32;
     #[cfg(feature = "test-support")]
