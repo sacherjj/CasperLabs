@@ -3110,7 +3110,8 @@ where
         dest_ptr: u32,
         _dest_size: u32,
     ) -> Result<Result<(), ApiError>, Trap> {
-        let attenuated_uref = match SystemContractType::try_from(system_contract_index) {
+        let contract_hash: ContractHash = match SystemContractType::try_from(system_contract_index)
+        {
             Ok(SystemContractType::Mint) => self.get_mint_contract(),
             Ok(SystemContractType::ProofOfStake) => self.get_pos_contract(),
             Ok(SystemContractType::StandardPayment) => self.get_standard_payment_contract(),
@@ -3118,8 +3119,8 @@ where
         };
 
         // Serialize data that will be written the memory under `dest_ptr`
-        let attenuated_uref_bytes = attenuated_uref.into_bytes().map_err(Error::BytesRepr)?;
-        match self.memory.set(dest_ptr, &attenuated_uref_bytes) {
+        let contract_hash_bytes = contract_hash.into_bytes().map_err(Error::BytesRepr)?;
+        match self.memory.set(dest_ptr, &contract_hash_bytes) {
             Ok(_) => Ok(Ok(())),
             Err(error) => Err(Error::Interpreter(error.into()).into()),
         }
