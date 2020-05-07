@@ -151,4 +151,29 @@ extern "C" {
         dest_ptr: *mut u8,
         dest_size: usize,
     ) -> i32;
+    pub fn remove_contract_user_group(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        label_ptr: *const u8,
+        label_size: usize,
+    ) -> i32;
+    pub fn extend_contract_user_group_urefs(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        label_ptr: *const u8,
+        label_size: usize,
+        new_urefs_count: usize,
+        value_size_ptr: *const usize,
+    ) -> i32;
+    pub fn remove_contract_user_group_urefs(
+        meta_ptr: *const u8,
+        meta_size: usize,
+        access_ptr: *const u8,
+        label_ptr: *const u8,
+        label_size: usize,
+        urefs_ptr: *const u8,
+        urefs_size: usize,
+    ) -> i32;
 }

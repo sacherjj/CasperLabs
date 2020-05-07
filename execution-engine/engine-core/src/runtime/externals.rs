@@ -686,6 +686,72 @@ where
                     self.get_named_arg(name_ptr, name_size as usize, dest_ptr, dest_size as usize)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
+
+            FunctionIndex::RemoveContractUserGroupIndex => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to contract version in wasm memory
+                // args(4) = pointer to label
+                // args(5) = label size
+                let (meta_key_ptr, meta_key_size, access_key_ptr, label_ptr, label_size) =
+                    Args::parse(args)?;
+
+                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let access_key = {
+                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+                };
+                let label: String = self.t_from_mem(label_ptr, label_size)?;
+
+                let ret = self.remove_contract_user_group(metadata_key, access_key, label)?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            FunctionIndex::ExtendContractUserGroupURefsIndex => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to label name
+                // args(4) = label size bytes
+                // args(5) = number of new urefs to be created
+                // args(6) = output of size value of host bytes data
+                let (
+                    meta_ptr,
+                    meta_size,
+                    access_ptr,
+                    label_ptr,
+                    label_size,
+                    new_urefs_count,
+                    value_size_ptr,
+                ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
+                let ret = self.extend_contract_user_group_urefs(
+                    meta_ptr,
+                    meta_size,
+                    access_ptr,
+                    label_ptr,
+                    label_size,
+                    new_urefs_count as usize,
+                    value_size_ptr,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
+            FunctionIndex::RemoveContractUserGroupURefsIndex => {
+                // args(0) = pointer to metadata key in wasm memory
+                // args(1) = size of metadata key in wasm memory
+                // args(2) = pointer to access key in wasm memory
+                // args(3) = pointer to label name
+                // args(4) = label size bytes
+                // args(5) = pointer to urefs
+                // args(6) = size of urefs pointer
+                let (meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size) =
+                    Args::parse(args)?;
+                let ret = self.remove_contract_user_group_urefs(
+                    meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
         }
     }
 }

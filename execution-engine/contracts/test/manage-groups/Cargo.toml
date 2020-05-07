@@ -1,11 +1,11 @@
 [package]
-name = "groups"
+name = "manage-groups"
 version = "0.1.0"
 authors = ["Michał Papierski <michal@casperlabs.io>"]
 edition = "2018"
 
 [[bin]]
-name = "groups"
+name = "manage_groups"
 path = "src/main.rs"
 bench = false
 doctest = false
