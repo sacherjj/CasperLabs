@@ -427,6 +427,12 @@ class CasperLabsClient:
     def send_deploy(self, deploy):
         self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
+    @staticmethod
+    def _full_view_convert(full_view):
+        if full_view:
+            return info.BlockInfo.View.FULL
+        return info.BlockInfo.View.BASIC
+
     @api
     def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
         """
@@ -440,11 +446,7 @@ class CasperLabsClient:
         """
         yield from self.casperService.StreamBlockInfos_stream(
             casper.StreamBlockInfosRequest(
-                depth=depth,
-                max_rank=max_rank,
-                view=(
-                    full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
-                ),
+                depth=depth, max_rank=max_rank, view=self._full_view_convert(full_view)
             )
         )
 
@@ -460,9 +462,7 @@ class CasperLabsClient:
         return self.casperService.GetBlockInfo(
             casper.GetBlockInfoRequest(
                 block_hash_base16=block_hash_base16,
-                view=(
-                    full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC
-                ),
+                view=self._full_view_convert(full_view),
             )
         )
 

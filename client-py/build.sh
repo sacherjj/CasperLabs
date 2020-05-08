@@ -7,6 +7,10 @@ cd ${DIR}
 
 rm -rf dist/*
 
+pushd ../
+make build-client-py-contracts
+popd
+
 # Verify .wasm has been generated
 count=`ls -1 casperlabs_client/*.wasm 2>/dev/null | wc -l`
 if [ $count == 0 ]

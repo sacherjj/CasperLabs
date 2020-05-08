@@ -72,7 +72,7 @@ def clean_up():
         shutil.rmtree(f"{PROTO_DIR}")
     except FileNotFoundError:
         pass
-    for file_name in glob(f"{PACKAGE_DIR}/*pb2*py"):
+    for file_name in glob(str(PACKAGE_DIR / "*pb2*py")):
         os.remove(file_name)
 
 
@@ -126,12 +126,16 @@ def collect_proto_files():
 
     download(
         "https://raw.githubusercontent.com/scalapb/ScalaPB/master/protobuf/scalapb/scalapb.proto",
-        f"{PROTO_DIR}",
+        PROTO_DIR,
     )
 
     for filename in ("empty.proto", "descriptor.proto", "wrappers.proto"):
         copyfile(
-            join(dirname(grpc_tools.__file__), f"_proto/google/protobuf/{filename}"),
+            Path(dirname(grpc_tools.__file__))
+            / "_proto"
+            / "google"
+            / "protobuf"
+            / filename,
             PROTO_DIR / filename,
         )
 
@@ -157,24 +161,25 @@ def run_codegen():
     make_dirs(PROTO_DIR)
     collect_proto_files()
     modify_files(
-        "Patch proto files' imports", [(r'".+/', '"')], glob(PROTO_DIR / "*.proto")
+        "Patch proto files' imports", [(r'".+/', '"')], glob(str(PROTO_DIR / "*.proto"))
     )
-    run_protoc(glob(PROTO_DIR / "*.proto"))
+    run_protoc(glob(str(PROTO_DIR / "*.proto")))
     modify_files(
         "Patch generated Python gRPC modules",
         pairs=[(r"(import .*_pb2)", r"from . \1")],
-        files=glob(f"{PACKAGE_DIR}/*pb2*py"),
+        files=glob(str(PACKAGE_DIR / "*pb2*py")),
     )
     modify_files(
         "Patch generated Python gRPC modules (for asyncio)",
         pairs=[(r"(import .*_pb2)", r"from . \1")],
-        files=[fn for fn in glob(PACKAGE_DIR / "*_grpc[.]py") if "_pb2_" not in fn],
+        files=[
+            fn for fn in glob(str(PACKAGE_DIR / "*_grpc[.]py")) if "_pb2_" not in fn
+        ],
     )
-    pattern = CONTRACTS_DIR / "*.wasm"
-    bundled_contracts = list(glob(pattern))
+    bundled_contracts = list(glob(str(CONTRACTS_DIR / "*.wasm")))
     if len(bundled_contracts) == 0:
         raise Exception(
-            f"Could not find wasm files that should be bundled with the client. {pattern}"
+            f"Could not find wasm files that should be bundled with the client."
         )
     for filename in bundled_contracts:
         shutil.copy(filename, PACKAGE_DIR)
@@ -230,7 +235,7 @@ setup(
     long_description=read_long_description(),
     long_description_content_type="text/markdown",
     include_package_data=True,
-    package_data={NAME: [PACKAGE_DIR / "*.wasm", VERSION_FILE]},
+    package_data={NAME: [str(PACKAGE_DIR / "*.wasm"), str(VERSION_FILE)]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",

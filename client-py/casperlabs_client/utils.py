@@ -58,7 +58,7 @@ def key_variant(key_type):
     """
     variant = STATE_QUERY_KEY_VARIANT.get(key_type.lower(), None)
     if variant is None:
-        raise Exception(f"{key_type} is not a known query-state key type")
+        raise ValueError(f"{key_type} is not a known query-state key type")
     return variant
 
 

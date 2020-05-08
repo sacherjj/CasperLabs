@@ -55,8 +55,8 @@ def public_address(public_key):
     numbers = public_key.public_numbers()
     x, y = numbers.x, numbers.y
 
-    def int_to_32_bytes(x):
-        return x.to_bytes(x.bit_length(), byteorder="little")[0:32]
+    def int_to_32_bytes(int_val):
+        return int_val.to_bytes(x.bit_length(), byteorder="little")[0:32]
 
     a = int_to_32_bytes(x) + int_to_32_bytes(y)
 
