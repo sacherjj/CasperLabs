@@ -26,7 +26,7 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
-    contract::Contract,
+    contract::ContractWasm,
     gas::Gas,
     motes::Motes,
     newtypes::{Blake2bHash, CorrelationId},
@@ -44,8 +44,9 @@ use types::{
     bytesrepr::{self, ToBytes},
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
-    AccessRights, BlockTime, CLValue, EntryPointAccess, EntryPointType, Key, NamedArg, Phase,
-    ProtocolVersion, RuntimeArgs, SemVer, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    AccessRights, BlockTime, CLValue, Contract, ContractPackage, EntryPoint, EntryPointType, Key,
+    NamedArg, Phase, ProtocolVersion, RuntimeArgs, SemVer, URef, KEY_HASH_LENGTH, U512,
+    UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -87,21 +88,26 @@ pub struct EngineState<S> {
     state: S,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum GetModuleResult {
-    Session(Module),
+    Session {
+        module: Module,
+        metadata: ContractPackage,
+        entrypoint: EntryPoint,
+    },
     Contract {
         module: Module,
         base_key: Key,
         named_keys: BTreeMap<String, Key>,
-        entry_point_type: EntryPointType,
+        metadata: ContractPackage,
+        entrypoint: EntryPoint,
     },
 }
 
 impl GetModuleResult {
     pub fn take_module(self) -> Module {
         match self {
-            GetModuleResult::Session(module) => module,
+            GetModuleResult::Session { module, .. } => module,
             GetModuleResult::Contract { module, .. } => module,
         }
     }
@@ -409,7 +415,7 @@ where
                 let contract = tracking_copy
                     .borrow_mut()
                     .get_contract(correlation_id, mint_metadata_key)?;
-                let (bytes, _, _) = contract.destructure();
+                let bytes = contract.take_bytes();
                 engine_wasm_prep::deserialize(&bytes)?
             };
             // For each account...
@@ -463,7 +469,8 @@ where
                         phase,
                         protocol_data,
                         system_contract_cache,
-                        EntryPointType::Session,
+                        ContractPackage::default(),
+                        EntryPoint::default(),
                     )?;
 
                     runtime
@@ -761,7 +768,11 @@ where
         match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
-                Ok(GetModuleResult::Session(module))
+                Ok(GetModuleResult::Session {
+                    module,
+                    metadata: ContractPackage::default(),
+                    entrypoint: EntryPoint::default(),
+                })
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
                 let hash_len = hash.len();
@@ -773,13 +784,17 @@ where
                 }
                 let mut arr = [0u8; KEY_HASH_LENGTH];
                 arr.copy_from_slice(&hash);
-                let (module, _contract) = self.get_module_from_key(
+                let (module, contract_header, contract) = self.get_module_from_key(
                     tracking_copy,
                     Key::Hash(arr),
                     correlation_id,
                     protocol_version,
                 )?;
-                Ok(GetModuleResult::Session(module))
+                Ok(GetModuleResult::Session {
+                    module,
+                    metadata: ContractPackage::default(),
+                    entrypoint: EntryPoint::default(),
+                })
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
@@ -790,13 +805,17 @@ where
                         return Err(error::Error::Exec(execution::Error::ForgedReference(*uref)));
                     }
                 }
-                let (module, _contract) = self.get_module_from_key(
+                let (module, contract_header, _contract) = self.get_module_from_key(
                     tracking_copy,
                     *stored_contract_key,
                     correlation_id,
                     protocol_version,
                 )?;
-                Ok(GetModuleResult::Session(module))
+                Ok(GetModuleResult::Session {
+                    module,
+                    metadata: ContractPackage::default(),
+                    entrypoint: EntryPoint::default(),
+                })
             }
             ExecutableDeployItem::StoredContractByURef { uref, .. } => {
                 let len = uref.len();
@@ -837,13 +856,17 @@ where
                         )));
                     }
                 };
-                let (module, _contract) = self.get_module_from_key(
+                let (module, contract_header, _contract) = self.get_module_from_key(
                     tracking_copy,
                     normalized_uref,
                     correlation_id,
                     protocol_version,
                 )?;
-                Ok(GetModuleResult::Session(module))
+                Ok(GetModuleResult::Session {
+                    module,
+                    metadata: ContractPackage::default(),
+                    entrypoint: EntryPoint::default(),
+                })
             }
             ExecutableDeployItem::StoredVersionedContractByName {
                 name,
@@ -867,13 +890,7 @@ where
                     .get_method(entry_point)
                     .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
 
-                if method_entrypoint.access() != &EntryPointAccess::Public {
-                    // TODO(mpapierski): Support `EntryPointAccess::Group` and unify validation from
-                    // `call_versioned_contract`
-                    return Err(error::Error::Exec(execution::Error::NoSuchMethod));
-                }
-
-                let (module, contract) = self.get_module_from_key(
+                let (module, contract_header, contract) = self.get_module_from_key(
                     tracking_copy,
                     contract_header.contract_key(),
                     correlation_id,
@@ -881,12 +898,17 @@ where
                 )?;
 
                 match method_entrypoint.entry_point_type() {
-                    EntryPointType::Session => Ok(GetModuleResult::Session(module)),
+                    EntryPointType::Session => Ok(GetModuleResult::Session {
+                        module,
+                        metadata: contract_metadata.clone(),
+                        entrypoint: method_entrypoint.clone(),
+                    }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_header.contract_key(),
-                        named_keys: contract.take_named_keys(),
-                        entry_point_type: method_entrypoint.entry_point_type(),
+                        named_keys: contract_header.take_named_keys(),
+                        metadata: contract_metadata.clone(),
+                        entrypoint: method_entrypoint.clone(),
                     }),
                 }
             }
@@ -909,13 +931,7 @@ where
                     .get_method(entry_point)
                     .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
 
-                if method_entrypoint.access() != &EntryPointAccess::Public {
-                    // TODO(mpapierski): Support `EntryPointAccess::Group` and unify validation from
-                    // `call_versioned_contract`
-                    return Err(error::Error::Exec(execution::Error::NoSuchMethod));
-                }
-
-                let (module, contract) = self.get_module_from_key(
+                let (module, contract_header, contract) = self.get_module_from_key(
                     tracking_copy,
                     contract_header.contract_key(),
                     correlation_id,
@@ -923,12 +939,17 @@ where
                 )?;
 
                 match method_entrypoint.entry_point_type() {
-                    EntryPointType::Session => Ok(GetModuleResult::Session(module)),
+                    EntryPointType::Session => Ok(GetModuleResult::Session {
+                        module,
+                        metadata: contract_metadata.clone(),
+                        entrypoint: method_entrypoint.clone(),
+                    }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_header.contract_key(),
-                        named_keys: contract.take_named_keys(),
-                        entry_point_type: method_entrypoint.entry_point_type(),
+                        named_keys: contract_header.take_named_keys(),
+                        metadata: contract_metadata.clone(),
+                        entrypoint: method_entrypoint.clone(),
                     }),
                 }
             }
@@ -941,14 +962,14 @@ where
         stored_contract_key: Key,
         correlation_id: CorrelationId,
         protocol_version: &ProtocolVersion,
-    ) -> Result<(Module, Contract), error::Error> {
-        let contract = tracking_copy
+    ) -> Result<(Module, Contract, ContractWasm), error::Error> {
+        let contract_header = tracking_copy
             .borrow_mut()
             .get_contract(correlation_id, stored_contract_key)?;
 
         // A contract may only call a stored contract that has the same protocol major version
         // number.
-        let contract_version = contract.protocol_version();
+        let contract_version = contract_header.protocol_version();
         if !contract_version.is_compatible_with(&protocol_version) {
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,
@@ -957,10 +978,14 @@ where
             return Err(error::Error::Exec(exec_error));
         }
 
-        let (ret, _, _) = contract.clone().destructure();
+        let contract = tracking_copy
+            .borrow_mut()
+            .get_contract(correlation_id, contract_header.contract_key())?;
+
+        let ret = contract.take_bytes();
         let module = engine_wasm_prep::deserialize(&ret)?;
 
-        Ok((module, contract))
+        Ok((module, contract_header, contract))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1121,13 +1146,23 @@ where
                 }
             };
 
+            let proof_of_stake_contract_wasm = match tracking_copy
+                .borrow_mut()
+                .get_contract_wasm(correlation_id, proof_of_stake_contract.contract_key())
+            {
+                Ok(contract) => contract,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            };
+
             let proof_of_stake_module =
                 match self.system_contract_cache.get(proof_of_stake_reference) {
                     Some(module) => module,
                     None => {
                         match {
                             if self.config.use_system_contracts() {
-                                engine_wasm_prep::deserialize(proof_of_stake_contract.bytes())
+                                engine_wasm_prep::deserialize(proof_of_stake_contract_wasm.bytes())
                             } else {
                                 wasm::do_nothing_module(preprocessor)
                             }
@@ -1266,7 +1301,13 @@ where
                     correlation_id,
                     &protocol_version,
                 )
-                .map(|(module, _contract)| GetModuleResult::Session(module))
+                .map(
+                    |(module, contract_header, _contract)| GetModuleResult::Session {
+                        module,
+                        metadata: ContractPackage::default(),
+                        entrypoint: EntryPoint::default(),
+                    },
+                )
             } else {
                 self.get_module(
                     Rc::clone(&tracking_copy),
@@ -1289,21 +1330,32 @@ where
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
 
-            let (payment_module, payment_context, mut payment_named_keys, entry_point_type) =
-                match payment_module {
-                    GetModuleResult::Session(module) => (
-                        module,
-                        base_key,
-                        account.named_keys().clone(),
-                        EntryPointType::Session,
-                    ),
-                    GetModuleResult::Contract {
-                        module,
-                        base_key,
-                        named_keys,
-                        entry_point_type,
-                    } => (module, base_key, named_keys, entry_point_type),
-                };
+            let (
+                payment_module,
+                payment_context,
+                mut payment_named_keys,
+                payment_metadata,
+                payment_entrypoint,
+            ) = match payment_module {
+                GetModuleResult::Session {
+                    module,
+                    metadata,
+                    entrypoint,
+                } => (
+                    module,
+                    base_key,
+                    account.named_keys().clone(),
+                    metadata,
+                    entrypoint,
+                ),
+                GetModuleResult::Contract {
+                    module,
+                    base_key,
+                    named_keys,
+                    metadata,
+                    entrypoint,
+                } => (module, base_key, named_keys, metadata, entrypoint),
+            };
 
             let payment_args = match payment.clone().take_args() {
                 Ok(args) => args,
@@ -1342,7 +1394,8 @@ where
                     phase,
                     protocol_data,
                     system_contract_cache,
-                    entry_point_type,
+                    payment_metadata.clone(),
+                    payment_entrypoint.clone(),
                 ) {
                     Ok((_instance, runtime)) => runtime,
                     Err(error) => {
@@ -1351,6 +1404,13 @@ where
                 };
 
                 let effects_snapshot = tracking_copy.borrow().effect();
+
+                if let Err(error) = runtime
+                    .validate_entry_point_access(&payment_metadata, &payment_entrypoint.access())
+                {
+                    return Ok(ExecutionResult::precondition_failure(Error::Exec(error)));
+                }
+
                 match runtime.call_host_standard_payment() {
                     Ok(()) => ExecutionResult::Success {
                         effect: runtime.context().effect(),
@@ -1381,7 +1441,8 @@ where
                     phase,
                     protocol_data,
                     system_contract_cache,
-                    EntryPointType::Session,
+                    payment_metadata,
+                    payment_entrypoint,
                 )
             }
         };
@@ -1433,21 +1494,32 @@ where
 
         // session_code_spec_2: execute session code
 
-        let (session_module, session_context, session_named_keys, session_entry_point_type) =
-            match session_module {
-                GetModuleResult::Session(module) => (
-                    module,
-                    base_key,
-                    account.named_keys().clone(),
-                    EntryPointType::Session,
-                ),
-                GetModuleResult::Contract {
-                    module,
-                    base_key,
-                    named_keys,
-                    entry_point_type,
-                } => (module, base_key, named_keys, entry_point_type),
-            };
+        let (
+            session_module,
+            session_context,
+            session_named_keys,
+            session_metadata,
+            session_entrypoint,
+        ) = match session_module {
+            GetModuleResult::Session {
+                module,
+                metadata,
+                entrypoint,
+            } => (
+                module,
+                base_key,
+                account.named_keys().clone(),
+                metadata,
+                entrypoint,
+            ),
+            GetModuleResult::Contract {
+                module,
+                base_key,
+                named_keys,
+                metadata,
+                entrypoint,
+            } => (module, base_key, named_keys, metadata, entrypoint),
+        };
 
         let session_args = match session.clone().take_args() {
             Ok(args) => args,
@@ -1487,7 +1559,8 @@ where
                 Phase::Session,
                 protocol_data,
                 system_contract_cache,
-                session_entry_point_type,
+                session_metadata,
+                session_entrypoint,
             )
         };
 
@@ -1614,7 +1687,7 @@ where
         };
 
         let contract = match reader.read(correlation_id, &proof_of_stake_key)? {
-            Some(StoredValue::Contract(contract)) => contract,
+            Some(StoredValue::ContractWasm(contract_wasm)) => contract,
             _ => return Err(MissingSystemContract(PROOF_OF_STAKE.to_string())),
         };
 

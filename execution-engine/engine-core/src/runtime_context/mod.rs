@@ -12,7 +12,7 @@ use blake2::{
 };
 
 use engine_shared::{
-    account::Account, contract::Contract, gas::Gas, newtypes::CorrelationId,
+    account::Account, contract::ContractWasm, gas::Gas, newtypes::CorrelationId,
     stored_value::StoredValue,
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
@@ -21,8 +21,9 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
-    bytesrepr, AccessRights, BlockTime, CLType, CLValue, EntryPointType, Key, Phase,
-    ProtocolVersion, RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
+    bytesrepr, AccessRights, BlockTime, CLType, CLValue, ContractPackage, EntryPoint,
+    EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
+    KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::{
@@ -34,6 +35,50 @@ use crate::{
 
 #[cfg(test)]
 mod tests;
+
+/// Checks whether given uref has enough access rights.
+pub(crate) fn uref_has_access_rights(
+    uref: &URef,
+    access_rights: &HashMap<Address, HashSet<AccessRights>>,
+) -> bool {
+    if let Some(known_rights) = access_rights.get(&uref.addr()) {
+        let new_rights = uref.access_rights();
+        // check if we have sufficient access rights
+        known_rights
+            .iter()
+            .any(|right| *right & new_rights == new_rights)
+    } else {
+        // URef is not known
+        false
+    }
+}
+
+pub fn validate_entry_point_access_with(
+    metadata: &ContractPackage,
+    access: &EntryPointAccess,
+    validator: impl Fn(&URef) -> bool,
+) -> Result<(), Error> {
+    if let EntryPointAccess::Groups(groups) = access {
+        if groups.is_empty() {
+            // Exits early in a special case of empty list of groups regardless of the group
+            // checking logic below it.
+            return Err(Error::InvalidContext);
+        }
+
+        let find_result = groups.iter().find(|g| {
+            metadata
+                .groups()
+                .get(g)
+                .and_then(|set| set.iter().find(|u| validator(u)))
+                .is_some()
+        });
+
+        if find_result.is_none() {
+            return Err(Error::InvalidContext);
+        }
+    }
+    Ok(())
+}
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -59,7 +104,8 @@ pub struct RuntimeContext<'a, R> {
     correlation_id: CorrelationId,
     phase: Phase,
     protocol_data: ProtocolData,
-    entry_point_type: EntryPointType,
+    _metadata: ContractPackage,
+    entrypoint: EntryPoint,
 }
 
 impl<'a, R> RuntimeContext<'a, R>
@@ -86,7 +132,8 @@ where
         correlation_id: CorrelationId,
         phase: Phase,
         protocol_data: ProtocolData,
-        entry_point_type: EntryPointType,
+        metadata: ContractPackage,
+        entrypoint: EntryPoint,
     ) -> Self {
         RuntimeContext {
             state: tracking_copy,
@@ -106,7 +153,8 @@ where
             correlation_id,
             phase,
             protocol_data,
-            entry_point_type,
+            _metadata: metadata,
+            entrypoint,
         }
     }
 
@@ -134,12 +182,13 @@ where
     fn remove_key_from_contract(
         &mut self,
         key: Key,
-        mut contract: Contract,
+        mut contract: ContractWasm,
         name: &str,
     ) -> Result<(), Error> {
-        contract.named_keys_mut().remove(name);
+        todo!();
+        // contract.named_keys_mut().remove(name);
 
-        let contract_value = StoredValue::Contract(contract);
+        let contract_value = StoredValue::ContractWasm(contract_wasm);
 
         self.state.borrow_mut().write(key, contract_value);
 
@@ -164,7 +213,7 @@ where
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
-                let contract: Contract = {
+                let contract: ContractWasm = {
                     let value: StoredValue = self
                         .state
                         .borrow_mut()
@@ -179,12 +228,12 @@ where
                 self.remove_key_from_contract(contract_uref, contract, name)
             }
             contract_hash @ Key::Hash(_) => {
-                let contract: Contract = self.read_gs_typed(&contract_hash)?;
+                let contract: ContractWasm = self.read_gs_typed(&contract_hash)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
             }
             contract_local @ Key::Local { .. } => {
-                let contract: Contract = self.read_gs_typed(&contract_local)?;
+                let contract: ContractWasm = self.read_gs_typed(&contract_local)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_local, contract, name)
             }
@@ -487,7 +536,8 @@ where
                     .values()
                     .try_for_each(|key| self.validate_key(key))
             }
-            StoredValue::Contract(contract) => contract
+            StoredValue::ContractWasm(_) => Ok(()),
+            StoredValue::Contract(contract_header) => contract_header
                 .named_keys()
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
@@ -521,19 +571,9 @@ where
         }
 
         // Check if the `key` is known
-        if let Some(known_rights) = self.access_rights.get(&uref.addr()) {
-            let new_rights = uref.access_rights();
-            // check if we have sufficient access rights
-            if known_rights
-                .iter()
-                .any(|right| *right & new_rights == new_rights)
-            {
-                Ok(())
-            } else {
-                Err(Error::ForgedReference(*uref))
-            }
+        if uref_has_access_rights(uref, &self.access_rights) {
+            Ok(())
         } else {
-            // uref is not known
             Err(Error::ForgedReference(*uref))
         }
     }
@@ -793,8 +833,8 @@ where
         named_keys: BTreeMap<String, Key>,
     ) -> Result<(), Error> {
         let protocol_version = self.protocol_version();
-        let contract = Contract::new(bytes, named_keys, protocol_version);
-        let contract = StoredValue::Contract(contract);
+        let contract = ContractWasm::new(bytes);
+        let contract = StoredValue::ContractWasm(contract_wasm);
 
         self.validate_writeable(&key)?;
         self.validate_key(&key)?;
@@ -829,6 +869,20 @@ where
 
     /// Gets entry point type.
     pub fn entry_point_type(&self) -> EntryPointType {
-        self.entry_point_type
+        self.entrypoint.entry_point_type()
+    }
+
+    /// Extends given user group with new urefs
+    // pub fn extend_contract_user_group_urefs(&self, metadata_key: Key, access_key: URef, label:
+    // String, new_urefs_count: usize) ->  {
+    pub fn get_contract_metadata(
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+    ) -> Result<ContractPackage, Error> {
+        self.validate_key(&metadata_key)?;
+        self.validate_uref(&access_key)?;
+        let metadata: ContractPackage = self.read_gs_typed(&metadata_key)?;
+        Ok(metadata)
     }
 }

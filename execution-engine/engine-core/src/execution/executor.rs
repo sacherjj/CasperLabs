@@ -12,8 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPointType, Key,
-    Phase, ProtocolVersion, RuntimeArgs,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractPackage,
+    EntryPoint, Key, Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
     },
     execution::{address_generator::AddressGenerator, Error},
     runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
-    runtime_context::RuntimeContext,
+    runtime_context::{self, RuntimeContext},
     tracking_copy::TrackingCopy,
 };
 
@@ -99,7 +99,8 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-        entry_point_type: EntryPointType,
+        metadata: ContractPackage,
+        entrypoint: EntryPoint,
     ) -> ExecutionResult
     where
         R: StateReader<Key, StoredValue>,
@@ -148,7 +149,8 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
-            entry_point_type,
+            metadata.clone(),
+            entrypoint.clone(),
         );
 
         let mut runtime = Runtime::new(
@@ -158,6 +160,17 @@ impl Executor {
             parity_module,
             context,
         );
+
+        let accounts_access_rights = {
+            let keys: Vec<Key> = account.named_keys().values().cloned().collect();
+            extract_access_rights_from_keys(keys)
+        };
+
+        on_fail_charge!(runtime_context::validate_entry_point_access_with(
+            &metadata,
+            entrypoint.access(),
+            |uref| runtime_context::uref_has_access_rights(uref, &accounts_access_rights)
+        ));
 
         if !self.config.use_system_contracts() {
             if runtime.is_mint(base_key) {
@@ -284,7 +297,8 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
-            EntryPointType::Session,
+            ContractPackage::default(),
+            EntryPoint::default(),
         );
 
         let (instance, memory) =
@@ -383,7 +397,8 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-        entry_point_type: EntryPointType,
+        metadata: ContractPackage,
+        entrypoint: EntryPoint,
     ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
         R: StateReader<Key, StoredValue>,
@@ -417,7 +432,8 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
-            entry_point_type,
+            metadata,
+            entrypoint,
         );
 
         let (instance, memory) = instance_and_memory(module.clone(), protocol_version)?;
@@ -477,7 +493,8 @@ impl Executor {
             phase,
             protocol_data,
             system_contract_cache,
-            EntryPointType::Session,
+            ContractPackage::default(),
+            EntryPoint::default(),
         )?;
 
         let error: wasmi::Error = match instance.invoke_export(entry_point_name, &[], &mut runtime)

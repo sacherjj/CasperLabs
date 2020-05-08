@@ -369,7 +369,7 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                     }
                 }
 
-                StoredValue::Contract(contract) => {
+                StoredValue::ContractWasm(contract_wasm) => {
                     let name = query.next_name();
                     if let Some(key) = contract.named_keys().get(name) {
                         query.current_key = key.normalize();
@@ -408,26 +408,30 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                             return Ok(query.into_not_found_result(&msg_prefix));
                         }
                     };
+
+                    // TODO
                     // Inactive versions are returning errors without going deeper through
                     // reconstructed local key.
-                    if metadata.is_version_removed(&sem_ver) {
-                        let msg_prefix =
-                            format!("Query cannot continue as version {} is removed", name);
-                        return Ok(query.into_not_found_result(&msg_prefix));
-                    }
+                    todo!("Querying with protocol version");
+                    // if metadata.is_version_removed(&sem_ver) {
+                    //     let msg_prefix =
+                    //         format!("Query cannot continue as version {} is removed", name);
+                    //     return Ok(query.into_not_found_result(&msg_prefix));
+                    // }
 
-                    let contract_header = match metadata.get_version(&sem_ver) {
-                        Some(contract_header) => contract_header,
-                        None => {
-                            let msg_prefix = format!(
-                                "Query cannot continue as version {} does not exists",
-                                name
-                            );
-                            return Ok(query.into_not_found_result(&msg_prefix));
-                        }
-                    };
-                    query.current_key = contract_header.contract_key()
+                    // let contract_header = match metadata.get_version(&sem_ver) {
+                    //     Some(contract_header) => contract_header,
+                    //     None => {
+                    //         let msg_prefix = format!(
+                    //             "Query cannot continue as version {} does not exists",
+                    //             name
+                    //         );
+                    //         return Ok(query.into_not_found_result(&msg_prefix));
+                    //     }
+                    // };
+                    // query.current_key = contract_header.contract_key()
                 }
+                StoredValue::Contract(_) => {}
             }
         }
     }

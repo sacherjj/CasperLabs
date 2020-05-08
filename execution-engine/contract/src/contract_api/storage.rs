@@ -230,7 +230,69 @@ pub fn create_contract_user_group(
     Ok(bytesrepr::deserialize(value_bytes).unwrap_or_revert())
 }
 
-// TODO: functions for removing user groups, adding/removing urefs from an existing group
+/// Extends specified group with new urefss
+pub fn extend_contract_user_group_urefs(
+    contract: Key,
+    access_key: URef,
+    label: &str,
+    new_urefs_count: usize,
+) -> Result<BTreeSet<URef>, ApiError> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
+    let value_size = {
+        let mut value_size = MaybeUninit::uninit();
+        let ret = unsafe {
+            ext_ffi::extend_contract_user_group_urefs(
+                meta_ptr,
+                meta_size,
+                access_ptr,
+                label_ptr,
+                label_size,
+                new_urefs_count,
+                value_size.as_mut_ptr(),
+            )
+        };
+        api_error::result_from(ret)?;
+        unsafe { value_size.assume_init() }
+    };
+    let value_bytes = runtime::read_host_buffer(value_size).unwrap_or_revert();
+    Ok(bytesrepr::deserialize(value_bytes).unwrap_or_revert())
+}
+
+/// Removes specified urefs from a named group.
+pub fn remove_contract_user_group_urefs(
+    contract: Key,
+    access_key: URef,
+    label: &str,
+    urefs: BTreeSet<URef>,
+) -> Result<(), ApiError> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
+    let (urefs_ptr, urefs_size, _bytes4) = contract_api::to_ptr(urefs);
+    let ret = unsafe {
+        ext_ffi::remove_contract_user_group_urefs(
+            meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size,
+        )
+    };
+    api_error::result_from(ret)
+}
+
+/// Remove a named group from given contract.
+pub fn remove_contract_user_group(
+    contract: Key,
+    access_key: URef,
+    label: &str,
+) -> Result<(), ApiError> {
+    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
+    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
+    let ret = unsafe {
+        ext_ffi::remove_contract_user_group(meta_ptr, meta_size, access_ptr, label_ptr, label_size)
+    };
+    api_error::result_from(ret)
+}
 
 /// Add a new version of a contract to the contract stored at the given
 /// `Key`. Note that this contract must have been created by

@@ -31,7 +31,7 @@ use engine_grpc_server::engine_server::{
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
-    contract::Contract,
+    contract::ContractWasm,
     gas::Gas,
     logging::{self, Settings, Style},
     newtypes::{Blake2bHash, CorrelationId},
@@ -593,7 +593,7 @@ where
         WasmTestResult(self.clone())
     }
 
-    pub fn get_pos_contract(&self) -> Contract {
+    pub fn get_pos_contract(&self) -> ContractWasm {
         let pos_contract: Key = self
             .pos_contract_hash
             .expect("should have pos contract uref")
@@ -634,12 +634,12 @@ where
         }
     }
 
-    pub fn get_contract(&self, contract_hash: ContractHash) -> Option<Contract> {
+    pub fn get_contract(&self, contract_hash: ContractHash) -> Option<ContractWasm> {
         let contract_value: StoredValue = self
             .query(None, contract_hash.into(), &[])
             .expect("should have contract value");
 
-        if let StoredValue::Contract(contract) = contract_value {
+        if let StoredValue::ContractWasm(contract_wasm) = contract_value {
             Some(contract)
         } else {
             None

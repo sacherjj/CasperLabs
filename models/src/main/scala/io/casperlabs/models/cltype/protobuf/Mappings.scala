@@ -575,13 +575,13 @@ object Mappings {
         .flatMap(clType => fromProto(value, clType))
   }
 
-  def fromArg(arg: Deploy.Arg): Either[Error, CLValue] = arg.value match {
+  def fromArg(arg: Deploy.Arg): Either[Error, (String, CLValue)] = arg.value match {
     case None => Left(Error.MissingArg)
     case Some(value) =>
       for {
         instance <- fromProto(value)
         clValue  <- instance.toValue.leftMap(Error.InstanceError.apply)
-      } yield clValue
+      } yield (arg.name, clValue)
   }
 
   private def toByteArray32(bytes: ByteString): Either[Error, ByteArray32] =
