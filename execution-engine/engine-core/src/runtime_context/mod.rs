@@ -21,8 +21,9 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
-    bytesrepr, AccessRights, BlockTime, CLType, CLValue, EntryPointType, Key, Phase,
-    ProtocolVersion, RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
+    bytesrepr, AccessRights, BlockTime, CLType, CLValue, ContractMetadata, EntryPoint,
+    EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
+    KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::{
@@ -34,6 +35,50 @@ use crate::{
 
 #[cfg(test)]
 mod tests;
+
+/// Checks whether given uref has enough access rights.
+pub(crate) fn uref_has_access_rights(
+    uref: &URef,
+    access_rights: &HashMap<Address, HashSet<AccessRights>>,
+) -> bool {
+    if let Some(known_rights) = access_rights.get(&uref.addr()) {
+        let new_rights = uref.access_rights();
+        // check if we have sufficient access rights
+        known_rights
+            .iter()
+            .any(|right| *right & new_rights == new_rights)
+    } else {
+        // URef is not known
+        false
+    }
+}
+
+pub fn validate_entry_point_access_with(
+    metadata: &ContractMetadata,
+    access: &EntryPointAccess,
+    validator: impl Fn(&URef) -> bool,
+) -> Result<(), Error> {
+    if let EntryPointAccess::Groups(groups) = access {
+        if groups.is_empty() {
+            // Exits early in a special case of empty list of groups regardless of the group
+            // checking logic below it.
+            return Err(Error::InvalidContext);
+        }
+
+        let find_result = groups.iter().find(|g| {
+            metadata
+                .groups()
+                .get(g)
+                .and_then(|set| set.iter().find(|u| validator(u)))
+                .is_some()
+        });
+
+        if find_result.is_none() {
+            return Err(Error::InvalidContext);
+        }
+    }
+    Ok(())
+}
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
@@ -59,7 +104,8 @@ pub struct RuntimeContext<'a, R> {
     correlation_id: CorrelationId,
     phase: Phase,
     protocol_data: ProtocolData,
-    entry_point_type: EntryPointType,
+    _metadata: ContractMetadata,
+    entrypoint: EntryPoint,
 }
 
 impl<'a, R> RuntimeContext<'a, R>
@@ -86,7 +132,8 @@ where
         correlation_id: CorrelationId,
         phase: Phase,
         protocol_data: ProtocolData,
-        entry_point_type: EntryPointType,
+        metadata: ContractMetadata,
+        entrypoint: EntryPoint,
     ) -> Self {
         RuntimeContext {
             state: tracking_copy,
@@ -106,7 +153,8 @@ where
             correlation_id,
             phase,
             protocol_data,
-            entry_point_type,
+            _metadata: metadata,
+            entrypoint,
         }
     }
 
@@ -521,19 +569,9 @@ where
         }
 
         // Check if the `key` is known
-        if let Some(known_rights) = self.access_rights.get(&uref.addr()) {
-            let new_rights = uref.access_rights();
-            // check if we have sufficient access rights
-            if known_rights
-                .iter()
-                .any(|right| *right & new_rights == new_rights)
-            {
-                Ok(())
-            } else {
-                Err(Error::ForgedReference(*uref))
-            }
+        if uref_has_access_rights(uref, &self.access_rights) {
+            Ok(())
         } else {
-            // uref is not known
             Err(Error::ForgedReference(*uref))
         }
     }
@@ -829,6 +867,20 @@ where
 
     /// Gets entry point type.
     pub fn entry_point_type(&self) -> EntryPointType {
-        self.entry_point_type
+        self.entrypoint.entry_point_type()
+    }
+
+    /// Extends given user group with new urefs
+    // pub fn extend_contract_user_group_urefs(&self, metadata_key: Key, access_key: URef, label:
+    // String, new_urefs_count: usize) ->  {
+    pub fn get_contract_metadata(
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+    ) -> Result<ContractMetadata, Error> {
+        self.validate_key(&metadata_key)?;
+        self.validate_uref(&access_key)?;
+        let metadata: ContractMetadata = self.read_gs_typed(&metadata_key)?;
+        Ok(metadata)
     }
 }

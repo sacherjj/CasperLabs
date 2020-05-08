@@ -15,8 +15,8 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPointType, Key,
-    Phase, ProtocolVersion, URef, U512,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractMetadata,
+    EntryPoint, Key, Phase, ProtocolVersion, URef, U512,
 };
 
 use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
@@ -107,7 +107,8 @@ where
         correlation_id,
         phase,
         protocol_data,
-        EntryPointType::Session,
+        ContractMetadata::default(),
+        EntryPoint::default(),
     );
 
     let wasm_bytes = utils::read_wasm_file_bytes(wasm_file);

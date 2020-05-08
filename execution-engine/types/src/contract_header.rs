@@ -3,7 +3,7 @@
 use crate::{
     bytesrepr::{self, FromBytes, ToBytes},
     uref::URef,
-    CLType, Key, ProtocolVersion, SemVer,
+    AccessRights, CLType, Key, ProtocolVersion, SemVer,
 };
 use alloc::{
     collections::{BTreeMap, BTreeSet},
@@ -12,9 +12,9 @@ use alloc::{
 };
 
 /// Maximum number of distinct user groups.
-pub const MAX_GROUPS: u8 = 10;
+pub const MAX_GROUP_UREFS: u8 = 10;
 /// Maximum number of URefs which can be assigned across all user groups.
-pub const MAX_TOTAL_UREFS: u8 = 100;
+pub const MAX_TOTAL_UREFS: usize = 100;
 
 /// Set of errors which may happen when working with contract headers.
 #[derive(Debug, PartialEq)]
@@ -37,6 +37,13 @@ pub enum Error {
     /// Attempted to add a new URef to a group, which resulted in the total
     /// number of URefs across all user groups to exceed the allowed maximum.
     MaxTotalURefsExceeded = 6,
+    /// Attempted to remove a URef from a group, which does not exist in the
+    /// group.
+    GroupDoesNotExist = 7,
+    /// Attempted to remove unknown URef from the group.
+    UnableToRemoveURef = 8,
+    /// Group is use by at least one active contract.
+    GroupInUse = 9,
 }
 
 /// A (labelled) "user group". Each method of a versioned contract may be
@@ -46,8 +53,8 @@ pub struct Group(String);
 
 impl Group {
     /// Basic constructor
-    pub fn new(s: String) -> Self {
-        Group(s)
+    pub fn new<T: Into<String>>(s: T) -> Self {
+        Group(s.into())
     }
 
     /// Retrieves underlying name.
@@ -94,6 +101,20 @@ pub struct ContractMetadata {
     groups: BTreeMap<Group, BTreeSet<URef>>,
 }
 
+impl Default for ContractMetadata {
+    fn default() -> Self {
+        // Default impl used for temporary backwards compatibility
+        let mut active_versions = BTreeMap::new();
+        active_versions.insert(SemVer::V1_0_0, ContractHeader::default());
+        ContractMetadata {
+            access_key: URef::new([0; 32], AccessRights::NONE),
+            active_versions,
+            removed_versions: BTreeSet::new(),
+            groups: BTreeMap::new(),
+        }
+    }
+}
+
 impl ContractMetadata {
     /// Create new `ContractMetadata` (with no versions) from given access key.
     pub fn new(access_key: URef) -> Self {
@@ -110,14 +131,20 @@ impl ContractMetadata {
         self.access_key
     }
 
+    /// Get the mutable group definitions for this contract.
+    pub fn groups_mut(&mut self) -> &mut BTreeMap<Group, BTreeSet<URef>> {
+        &mut self.groups
+    }
+
     /// Get the group definitions for this contract.
     pub fn groups(&self) -> &BTreeMap<Group, BTreeSet<URef>> {
         &self.groups
     }
 
-    /// Get a mutable reference to the group definitions for this contract.
-    pub fn groups_mut(&mut self) -> &mut BTreeMap<Group, BTreeSet<URef>> {
-        &mut self.groups
+    /// Adds new group to the user groups set
+    pub fn add_group(&mut self, group: Group, urefs: BTreeSet<URef>) {
+        let v = self.groups.entry(group).or_insert_with(Default::default);
+        v.extend(urefs)
     }
 
     /// Get the contract header for the given version (if present)
@@ -176,6 +203,32 @@ impl ContractMetadata {
     /// Returns mutable versions
     pub fn removed_versions_mut(&mut self) -> &mut BTreeSet<SemVer> {
         &mut self.removed_versions
+    }
+
+    /// Checks is given group is in use in at least one of active contracts.
+    fn is_user_group_in_use(&self, group: &Group) -> bool {
+        for contract_header in self.active_versions.values() {
+            for entrypoint in contract_header.methods().values() {
+                if let EntryPointAccess::Groups(groups) = entrypoint.access() {
+                    if groups.contains(group) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Removes a user group.
+    ///
+    /// Returns true if group could be removed, and false otherwise if the user group is still
+    /// active.
+    pub fn remove_group(&mut self, group: &Group) -> bool {
+        if self.is_user_group_in_use(group) {
+            return false;
+        }
+
+        self.groups.remove(group).is_some()
     }
 }
 
@@ -271,6 +324,23 @@ impl ContractHeader {
     /// Hash for accessing contract version
     pub fn take_methods(self) -> BTreeMap<String, EntryPoint> {
         self.methods
+    }
+
+    /// Returns immutable reference to methods
+    pub fn methods(&self) -> &BTreeMap<String, EntryPoint> {
+        &self.methods
+    }
+}
+
+impl Default for ContractHeader {
+    fn default() -> Self {
+        let mut methods = BTreeMap::new();
+        methods.insert("call".into(), EntryPoint::default());
+        ContractHeader {
+            contract_key: Key::Hash([0; 32]),
+            methods,
+            protocol_version: ProtocolVersion::V1_0_0,
+        }
     }
 }
 
@@ -380,6 +450,16 @@ impl EntryPoint {
         }
     }
 
+    /// Creates default entry point for a contract.
+    pub fn default_for_contract() -> Self {
+        EntryPoint {
+            args: Vec::new(),
+            ret: CLType::Unit,
+            access: EntryPointAccess::Public,
+            entry_point_type: EntryPointType::Contract,
+        }
+    }
+
     /// Get access enum.
     pub fn access(&self) -> &EntryPointAccess {
         &self.access
@@ -396,6 +476,17 @@ impl EntryPoint {
     }
 }
 
+impl Default for EntryPoint {
+    fn default() -> Self {
+        EntryPoint {
+            args: Vec::new(),
+            ret: CLType::Unit,
+            access: EntryPointAccess::Public,
+            entry_point_type: EntryPointType::Session,
+        }
+    }
+}
+
 impl ToBytes for EntryPoint {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
@@ -409,9 +500,9 @@ impl ToBytes for EntryPoint {
     }
 
     fn serialized_length(&self) -> usize {
-        self.access.serialized_length()
-            + self.args.serialized_length()
+        self.args.serialized_length()
             + self.ret.serialized_length()
+            + self.access.serialized_length()
             + self.entry_point_type.serialized_length()
     }
 }
@@ -467,7 +558,7 @@ impl ToBytes for EntryPointAccess {
                 result.push(ENTRYPOINTACCESS_PUBLIC_TAG);
             }
             EntryPointAccess::Groups(groups) => {
-                result.push(ENTRYPOINTACCESS_PUBLIC_TAG);
+                result.push(ENTRYPOINTACCESS_GROUPS_TAG);
                 result.append(&mut groups.to_bytes()?);
             }
         }
@@ -545,5 +636,97 @@ impl FromBytes for Parameter {
         let (cl_type, bytes) = CLType::from_bytes(bytes)?;
 
         Ok((Parameter { name, cl_type }, bytes))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{AccessRights, URef};
+
+    fn make_contract_metadata() -> ContractMetadata {
+        let mut contract_metadata = ContractMetadata::new(URef::new([0; 32], AccessRights::NONE));
+
+        let uref1 = URef::new([1; 32], AccessRights::READ);
+
+        let mut set = BTreeSet::new();
+        set.insert(uref1);
+        contract_metadata
+            .groups_mut()
+            .insert(Group::new("Group 1"), set.clone());
+
+        contract_metadata
+            .groups_mut()
+            .insert(Group::new("Group 2"), set);
+
+        let mut methods = BTreeMap::new();
+
+        let entrypoint = EntryPoint::new(
+            vec![],
+            CLType::U32,
+            EntryPointAccess::groups(&["Group 2"]),
+            EntryPointType::Session,
+        );
+        methods.insert("method0".into(), entrypoint);
+
+        let entrypoint = EntryPoint::new(
+            vec![Parameter::new("Foo", CLType::U32)],
+            CLType::U32,
+            EntryPointAccess::groups(&["Group 1"]),
+            EntryPointType::Session,
+        );
+        methods.insert("method1".into(), entrypoint);
+
+        let header = ContractHeader::new(methods, Key::Hash([42; 32]), ProtocolVersion::V1_0_0);
+        contract_metadata
+            .add_version(SemVer::V1_0_0, header)
+            .expect("should add version");
+
+        contract_metadata
+    }
+
+    #[test]
+    fn roundtrip_serialization() {
+        let contract_metadata = make_contract_metadata();
+        let bytes = contract_metadata.to_bytes().expect("should serialize");
+        let (decoded_metadata, rem) =
+            ContractMetadata::from_bytes(&bytes).expect("should deserialize");
+        assert_eq!(contract_metadata, decoded_metadata);
+        assert_eq!(rem.len(), 0);
+    }
+
+    #[test]
+    fn should_check_user_group_in_use() {
+        let mut contract_metadata = make_contract_metadata();
+        assert!(contract_metadata.is_user_group_in_use(&Group::new("Group 1")));
+        assert!(contract_metadata.is_user_group_in_use(&Group::new("Group 2")));
+        assert!(!contract_metadata.is_user_group_in_use(&Group::new("Non existing group")));
+
+        contract_metadata
+            .remove_version(SemVer::V1_0_0)
+            .expect("should remove version");
+        assert!(!contract_metadata.is_user_group_in_use(&Group::new("Group 1")));
+        assert!(!contract_metadata.is_user_group_in_use(&Group::new("Group 2")));
+    }
+
+    #[test]
+    fn should_remove_group() {
+        let mut contract_metadata = make_contract_metadata();
+
+        assert!(!contract_metadata.remove_group(&Group::new("Non existing group")));
+        assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group in use
+
+        contract_metadata
+            .remove_version(SemVer::V1_0_0)
+            .expect("should remove version");
+
+        assert!(contract_metadata.remove_group(&Group::new("Group 1"))); // Group not used used can be removed
+        assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group does not exist
+    }
+
+    #[test]
+    fn should_check_group_not_in_use() {
+        let contract_metadata = ContractMetadata::default();
+        assert!(!contract_metadata.is_user_group_in_use(&Group::new("Group 1")));
     }
 }

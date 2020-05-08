@@ -133,7 +133,8 @@ fn mock_runtime_context<'a>(
         CorrelationId::new(),
         Phase::Session,
         Default::default(),
-        EntryPointType::Session,
+        ContractMetadata::default(),
+        EntryPoint::default(),
     )
 }
 
@@ -468,7 +469,8 @@ fn contract_key_addable_valid() {
         CorrelationId::new(),
         PHASE,
         Default::default(),
-        EntryPointType::Session,
+        ContractMetadata::default(),
+        EntryPoint::default(),
     );
 
     let uref_name = "NewURef".to_owned();
@@ -532,7 +534,8 @@ fn contract_key_addable_invalid() {
         CorrelationId::new(),
         PHASE,
         Default::default(),
-        EntryPointType::Session,
+        ContractMetadata::default(),
+        EntryPoint::default(),
     );
 
     let uref_name = "NewURef".to_owned();

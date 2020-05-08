@@ -32,14 +32,14 @@ use types::{
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, ContractHash, ContractMetadataHash,
     EntryPointType, Key, ProtocolVersion, RuntimeArgs, SemVer, SystemContractType, TransferResult,
-    TransferredTo, URef, U128, U256, U512,
+    TransferredTo, URef, U128, U256, U512, UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
     engine_state::{system_contract_cache::SystemContractCache, EngineConfig},
     execution::{Error, MINT_NAME, POS_NAME},
     resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
-    runtime_context::RuntimeContext,
+    runtime_context::{self, RuntimeContext},
     Address,
 };
 use scoped_timer::ScopedTimer;
@@ -1764,7 +1764,8 @@ where
             correlation_id,
             phase,
             protocol_data,
-            EntryPointType::Session,
+            ContractMetadata::default(),
+            EntryPoint::default(),
         );
 
         let method_name: String = Self::get_argument(&args, 0)?;
@@ -1857,7 +1858,8 @@ where
             correlation_id,
             phase,
             protocol_data,
-            EntryPointType::Session,
+            ContractMetadata::default(),
+            EntryPoint::default(),
         );
 
         let mut runtime = Runtime::new(
@@ -1949,7 +1951,14 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
-        self.execute_contract(key, contract, args, "call", EntryPointType::Contract)
+        self.execute_contract(
+            key,
+            contract,
+            args,
+            "call",
+            ContractMetadata::default(),
+            EntryPoint::default_for_contract(),
+        )
     }
 
     /// Calls `version` of the contract living at `key`, invoking `method` with
@@ -1963,7 +1972,7 @@ where
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
         let key = contract_metadata_hash.into();
-        let (context_key, contract, entry_point_type) = match self.context.read_gs(&key)? {
+        let (context_key, contract, metadata, entrypoint) = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractMetadata(metadata)) => {
                 let header = metadata
                     .get_version(&version)
@@ -1973,21 +1982,7 @@ where
                     .get_method(&entry_point_name)
                     .ok_or_else(|| Error::NoSuchMethod)?;
 
-                if let EntryPointAccess::Groups(groups) = entry_point.access() {
-                    let find_result = groups.iter().find(|g| {
-                        metadata
-                            .groups()
-                            .get(g)
-                            .and_then(|set| {
-                                set.iter().find(|u| self.context.validate_uref(u).is_ok())
-                            })
-                            .is_some()
-                    });
-
-                    if find_result.is_none() {
-                        return Err(Error::InvalidContext);
-                    }
-                }
+                self.validate_entry_point_access(&metadata, entry_point.access())?;
 
                 for (expected, found) in entry_point
                     .args()
@@ -2007,7 +2002,7 @@ where
                     .and_then(|sv| sv.as_contract().cloned())
                     .ok_or_else(|| Error::InvalidContractVersion)?;
 
-                let (context_key, entry_point_type) = match entry_point.entry_point_type() {
+                let context_key = match entry_point.entry_point_type() {
                     EntryPointType::Session
                         if self.context.entry_point_type() == EntryPointType::Contract =>
                     {
@@ -2017,15 +2012,15 @@ where
                     EntryPointType::Session => {
                         assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
                         // Session code called from session reuses current base key
-                        (self.context.base_key(), entry_point.entry_point_type())
+                        self.context.base_key()
                     }
                     EntryPointType::Contract => {
                         // Contract code from entrypoint -> contract context
-                        (header.contract_key(), entry_point.entry_point_type())
+                        header.contract_key()
                     }
                 };
 
-                (context_key, contract, entry_point_type)
+                (context_key, contract, metadata.clone(), entry_point.clone())
             }
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
@@ -2041,7 +2036,8 @@ where
             contract,
             args,
             entry_point_name,
-            entry_point_type,
+            metadata,
+            entrypoint,
         )
     }
 
@@ -2051,7 +2047,8 @@ where
         contract: Contract,
         args: RuntimeArgs,
         entry_point_name: &str,
-        entry_point_type: EntryPointType,
+        metadata: ContractMetadata,
+        entrypoint: EntryPoint,
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
         let contract_version = contract.protocol_version();
@@ -2101,7 +2098,7 @@ where
             None => parity_wasm::deserialize_buffer(contract.bytes())?,
         };
 
-        let mut named_keys = match entry_point_type {
+        let mut named_keys = match entrypoint.entry_point_type() {
             EntryPointType::Session => self.context.account().named_keys().clone(),
             EntryPointType::Contract => contract.take_named_keys(),
         };
@@ -2140,7 +2137,8 @@ where
             self.context.correlation_id(),
             self.context.phase(),
             self.context.protocol_data(),
-            entry_point_type,
+            metadata,
+            entrypoint,
         );
 
         let mut runtime = Runtime {
@@ -2391,7 +2389,7 @@ where
         }
 
         // Ensure there are not too many groups
-        if groups.len() >= (contract_header::MAX_GROUPS as usize) {
+        if groups.len() >= (contract_header::MAX_GROUP_UREFS as usize) {
             return Ok(Err(contract_header::Error::MaxGroupsExceeded.into()));
         }
 
@@ -2399,7 +2397,7 @@ where
         let total_urefs: usize = groups.values().map(|urefs| urefs.len()).sum::<usize>()
             + (num_new_urefs as usize)
             + existing_urefs.len();
-        if total_urefs > (contract_header::MAX_TOTAL_UREFS as usize) {
+        if total_urefs > contract_header::MAX_TOTAL_UREFS {
             let err = contract_header::Error::MaxTotalURefsExceeded;
             return Ok(Err(ApiError::ContractHeader(err as u8)));
         }
@@ -3240,6 +3238,188 @@ where
         {
             return Err(Error::Interpreter(e.into()).into());
         }
+
+        Ok(Ok(()))
+    }
+    pub fn validate_entry_point_access(
+        &self,
+        metadata: &ContractMetadata,
+        access: &EntryPointAccess,
+    ) -> Result<(), Error> {
+        runtime_context::validate_entry_point_access_with(metadata, access, |uref| {
+            self.context.validate_uref(uref).is_ok()
+        })
+    }
+
+    /// Remove a user group from access to a contract
+    fn remove_contract_user_group(
+        &mut self,
+        metadata_key: Key,
+        access_key: URef,
+        label: String,
+    ) -> Result<Result<(), ApiError>, Error> {
+        self.context.validate_key(&metadata_key)?;
+        self.context.validate_uref(&access_key)?;
+
+        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
+
+        if metadata.access_key() != access_key {
+            return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
+        }
+
+        let group_to_remove = Group::new(label);
+        let groups = metadata.groups_mut();
+
+        // Ensure group exists in groups
+        if groups.get(&group_to_remove).is_none() {
+            return Ok(Err(contract_header::Error::GroupDoesNotExist.into()));
+        }
+
+        // Remove group ensuring that it is not referenced by at least one entrypoint in active
+        // versions.
+        if !metadata.remove_group(&group_to_remove) {
+            return Ok(Err(contract_header::Error::GroupInUse.into()));
+        }
+
+        // Write updated metadata to the global state
+        self.context
+            .state()
+            .borrow_mut()
+            .write(metadata_key, StoredValue::ContractMetadata(metadata));
+        Ok(Ok(()))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn extend_contract_user_group_urefs(
+        &mut self,
+        meta_key_ptr: u32,
+        meta_key_size: u32,
+        access_key_ptr: u32,
+        label_ptr: u32,
+        label_size: u32,
+        new_urefs_count: usize,
+        output_size_ptr: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+        let access_key = {
+            let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+            bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+        };
+        let label: String = self.t_from_mem(label_ptr, label_size)?;
+        let mut metadata = self
+            .context
+            .get_contract_metadata(metadata_key, access_key)?;
+
+        if metadata.access_key() != access_key {
+            return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
+        }
+
+        let groups = metadata.groups_mut();
+
+        let group_label = Group::new(label);
+
+        // Ensure there are not too many urefs
+        let total_urefs: usize = groups.values().map(|urefs| urefs.len()).sum();
+
+        if total_urefs + new_urefs_count > contract_header::MAX_TOTAL_UREFS {
+            return Ok(Err(contract_header::Error::MaxTotalURefsExceeded.into()));
+        }
+
+        // Ensure given group exists and does not exceed limits
+        let group = match groups.get_mut(&group_label) {
+            Some(group)
+                if group.len() + new_urefs_count > contract_header::MAX_GROUP_UREFS as usize =>
+            {
+                // Ensures there are not too many groups to fit in amount of new urefs
+                return Ok(Err(contract_header::Error::MaxTotalURefsExceeded.into()));
+            }
+            Some(group) => group,
+            None => return Ok(Err(contract_header::Error::GroupDoesNotExist.into())),
+        };
+
+        // Proceed with creating new URefs
+        let mut new_urefs = Vec::with_capacity(new_urefs_count as usize);
+        for _ in 0..new_urefs_count {
+            let u = self.context.new_unit_uref()?;
+            new_urefs.push(u);
+        }
+        group.extend(new_urefs.iter());
+
+        // check we can write to the host buffer
+        if let Err(err) = self.check_host_buffer() {
+            return Ok(Err(err));
+        }
+        // create CLValue for return value
+        let new_urefs_value = CLValue::from_t(new_urefs)?;
+        let value_size = new_urefs_value.inner_bytes().len();
+        // write return value to buffer
+        if let Err(err) = self.write_host_buffer(new_urefs_value) {
+            return Ok(Err(err));
+        }
+        // Write return value size to output location
+        let output_size_bytes = value_size.to_le_bytes(); // Wasm is little-endian
+        if let Err(error) = self.memory.set(output_size_ptr, &output_size_bytes) {
+            return Err(Error::Interpreter(error.into()));
+        }
+
+        // Write updated metadata to the global state
+        self.context
+            .state()
+            .borrow_mut()
+            .write(metadata_key, StoredValue::ContractMetadata(metadata));
+
+        Ok(Ok(()))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn remove_contract_user_group_urefs(
+        &mut self,
+        meta_key_ptr: u32,
+        meta_key_size: u32,
+        access_key_ptr: u32,
+        label_ptr: u32,
+        label_size: u32,
+        urefs_ptr: u32,
+        urefs_size: u32,
+    ) -> Result<Result<(), ApiError>, Error> {
+        let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+        let access_key = {
+            let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
+            bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
+        };
+        let label: String = self.t_from_mem(label_ptr, label_size)?;
+        let urefs: BTreeSet<URef> = self.t_from_mem(urefs_ptr, urefs_size)?;
+
+        let mut metadata = self
+            .context
+            .get_contract_metadata(metadata_key, access_key)?;
+
+        if metadata.access_key() != access_key {
+            return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
+        }
+
+        let groups = metadata.groups_mut();
+        let group_label = Group::new(label);
+
+        let group = match groups.get_mut(&group_label) {
+            Some(group) => group,
+            None => return Ok(Err(contract_header::Error::GroupDoesNotExist.into())),
+        };
+
+        if urefs.is_empty() {
+            return Ok(Ok(()));
+        }
+
+        for uref in urefs {
+            if !group.remove(&uref) {
+                return Ok(Err(contract_header::Error::UnableToRemoveURef.into()));
+            }
+        }
+        // Write updated metadata to the global state
+        self.context
+            .state()
+            .borrow_mut()
+            .write(metadata_key, StoredValue::ContractMetadata(metadata));
 
         Ok(Ok(()))
     }
