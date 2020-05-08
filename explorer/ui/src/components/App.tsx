@@ -73,8 +73,10 @@ class GroupedMenuItem {
           data-target={`#${this.id}`}
           aria-controls={this.id}
         >
-          <i className={`nav-link-icon fas fa-${this.icon}`} />
-          {this.label}
+          <i className={`nav-link-icon fa fa-fw fa-${this.icon}`} />
+          <span className="nav-link-text">
+            {this.label}
+          </span>
           <div className="sidenav-collapse-arrow">
             <i className="fas fa-angle-down" />
           </div>
