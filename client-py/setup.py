@@ -24,7 +24,13 @@ CONTRACTS_DIR = f"{THIS_DIRECTORY}/../client/src/main/resources"
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../protobuf"
 PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
 PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
+VERSION_FILE = f"{PACKAGE_DIR}/VERSION"
 NAME = "casperlabs_client"
+
+
+def read_version() -> str:
+    with open(VERSION_FILE, "r") as f:
+        return f.read().strip()
 
 
 def proto_compiler_check():
@@ -210,7 +216,8 @@ class CDevelop(DevelopCommand):
 
 setup(
     name=NAME,
-    version="0.18.1",
+    # Version now defined in VERSION file in casperlabs_client directory.
+    version=read_version(),
     packages=find_packages(exclude=["tests"]),
     setup_requires=[
         "protobuf==3.9.1",
@@ -230,8 +237,7 @@ setup(
     description="Python Client for interacting with a CasperLabs Node",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    include_package_data=True,
-    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm"]},
+    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm", VERSION_FILE]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",
