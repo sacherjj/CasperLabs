@@ -5,7 +5,7 @@ use proptest::{collection::vec, prelude::*};
 
 use engine_shared::{
     account::{Account, AssociatedKeys},
-    contract::Contract,
+    contract::ContractWasm,
     newtypes::CorrelationId,
     stored_value::{gens::stored_value_arb, StoredValue},
     transform::Transform,
@@ -318,7 +318,7 @@ proptest! {
         let mut named_keys = BTreeMap::new();
         named_keys.insert(name.clone(), k);
         let contract =
-            StoredValue::Contract(Contract::new(body, named_keys, ProtocolVersion::V1_0_0));
+            StoredValue::ContractWasm(ContractWasm::new(body, named_keys, ProtocolVersion::V1_0_0));
         let contract_key = Key::Hash(hash);
 
         let (gs, root_hash) = InMemoryGlobalState::from_pairs(
@@ -397,8 +397,8 @@ proptest! {
         // create contract which knows about value
         let mut contract_named_keys = BTreeMap::new();
         contract_named_keys.insert(state_name.clone(), k);
-        let contract = StoredValue::Contract(
-            Contract::new(body, contract_named_keys, ProtocolVersion::V1_0_0)
+        let contract = StoredValue::ContractWasm(
+            ContractWasm::new(body, contract_named_keys, ProtocolVersion::V1_0_0)
         );
         let contract_key = Key::Hash(hash);
 
@@ -493,8 +493,11 @@ fn query_for_circular_references_should_fail() {
     let mut named_keys = BTreeMap::new();
     named_keys.insert(key_name.clone(), cl_value_key);
     named_keys.insert(contract_name.clone(), contract_key);
-    let contract =
-        StoredValue::Contract(Contract::new(vec![], named_keys, ProtocolVersion::V1_0_0));
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
+        vec![],
+        named_keys,
+        ProtocolVersion::V1_0_0,
+    ));
 
     let correlation_id = CorrelationId::new();
     let (global_state, root_hash) = InMemoryGlobalState::from_pairs(

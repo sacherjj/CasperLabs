@@ -1,13 +1,13 @@
 use std::convert::TryInto;
 
 use engine_shared::{
-    account::Account, contract::Contract, motes::Motes, newtypes::CorrelationId,
+    account::Account, contract::ContractWasm, motes::Motes, newtypes::CorrelationId,
     stored_value::StoredValue, TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
 use types::{
-    account::PublicKey, bytesrepr::ToBytes, CLValue, ContractHash, ContractMetadata, Key, SemVer,
-    U512,
+    account::PublicKey, bytesrepr::ToBytes, CLValue, Contract, ContractHash, ContractPackage, Key,
+    SemVer, U512,
 };
 
 use crate::{execution, tracking_copy::TrackingCopy};
@@ -38,6 +38,13 @@ pub trait TrackingCopyExt<R> {
     ) -> Result<Motes, Self::Error>;
 
     /// Gets a contract by Key
+    fn get_contract_wasm(
+        &mut self,
+        correlation_id: CorrelationId,
+        key: Key,
+    ) -> Result<ContractWasm, Self::Error>;
+
+    /// Gets a contract header by Key
     fn get_contract(
         &mut self,
         correlation_id: CorrelationId,
@@ -45,11 +52,11 @@ pub trait TrackingCopyExt<R> {
     ) -> Result<Contract, Self::Error>;
 
     /// Gets a contract metadata by Key
-    fn get_contract_metadata(
+    fn get_contract_package(
         &mut self,
         correlation_id: CorrelationId,
         key: Key,
-    ) -> Result<ContractMetadata, Self::Error>;
+    ) -> Result<ContractPackage, Self::Error>;
 }
 
 impl<R> TrackingCopyExt<R> for TrackingCopy<R>
@@ -123,6 +130,32 @@ where
         }
     }
 
+    fn get_contract_wasm(
+        &mut self,
+        correlation_id: CorrelationId,
+        key: Key,
+    ) -> Result<ContractWasm, Self::Error> {
+        match self
+            .get(correlation_id, &key.normalize())
+            .map_err(Into::into)?
+        {
+            Some(StoredValue::ContractMetadata(metadata)) => {
+                todo!("get_contract with ContractMetadata");
+                // let contract_header = metadata
+                //     .get_version(&SemVer::V1_0_0)
+                //     .ok_or_else(|| execution::Error::KeyNotFound(key))?;
+                // self.get_contract(correlation_id, contract_header.contract_key())
+            }
+            Some(StoredValue::ContractWasm(contract_wasm)) => Ok(contract_wasm),
+            Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
+                "Contract".to_string(),
+                other.type_name(),
+            ))),
+            None => Err(execution::Error::KeyNotFound(key)),
+        }
+    }
+
+    /// Gets a contract header by Key
     fn get_contract(
         &mut self,
         correlation_id: CorrelationId,
@@ -132,26 +165,20 @@ where
             .get(correlation_id, &key.normalize())
             .map_err(Into::into)?
         {
-            Some(StoredValue::ContractMetadata(metadata)) => {
-                let contract_header = metadata
-                    .get_version(&SemVer::V1_0_0)
-                    .ok_or_else(|| execution::Error::KeyNotFound(key))?;
-                self.get_contract(correlation_id, contract_header.contract_key())
-            }
-            Some(StoredValue::Contract(contract)) => Ok(contract),
+            Some(StoredValue::Contract(contract_header)) => Ok(contract_header),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                "Contract".to_string(),
+                "ContractHeader".to_string(),
                 other.type_name(),
             ))),
             None => Err(execution::Error::KeyNotFound(key)),
         }
     }
 
-    fn get_contract_metadata(
+    fn get_contract_package(
         &mut self,
         correlation_id: CorrelationId,
         key: Key,
-    ) -> Result<ContractMetadata, Self::Error> {
+    ) -> Result<ContractPackage, Self::Error> {
         match self
             .get(correlation_id, &key.normalize())
             .map_err(Into::into)?

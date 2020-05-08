@@ -15,7 +15,7 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractMetadata,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractPackage,
     EntryPoint, Key, Phase, ProtocolVersion, URef, U512,
 };
 
@@ -107,7 +107,7 @@ where
         correlation_id,
         phase,
         protocol_data,
-        ContractMetadata::default(),
+        ContractPackage::default(),
         EntryPoint::default(),
     );
 

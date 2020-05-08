@@ -12,7 +12,7 @@ use blake2::{
 };
 
 use engine_shared::{
-    account::Account, contract::Contract, gas::Gas, newtypes::CorrelationId,
+    account::Account, contract::ContractWasm, gas::Gas, newtypes::CorrelationId,
     stored_value::StoredValue,
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
@@ -21,7 +21,7 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
-    bytesrepr, AccessRights, BlockTime, CLType, CLValue, ContractMetadata, EntryPoint,
+    bytesrepr, AccessRights, BlockTime, CLType, CLValue, ContractPackage, EntryPoint,
     EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
     KEY_LOCAL_SEED_LENGTH,
 };
@@ -54,7 +54,7 @@ pub(crate) fn uref_has_access_rights(
 }
 
 pub fn validate_entry_point_access_with(
-    metadata: &ContractMetadata,
+    metadata: &ContractPackage,
     access: &EntryPointAccess,
     validator: impl Fn(&URef) -> bool,
 ) -> Result<(), Error> {
@@ -104,7 +104,7 @@ pub struct RuntimeContext<'a, R> {
     correlation_id: CorrelationId,
     phase: Phase,
     protocol_data: ProtocolData,
-    _metadata: ContractMetadata,
+    _metadata: ContractPackage,
     entrypoint: EntryPoint,
 }
 
@@ -132,7 +132,7 @@ where
         correlation_id: CorrelationId,
         phase: Phase,
         protocol_data: ProtocolData,
-        metadata: ContractMetadata,
+        metadata: ContractPackage,
         entrypoint: EntryPoint,
     ) -> Self {
         RuntimeContext {
@@ -182,12 +182,13 @@ where
     fn remove_key_from_contract(
         &mut self,
         key: Key,
-        mut contract: Contract,
+        mut contract: ContractWasm,
         name: &str,
     ) -> Result<(), Error> {
-        contract.named_keys_mut().remove(name);
+        todo!();
+        // contract.named_keys_mut().remove(name);
 
-        let contract_value = StoredValue::Contract(contract);
+        let contract_value = StoredValue::ContractWasm(contract_wasm);
 
         self.state.borrow_mut().write(key, contract_value);
 
@@ -212,7 +213,7 @@ where
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
-                let contract: Contract = {
+                let contract: ContractWasm = {
                     let value: StoredValue = self
                         .state
                         .borrow_mut()
@@ -227,12 +228,12 @@ where
                 self.remove_key_from_contract(contract_uref, contract, name)
             }
             contract_hash @ Key::Hash(_) => {
-                let contract: Contract = self.read_gs_typed(&contract_hash)?;
+                let contract: ContractWasm = self.read_gs_typed(&contract_hash)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
             }
             contract_local @ Key::Local { .. } => {
-                let contract: Contract = self.read_gs_typed(&contract_local)?;
+                let contract: ContractWasm = self.read_gs_typed(&contract_local)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_local, contract, name)
             }
@@ -535,7 +536,8 @@ where
                     .values()
                     .try_for_each(|key| self.validate_key(key))
             }
-            StoredValue::Contract(contract) => contract
+            StoredValue::ContractWasm(_) => Ok(()),
+            StoredValue::Contract(contract_header) => contract_header
                 .named_keys()
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
@@ -831,8 +833,8 @@ where
         named_keys: BTreeMap<String, Key>,
     ) -> Result<(), Error> {
         let protocol_version = self.protocol_version();
-        let contract = Contract::new(bytes, named_keys, protocol_version);
-        let contract = StoredValue::Contract(contract);
+        let contract = ContractWasm::new(bytes);
+        let contract = StoredValue::ContractWasm(contract_wasm);
 
         self.validate_writeable(&key)?;
         self.validate_key(&key)?;
@@ -877,10 +879,10 @@ where
         &mut self,
         metadata_key: Key,
         access_key: URef,
-    ) -> Result<ContractMetadata, Error> {
+    ) -> Result<ContractPackage, Error> {
         self.validate_key(&metadata_key)?;
         self.validate_uref(&access_key)?;
-        let metadata: ContractMetadata = self.read_gs_typed(&metadata_key)?;
+        let metadata: ContractPackage = self.read_gs_typed(&metadata_key)?;
         Ok(metadata)
     }
 }

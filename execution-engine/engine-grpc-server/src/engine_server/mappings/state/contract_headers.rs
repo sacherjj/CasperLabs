@@ -3,14 +3,13 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 use types::{
-    ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, EntryPointType, Group,
-    Parameter,
+    Contract, ContractPackage, EntryPoint, EntryPointAccess, EntryPointType, Group, Parameter,
 };
 
 use crate::engine_server::{mappings::ParsingError, state};
 
-impl From<ContractMetadata> for state::ContractMetadata {
-    fn from(value: ContractMetadata) -> state::ContractMetadata {
+impl From<ContractPackage> for state::ContractMetadata {
+    fn from(value: ContractPackage) -> state::ContractMetadata {
         let mut metadata = state::ContractMetadata::new();
         metadata.set_access_key(value.access_key().into());
 
@@ -43,11 +42,11 @@ impl From<ContractMetadata> for state::ContractMetadata {
     }
 }
 
-impl TryFrom<state::ContractMetadata> for ContractMetadata {
+impl TryFrom<state::ContractMetadata> for ContractPackage {
     type Error = ParsingError;
-    fn try_from(mut value: state::ContractMetadata) -> Result<ContractMetadata, Self::Error> {
+    fn try_from(mut value: state::ContractMetadata) -> Result<ContractPackage, Self::Error> {
         let access_uref = value.take_access_key().try_into()?;
-        let mut metadata = ContractMetadata::new(access_uref);
+        let mut metadata = ContractPackage::new(access_uref);
         for mut active_version in value.take_active_versions().into_iter() {
             let version = active_version.take_version().into();
             let header = active_version.take_contract_header().try_into()?;
@@ -72,8 +71,8 @@ impl TryFrom<state::ContractMetadata> for ContractMetadata {
     }
 }
 
-impl From<ContractHeader> for state::ContractHeader {
-    fn from(value: ContractHeader) -> Self {
+impl From<Contract> for state::ContractHeader {
+    fn from(value: Contract) -> Self {
         let mut res = state::ContractHeader::new();
         res.set_contract_key(value.contract_key().into());
         res.set_protocol_version(value.protocol_version().into());
@@ -88,9 +87,9 @@ impl From<ContractHeader> for state::ContractHeader {
     }
 }
 
-impl TryFrom<state::ContractHeader> for ContractHeader {
+impl TryFrom<state::ContractHeader> for Contract {
     type Error = ParsingError;
-    fn try_from(mut value: state::ContractHeader) -> Result<ContractHeader, Self::Error> {
+    fn try_from(mut value: state::ContractHeader) -> Result<Contract, Self::Error> {
         let mut methods = BTreeMap::new();
         for mut method_entry in value.take_methods().into_iter() {
             methods.insert(
@@ -100,7 +99,7 @@ impl TryFrom<state::ContractHeader> for ContractHeader {
         }
 
         let contract_key = value.take_contract_key().try_into()?;
-        Ok(ContractHeader::new(
+        Ok(Contract::new(
             methods,
             contract_key,
             value.take_protocol_version().into(),

@@ -40,7 +40,7 @@ fn should_run_mint_install_contract() {
         .transforms
         .get(&Key::URef(ret_value.remove_access_rights()))
     {
-        Some(Transform::Write(StoredValue::Contract(_))) => (),
+        Some(Transform::Write(StoredValue::ContractWasm(_))) => (),
 
         _ => panic!("Expected contract to be written under the key"),
     }

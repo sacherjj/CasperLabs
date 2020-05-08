@@ -12,7 +12,7 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractMetadata,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractPackage,
     EntryPoint, Key, Phase, ProtocolVersion, RuntimeArgs,
 };
 
@@ -99,7 +99,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-        metadata: ContractMetadata,
+        metadata: ContractPackage,
         entrypoint: EntryPoint,
     ) -> ExecutionResult
     where
@@ -297,7 +297,7 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
-            ContractMetadata::default(),
+            ContractPackage::default(),
             EntryPoint::default(),
         );
 
@@ -397,7 +397,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-        metadata: ContractMetadata,
+        metadata: ContractPackage,
         entrypoint: EntryPoint,
     ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
@@ -493,7 +493,7 @@ impl Executor {
             phase,
             protocol_data,
             system_contract_cache,
-            ContractMetadata::default(),
+            ContractPackage::default(),
             EntryPoint::default(),
         )?;
 

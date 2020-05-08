@@ -14,7 +14,10 @@ impl From<StoredValue> for state::StoredValue {
         match value {
             StoredValue::CLValue(cl_value) => pb_value.set_cl_value(cl_value.into()),
             StoredValue::Account(account) => pb_value.set_account(account.into()),
-            StoredValue::Contract(contract) => pb_value.set_contract(contract.into()),
+            StoredValue::ContractWasm(contract_wasm) => pb_value.set_contract(contract.into()),
+            StoredValue::Contract(contract_header) => {
+                todo!("From<StoredValue::Contract> for state::StoredValue")
+            }
             StoredValue::ContractMetadata(metadata) => {
                 pb_value.set_contract_metadata(metadata.into())
             }
@@ -40,7 +43,7 @@ impl TryFrom<state::StoredValue> for StoredValue {
                 StoredValue::Account(pb_account.try_into()?)
             }
             StoredValue_oneof_variants::contract(pb_contract) => {
-                StoredValue::Contract(pb_contract.try_into()?)
+                StoredValue::ContractWasm(pb_contract.try_into()?)
             }
             StoredValue_oneof_variants::contract_metadata(pb_contract_metadata) => {
                 StoredValue::ContractMetadata(pb_contract_metadata.try_into()?)

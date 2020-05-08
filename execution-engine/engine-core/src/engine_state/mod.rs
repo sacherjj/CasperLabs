@@ -26,7 +26,7 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
-    contract::Contract,
+    contract::ContractWasm,
     gas::Gas,
     motes::Motes,
     newtypes::{Blake2bHash, CorrelationId},
@@ -44,8 +44,9 @@ use types::{
     bytesrepr::{self, ToBytes},
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
-    AccessRights, BlockTime, CLValue, ContractMetadata, EntryPoint, EntryPointType, Key, NamedArg,
-    Phase, ProtocolVersion, RuntimeArgs, SemVer, URef, KEY_HASH_LENGTH, U512, UREF_ADDR_LENGTH,
+    AccessRights, BlockTime, CLValue, Contract, ContractPackage, EntryPoint, EntryPointType, Key,
+    NamedArg, Phase, ProtocolVersion, RuntimeArgs, SemVer, URef, KEY_HASH_LENGTH, U512,
+    UREF_ADDR_LENGTH,
 };
 
 pub use self::{
@@ -91,14 +92,14 @@ pub struct EngineState<S> {
 pub enum GetModuleResult {
     Session {
         module: Module,
-        metadata: ContractMetadata,
+        metadata: ContractPackage,
         entrypoint: EntryPoint,
     },
     Contract {
         module: Module,
         base_key: Key,
         named_keys: BTreeMap<String, Key>,
-        metadata: ContractMetadata,
+        metadata: ContractPackage,
         entrypoint: EntryPoint,
     },
 }
@@ -414,7 +415,7 @@ where
                 let contract = tracking_copy
                     .borrow_mut()
                     .get_contract(correlation_id, mint_metadata_key)?;
-                let (bytes, _, _) = contract.destructure();
+                let bytes = contract.take_bytes();
                 engine_wasm_prep::deserialize(&bytes)?
             };
             // For each account...
@@ -468,7 +469,7 @@ where
                         phase,
                         protocol_data,
                         system_contract_cache,
-                        ContractMetadata::default(),
+                        ContractPackage::default(),
                         EntryPoint::default(),
                     )?;
 
@@ -769,7 +770,7 @@ where
                 let module = preprocessor.preprocess(&module_bytes)?;
                 Ok(GetModuleResult::Session {
                     module,
-                    metadata: ContractMetadata::default(),
+                    metadata: ContractPackage::default(),
                     entrypoint: EntryPoint::default(),
                 })
             }
@@ -783,7 +784,7 @@ where
                 }
                 let mut arr = [0u8; KEY_HASH_LENGTH];
                 arr.copy_from_slice(&hash);
-                let (module, _contract) = self.get_module_from_key(
+                let (module, contract_header, contract) = self.get_module_from_key(
                     tracking_copy,
                     Key::Hash(arr),
                     correlation_id,
@@ -791,7 +792,7 @@ where
                 )?;
                 Ok(GetModuleResult::Session {
                     module,
-                    metadata: ContractMetadata::default(),
+                    metadata: ContractPackage::default(),
                     entrypoint: EntryPoint::default(),
                 })
             }
@@ -804,7 +805,7 @@ where
                         return Err(error::Error::Exec(execution::Error::ForgedReference(*uref)));
                     }
                 }
-                let (module, _contract) = self.get_module_from_key(
+                let (module, contract_header, _contract) = self.get_module_from_key(
                     tracking_copy,
                     *stored_contract_key,
                     correlation_id,
@@ -812,7 +813,7 @@ where
                 )?;
                 Ok(GetModuleResult::Session {
                     module,
-                    metadata: ContractMetadata::default(),
+                    metadata: ContractPackage::default(),
                     entrypoint: EntryPoint::default(),
                 })
             }
@@ -855,7 +856,7 @@ where
                         )));
                     }
                 };
-                let (module, _contract) = self.get_module_from_key(
+                let (module, contract_header, _contract) = self.get_module_from_key(
                     tracking_copy,
                     normalized_uref,
                     correlation_id,
@@ -863,7 +864,7 @@ where
                 )?;
                 Ok(GetModuleResult::Session {
                     module,
-                    metadata: ContractMetadata::default(),
+                    metadata: ContractPackage::default(),
                     entrypoint: EntryPoint::default(),
                 })
             }
@@ -889,7 +890,7 @@ where
                     .get_method(entry_point)
                     .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
 
-                let (module, contract) = self.get_module_from_key(
+                let (module, contract_header, contract) = self.get_module_from_key(
                     tracking_copy,
                     contract_header.contract_key(),
                     correlation_id,
@@ -905,7 +906,7 @@ where
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_header.contract_key(),
-                        named_keys: contract.take_named_keys(),
+                        named_keys: contract_header.take_named_keys(),
                         metadata: contract_metadata.clone(),
                         entrypoint: method_entrypoint.clone(),
                     }),
@@ -930,7 +931,7 @@ where
                     .get_method(entry_point)
                     .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
 
-                let (module, contract) = self.get_module_from_key(
+                let (module, contract_header, contract) = self.get_module_from_key(
                     tracking_copy,
                     contract_header.contract_key(),
                     correlation_id,
@@ -946,7 +947,7 @@ where
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_header.contract_key(),
-                        named_keys: contract.take_named_keys(),
+                        named_keys: contract_header.take_named_keys(),
                         metadata: contract_metadata.clone(),
                         entrypoint: method_entrypoint.clone(),
                     }),
@@ -961,14 +962,14 @@ where
         stored_contract_key: Key,
         correlation_id: CorrelationId,
         protocol_version: &ProtocolVersion,
-    ) -> Result<(Module, Contract), error::Error> {
-        let contract = tracking_copy
+    ) -> Result<(Module, Contract, ContractWasm), error::Error> {
+        let contract_header = tracking_copy
             .borrow_mut()
             .get_contract(correlation_id, stored_contract_key)?;
 
         // A contract may only call a stored contract that has the same protocol major version
         // number.
-        let contract_version = contract.protocol_version();
+        let contract_version = contract_header.protocol_version();
         if !contract_version.is_compatible_with(&protocol_version) {
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,
@@ -977,10 +978,14 @@ where
             return Err(error::Error::Exec(exec_error));
         }
 
-        let (ret, _, _) = contract.clone().destructure();
+        let contract = tracking_copy
+            .borrow_mut()
+            .get_contract(correlation_id, contract_header.contract_key())?;
+
+        let ret = contract.take_bytes();
         let module = engine_wasm_prep::deserialize(&ret)?;
 
-        Ok((module, contract))
+        Ok((module, contract_header, contract))
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1141,13 +1146,23 @@ where
                 }
             };
 
+            let proof_of_stake_contract_wasm = match tracking_copy
+                .borrow_mut()
+                .get_contract_wasm(correlation_id, proof_of_stake_contract.contract_key())
+            {
+                Ok(contract) => contract,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            };
+
             let proof_of_stake_module =
                 match self.system_contract_cache.get(proof_of_stake_reference) {
                     Some(module) => module,
                     None => {
                         match {
                             if self.config.use_system_contracts() {
-                                engine_wasm_prep::deserialize(proof_of_stake_contract.bytes())
+                                engine_wasm_prep::deserialize(proof_of_stake_contract_wasm.bytes())
                             } else {
                                 wasm::do_nothing_module(preprocessor)
                             }
@@ -1286,11 +1301,13 @@ where
                     correlation_id,
                     &protocol_version,
                 )
-                .map(|(module, _contract)| GetModuleResult::Session {
-                    module,
-                    metadata: ContractMetadata::default(),
-                    entrypoint: EntryPoint::default(),
-                })
+                .map(
+                    |(module, contract_header, _contract)| GetModuleResult::Session {
+                        module,
+                        metadata: ContractPackage::default(),
+                        entrypoint: EntryPoint::default(),
+                    },
+                )
             } else {
                 self.get_module(
                     Rc::clone(&tracking_copy),
@@ -1670,7 +1687,7 @@ where
         };
 
         let contract = match reader.read(correlation_id, &proof_of_stake_key)? {
-            Some(StoredValue::Contract(contract)) => contract,
+            Some(StoredValue::ContractWasm(contract_wasm)) => contract,
             _ => return Err(MissingSystemContract(PROOF_OF_STAKE.to_string())),
         };
 

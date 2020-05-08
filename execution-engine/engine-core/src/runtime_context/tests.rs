@@ -10,7 +10,7 @@ use rand::RngCore;
 use engine_shared::{
     account::{Account, AssociatedKeys},
     additive_map::AdditiveMap,
-    contract::Contract,
+    contract::ContractWasm,
     gas::Gas,
     newtypes::CorrelationId,
     stored_value::StoredValue,
@@ -210,7 +210,7 @@ fn store_contract_with_uref_valid() {
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![uref]);
 
-    let contract = StoredValue::Contract(Contract::new(
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), uref)).collect(),
         ProtocolVersion::V1_0_0,
@@ -235,7 +235,7 @@ fn store_contract_with_uref_valid() {
 fn store_contract_with_uref_forged() {
     let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let contract = StoredValue::Contract(Contract::new(
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         iter::once(("ForgedURef".to_owned(), uref)).collect(),
         ProtocolVersion::V1_0_0,
@@ -255,7 +255,7 @@ fn store_contract_under_uref_valid() {
     let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
     let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
-    let contract = StoredValue::Contract(Contract::new(
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         iter::once(("ValidURef".to_owned(), contract_uref)).collect(),
         ProtocolVersion::V1_0_0,
@@ -280,7 +280,7 @@ fn store_contract_under_uref_forged() {
     // ForgedReference error.
     let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ_WRITE);
-    let contract = StoredValue::Contract(Contract::new(
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         BTreeMap::new(),
         ProtocolVersion::V1_0_0,
@@ -300,7 +300,7 @@ fn store_contract_uref_invalid_access() {
     let mut rng = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let contract_uref = create_uref(&mut rng, AccessRights::READ);
     let access_rights = extract_access_rights_from_keys(vec![contract_uref]);
-    let contract = StoredValue::Contract(Contract::new(
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         BTreeMap::new(),
         ProtocolVersion::V1_0_0,
@@ -438,7 +438,7 @@ fn contract_key_addable_valid() {
     let fn_store_id = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
-    let contract = StoredValue::Contract(Contract::new(
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         BTreeMap::new(),
         ProtocolVersion::V1_0_0,
@@ -480,7 +480,7 @@ fn contract_key_addable_valid() {
         .add_gs(contract_key, named_key)
         .expect("Adding should work.");
 
-    let updated_contract = StoredValue::Contract(Contract::new(
+    let updated_contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         iter::once((uref_name, uref)).collect(),
         ProtocolVersion::V1_0_0,
@@ -504,7 +504,7 @@ fn contract_key_addable_invalid() {
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
     let other_contract_key = random_contract_key(&mut rng);
-    let contract = StoredValue::Contract(Contract::new(
+    let contract = StoredValue::ContractWasm(ContractWasm::new(
         Vec::new(),
         BTreeMap::new(),
         ProtocolVersion::V1_0_0,

@@ -18,16 +18,16 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 
 use ::mint::Mint;
 use contract::args_parser::ArgsParser;
-use engine_shared::{account::Account, contract::Contract, gas::Gas, stored_value::StoredValue};
+use engine_shared::{
+    account::Account, contract::ContractWasm, gas::Gas, stored_value::StoredValue,
+};
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use proof_of_stake::ProofOfStake;
 use standard_payment::StandardPayment;
 use types::{
     account::{ActionType, PublicKey, Weight},
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_header::{
-        self, ContractHeader, ContractMetadata, EntryPoint, EntryPointAccess, Group,
-    },
+    contract_header::{self, Contract, ContractPackage, EntryPoint, EntryPointAccess, Group},
     system_contract_errors,
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, ContractHash, ContractMetadataHash,
@@ -42,6 +42,7 @@ use crate::{
     runtime_context::{self, RuntimeContext},
     Address,
 };
+use contract_header::ContractVersion;
 use scoped_timer::ScopedTimer;
 
 pub struct Runtime<'a, R> {
@@ -1466,7 +1467,7 @@ where
         }
     }
 
-    fn get_module_by_header(&mut self, header: &ContractHeader) -> Result<Vec<u8>, Error> {
+    fn get_module_by_header(&mut self, header: &Contract) -> Result<Vec<u8>, Error> {
         let export_section = self
             .module
             .export_section()
@@ -1764,7 +1765,7 @@ where
             correlation_id,
             phase,
             protocol_data,
-            ContractMetadata::default(),
+            ContractPackage::default(),
             EntryPoint::default(),
         );
 
@@ -1858,7 +1859,7 @@ where
             correlation_id,
             phase,
             protocol_data,
-            ContractMetadata::default(),
+            ContractPackage::default(),
             EntryPoint::default(),
         );
 
@@ -1942,7 +1943,7 @@ where
     /// Calls contract living under a `key`, with supplied `args`.
     pub fn call_contract(&mut self, key: Key, args: RuntimeArgs) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
-            Some(StoredValue::Contract(contract)) => contract,
+            Some(StoredValue::ContractWasm(contract_wasm)) => contract,
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a contract",
@@ -1956,7 +1957,7 @@ where
             contract,
             args,
             "call",
-            ContractMetadata::default(),
+            ContractPackage::default(),
             EntryPoint::default_for_contract(),
         )
     }
@@ -1967,69 +1968,78 @@ where
     pub fn call_versioned_contract(
         &mut self,
         contract_metadata_hash: ContractMetadataHash,
-        version: SemVer,
+        version: ContractVersion,
         entry_point_name: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
         let key = contract_metadata_hash.into();
-        let (context_key, contract, metadata, entrypoint) = match self.context.read_gs(&key)? {
-            Some(StoredValue::ContractMetadata(metadata)) => {
-                let header = metadata
-                    .get_version(&version)
-                    .ok_or_else(|| Error::InvalidContractVersion)?;
+        let (context_key, contract, contract_wasm, metadata, entrypoint) =
+            match self.context.read_gs(&key)? {
+                Some(StoredValue::ContractMetadata(metadata)) => {
+                    let lookup_key = (self.context.protocol_version().value().major, version);
 
-                let entry_point = header
-                    .get_method(&entry_point_name)
-                    .ok_or_else(|| Error::NoSuchMethod)?;
+                    let header = metadata
+                        .get_version(lookup_key)
+                        .ok_or_else(|| Error::InvalidContractVersion)?;
 
-                self.validate_entry_point_access(&metadata, entry_point.access())?;
+                    let entry_point = header
+                        .get_method(&entry_point_name)
+                        .ok_or_else(|| Error::NoSuchMethod)?;
 
-                for (expected, found) in entry_point
-                    .args()
-                    .iter()
-                    .map(|a| a.cl_type())
-                    .cloned()
-                    .zip(args.to_values().into_iter().map(|v| v.cl_type()).cloned())
-                {
-                    if expected != found {
-                        return Err(Error::type_mismatch(expected, found));
-                    }
-                }
+                    self.validate_entry_point_access(&metadata, entry_point.access())?;
 
-                let contract = self
-                    .context
-                    .read_gs_direct(&header.contract_key())?
-                    .and_then(|sv| sv.as_contract().cloned())
-                    .ok_or_else(|| Error::InvalidContractVersion)?;
-
-                let context_key = match entry_point.entry_point_type() {
-                    EntryPointType::Session
-                        if self.context.entry_point_type() == EntryPointType::Contract =>
+                    for (expected, found) in entry_point
+                        .args()
+                        .iter()
+                        .map(|a| a.cl_type())
+                        .cloned()
+                        .zip(args.to_values().into_iter().map(|v| v.cl_type()).cloned())
                     {
-                        // Session code can't be called from Contract code for security reasons.
-                        return Err(Error::InvalidContext);
+                        if expected != found {
+                            return Err(Error::type_mismatch(expected, found));
+                        }
                     }
-                    EntryPointType::Session => {
-                        assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
-                        // Session code called from session reuses current base key
-                        self.context.base_key()
-                    }
-                    EntryPointType::Contract => {
-                        // Contract code from entrypoint -> contract context
-                        header.contract_key()
-                    }
-                };
 
-                (context_key, contract, metadata.clone(), entry_point.clone())
-            }
-            Some(_) => {
-                return Err(Error::FunctionNotFound(format!(
-                    "Value at {:?} is not a versioned contract",
-                    contract_metadata_hash
-                )))
-            }
-            None => return Err(Error::KeyNotFound(key)),
-        };
+                    let contract = self
+                        .context
+                        .read_gs_direct(&header.contract_key())?
+                        .and_then(|sv| sv.as_contract().cloned())
+                        .ok_or_else(|| Error::InvalidContractVersion)?;
+
+                    let context_key = match entry_point.entry_point_type() {
+                        EntryPointType::Session
+                            if self.context.entry_point_type() == EntryPointType::Contract =>
+                        {
+                            // Session code can't be called from Contract code for security reasons.
+                            return Err(Error::InvalidContext);
+                        }
+                        EntryPointType::Session => {
+                            assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
+                            // Session code called from session reuses current base key
+                            self.context.base_key()
+                        }
+                        EntryPointType::Contract => {
+                            // Contract code from entrypoint -> contract context
+                            header.contract_key()
+                        }
+                    };
+
+                    (
+                        context_key,
+                        contract,
+                        contract_wasm,
+                        metadata.clone(),
+                        entry_point.clone(),
+                    )
+                }
+                Some(_) => {
+                    return Err(Error::FunctionNotFound(format!(
+                        "Value at {:?} is not a versioned contract",
+                        contract_metadata_hash
+                    )))
+                }
+                None => return Err(Error::KeyNotFound(key)),
+            };
         let entry_point_name = entry_point_name.as_str();
         self.execute_contract(
             context_key,
@@ -2047,7 +2057,7 @@ where
         contract: Contract,
         args: RuntimeArgs,
         entry_point_name: &str,
-        metadata: ContractMetadata,
+        metadata: ContractPackage,
         entrypoint: EntryPoint,
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
@@ -2093,9 +2103,10 @@ where
 
         let maybe_module = self.system_contract_cache.get(key.into_seed());
 
+        let contract_wasm: ContractWasm = todo!("get contract wasm");
         let module = match maybe_module {
             Some(module) => module,
-            None => parity_wasm::deserialize_buffer(contract.bytes())?,
+            None => parity_wasm::deserialize_buffer(contract_wasm.bytes())?,
         };
 
         let mut named_keys = match entrypoint.entry_point_type() {
@@ -2225,7 +2236,7 @@ where
     fn call_versioned_contract_host_buffer(
         &mut self,
         contract_metadata_hash: ContractMetadataHash,
-        version: SemVer,
+        version: ContractVersion,
         method: String,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
@@ -2322,11 +2333,7 @@ where
         fn_bytes: Vec<u8>,
         named_keys: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
-        let contract = Contract::new(fn_bytes, named_keys, self.context.protocol_version());
-        let contract_addr = self
-            .context
-            .store_function(StoredValue::Contract(contract))?;
-        Ok(contract_addr)
+        todo!("remove store_function")
     }
 
     /// Tries to store a function, represented as bytes from the Wasm memory,
@@ -2337,16 +2344,17 @@ where
         fn_bytes: Vec<u8>,
         named_keys: BTreeMap<String, Key>,
     ) -> Result<[u8; 32], Error> {
-        let contract = Contract::new(fn_bytes, named_keys, self.context.protocol_version());
-        let new_hash = self
-            .context
-            .store_function_at_hash(StoredValue::Contract(contract))?;
-        Ok(new_hash)
+        todo!("remove store_function_at_hash");
+        // let contract = ContractWasm::new(fn_bytes, named_keys, self.context.protocol_version());
+        // let new_hash = self
+        //     .context
+        //     .store_function_at_hash(StoredValue::ContractWasm(contract_wasm))?;
+        // Ok(new_hash)
     }
 
     fn create_contract_value(&mut self) -> Result<(StoredValue, URef), Error> {
         let access_key = self.context.new_unit_uref()?;
-        let contract_metadata = ContractMetadata::new(access_key);
+        let contract_metadata = ContractPackage::new(access_key);
 
         let value = StoredValue::ContractMetadata(contract_metadata);
 
@@ -2374,7 +2382,7 @@ where
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
 
-        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
+        let mut metadata: ContractPackage = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
             return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
@@ -2442,28 +2450,29 @@ where
 
     fn add_contract_version(
         &mut self,
-        metadata_key: Key,
+        contract_package_key: Key,
         access_key: URef,
-        version: SemVer,
+        version: ContractVersion,
         entry_points: BTreeMap<String, EntryPoint>,
         named_keys: BTreeMap<String, Key>,
         output_ptr: u32,
         output_size: usize,
         bytes_written_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        self.context.validate_key(&metadata_key)?;
+        self.context.validate_key(&contract_package_key)?;
         self.context.validate_uref(&access_key)?;
 
-        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
+        let mut contract_package: ContractPackage =
+            self.context.read_gs_typed(&contract_package_key)?;
 
-        if metadata.access_key() != access_key {
+        if contract_package.access_key() != access_key {
             return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
         }
 
-        let contract_key = Key::Hash(self.context.new_function_address()?);
+        let contract_header_key = Key::Hash(self.context.new_function_address()?);
 
         {
-            let key_bytes = match contract_key.to_bytes() {
+            let key_bytes = match contract_header_key.to_bytes() {
                 Ok(bytes) => bytes,
                 Err(error) => return Ok(Err(error.into())),
             };
@@ -2486,25 +2495,42 @@ where
             }
         }
 
-        let header =
-            ContractHeader::new(entry_points, contract_key, self.context.protocol_version());
+        let major = self.context.protocol_version().value().major;
+        let next_version = contract_package.next_contract_version_for(major) + 1; // TODO: Overflow check and return appropriate error
+        let contract_lookup_key = (major, next_version);
 
-        if let Err(err) = metadata.add_version(version, header.clone()) {
+        let contract_wasm_key = Key::Hash(self.context.new_function_address()?);
+
+        let header = Contract::new(
+            contract_wasm_key,
+            named_keys,
+            entry_points,
+            self.context.protocol_version(),
+        );
+
+        if let Err(err) = contract_package.add_version(contract_lookup_key, header.clone()) {
             return Ok(Err(err.into()));
         }
 
         let module_bytes = self.get_module_by_header(&header)?;
-        let contract = Contract::new(module_bytes, named_keys, header.protocol_version());
+
+        let contract_wasm_key = Key::Hash(self.context.new_function_address()?);
+        let contract_wasm = ContractWasm::new(module_bytes);
 
         self.context
             .state()
             .borrow_mut()
-            .write(contract_key, StoredValue::Contract(contract));
+            .write(contract_wasm_key, StoredValue::ContractWasm(contract_wasm));
 
         self.context
             .state()
             .borrow_mut()
-            .write(metadata_key, StoredValue::ContractMetadata(metadata));
+            .write(contract_header_key, StoredValue::Contract(contract_header));
+
+        self.context.state().borrow_mut().write(
+            contract_package_key,
+            StoredValue::ContractMetadata(contract_package),
+        );
 
         Ok(Ok(()))
     }
@@ -2513,27 +2539,29 @@ where
         &mut self,
         metadata_key: Key,
         access_key: URef,
-        version: SemVer,
+        version: ContractVersion,
     ) -> Result<Result<(), ApiError>, Error> {
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
 
-        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
+        let mut metadata: ContractPackage = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
             return Ok(Err(contract_header::Error::InvalidAccessKey.into()));
         }
 
-        if let Err(err) = metadata.remove_version(version) {
-            return Ok(Err(err.into()));
-        }
+        todo!("remove_contract_version");
 
-        self.context
-            .state()
-            .borrow_mut()
-            .write(metadata_key, StoredValue::ContractMetadata(metadata));
+        // if let Err(err) = metadata.remove_version(version) {
+        //     return Ok(Err(err.into()));
+        // }
 
-        Ok(Ok(()))
+        // self.context
+        //     .state()
+        //     .borrow_mut()
+        //     .write(metadata_key, StoredValue::ContractMetadata(metadata));
+
+        // Ok(Ok(()))
     }
 
     /// Writes function address (`hash_bytes`) into the Wasm memory (at
@@ -3079,7 +3107,7 @@ where
         let key = self.key_from_mem(key_ptr, key_size)?;
         let named_keys = match self.context.read_gs(&key)? {
             None => Err(Error::KeyNotFound(key)),
-            Some(StoredValue::Contract(contract)) => {
+            Some(StoredValue::ContractWasm(contract_wasm)) => {
                 let old_contract_size =
                     contract.named_keys().serialized_length() + contract.bytes().len();
                 scoped_timer.add_property("old_contract_size", old_contract_size.to_string());
@@ -3243,7 +3271,7 @@ where
     }
     pub fn validate_entry_point_access(
         &self,
-        metadata: &ContractMetadata,
+        metadata: &ContractPackage,
         access: &EntryPointAccess,
     ) -> Result<(), Error> {
         runtime_context::validate_entry_point_access_with(metadata, access, |uref| {
@@ -3261,7 +3289,7 @@ where
         self.context.validate_key(&metadata_key)?;
         self.context.validate_uref(&access_key)?;
 
-        let mut metadata: ContractMetadata = self.context.read_gs_typed(&metadata_key)?;
+        let mut metadata: ContractPackage = self.context.read_gs_typed(&metadata_key)?;
 
         if metadata.access_key() != access_key {
             return Ok(Err(contract_header::Error::InvalidAccessKey.into()));

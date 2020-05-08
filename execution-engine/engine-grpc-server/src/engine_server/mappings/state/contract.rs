@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use engine_shared::contract::Contract;
+use engine_shared::contract::ContractWasm;
 
 use super::NamedKeyMap;
 use crate::engine_server::{
@@ -8,8 +8,8 @@ use crate::engine_server::{
     state::{self, NamedKey},
 };
 
-impl From<Contract> for state::Contract {
-    fn from(contract: Contract) -> Self {
+impl From<ContractWasm> for state::Contract {
+    fn from(contract: ContractWasm) -> Self {
         let (bytes, named_keys, protocol_version) = contract.destructure();
         let mut pb_contract = state::Contract::new();
         let named_keys: Vec<NamedKey> = NamedKeyMap::new(named_keys).into();
@@ -20,13 +20,14 @@ impl From<Contract> for state::Contract {
     }
 }
 
-impl TryFrom<state::Contract> for Contract {
+impl TryFrom<state::Contract> for ContractWasm {
     type Error = ParsingError;
 
     fn try_from(mut pb_contract: state::Contract) -> Result<Self, Self::Error> {
         let named_keys: NamedKeyMap = pb_contract.take_named_keys().into_vec().try_into()?;
         let protocol_version = pb_contract.take_protocol_version().into();
-        let contract = Contract::new(pb_contract.body, named_keys.into_inner(), protocol_version);
+        let contract =
+            ContractWasm::new(pb_contract.body, named_keys.into_inner(), protocol_version);
         Ok(contract)
     }
 }
@@ -43,7 +44,7 @@ mod tests {
     proptest! {
         #[test]
         fn round_trip(contract in gens::contract_arb()) {
-            test_utils::protobuf_round_trip::<Contract, state::Contract>(contract);
+            test_utils::protobuf_round_trip::<ContractWasm, state::Contract>(contract);
         }
     }
 }

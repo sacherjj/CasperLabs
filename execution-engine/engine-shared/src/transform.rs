@@ -155,13 +155,18 @@ impl Transform {
                     Ok(StoredValue::Account(account))
                 }
                 StoredValue::CLValue(cl_value) => {
-                    let expected = "Contract or Account".to_string();
+                    let expected = "ContractHeader or Account".to_string();
                     let found = format!("{:?}", cl_value.cl_type());
                     Err(TypeMismatch::new(expected, found).into())
                 }
                 StoredValue::ContractMetadata(_) => {
-                    let expected = "Contract or Account".to_string();
+                    let expected = "ContractHeader or Account".to_string();
                     let found = "ContractMetadata".to_string();
+                    Err(TypeMismatch::new(expected, found).into())
+                }
+                StoredValue::ContractWasm(_) => {
+                    let expected = "ContractHeader or Account".to_string();
+                    let found = "Contract".to_string();
                     Err(TypeMismatch::new(expected, found).into())
                 }
             },
@@ -309,7 +314,7 @@ mod tests {
     use super::*;
     use crate::{
         account::{Account, ActionThresholds, AssociatedKeys},
-        contract::Contract,
+        contract::ContractWasm,
     };
 
     const ZERO_ARRAY: [u8; 32] = [0; 32];
@@ -436,11 +441,7 @@ mod tests {
             };
         }
 
-        let contract = StoredValue::Contract(Contract::new(
-            vec![],
-            BTreeMap::new(),
-            ProtocolVersion::default(),
-        ));
+        let contract = StoredValue::ContractWasm(ContractWasm::new(vec![]));
         assert_yields_type_mismatch_error(contract);
 
         let uref = URef::new(ZERO_ARRAY, AccessRights::READ);
