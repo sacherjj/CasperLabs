@@ -12,7 +12,7 @@ import Modal from './Modal';
 import { CLType, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import Pages from './Pages';
 import { Link } from 'react-router-dom';
-import { DeployUtil } from 'casperlabs-sdk';
+import { DeployUtil, Signer } from 'casperlabs-sdk';
 
 
 interface Props {
@@ -41,7 +41,7 @@ export class DeployContractsForm extends React.Component<Props, {}> {
 
   render() {
     const { deployContractsContainer } = this.props;
-    let hint = (window as any).casperlabsHelper?.isConnected() ? (
+    let hint = Signer.isConnected() ? (
       <p>
         <SuccessIcon/> We will use CasperLabs Sign Helper plugin to sign the deploy
       </p>
