@@ -10,6 +10,7 @@ import os
 import functools
 import logging
 from pathlib import Path
+import semver
 
 from casperlabs_client import (
     CasperLabsClient,
@@ -426,31 +427,46 @@ def natural(number):
     return n
 
 
+def sem_ver(sem_ver_str):
+    """ Check string is a valid Sym Ver """
+    error_str = f"{sem_ver_str} is not a valid format. Should be `major.minor.patch`"
+    try:
+        version = semver.VersionInfo.parse(sem_ver_str)
+    except Exception as e:
+        raise argparse.ArgumentTypeError(error_str)
+    # We are not using prerelease or build numbers, so should be None
+    if version.prerelease is not None or version.build is not None:
+        raise argparse.ArgumentTypeError(error_str)
+    return version
+
+
 # fmt: off
-def deploy_options(private_key_accepted=True):
-    return ([
-        [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
-        [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
-        [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
-        [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used. By default --payment-amount is set to 10000000")],
-        [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
-        [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code')],
-        [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
-        [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
-        [('--payment-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the payment; base16 encoded')],
-        [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
-        [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
-        [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
-        [('--session-uref',), dict(required=False, type=str, default=None, help='URef of the stored contract to be called in the session; base16 encoded')],
-        [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
-        [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
-        [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
-        [('-w', '--wait-for-processed'), dict(action='store_true', help='Wait for deploy status PROCESSED or DISCARDED')],
-        [('--timeout-seconds',), dict(type=int, default=CasperLabsClient.DEPLOY_STATUS_TIMEOUT, help='Timeout in seconds')],
-        [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')]]
-        + (private_key_accepted
-           and [[('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]]
-           or []))
+DEPLOY_OPTIONS = [
+    [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
+    [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
+    [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
+    [('--payment-amount',), dict(required=False, type=int, default=None, help="Standard payment amount. Use this with the default payment, or override with --payment-args if custom payment code is used. By default --payment-amount is set to 10000000")],
+    [('--gas-price',), dict(required=False, type=int, default=10, help='The price of gas for this transaction in units dust/gas. Must be positive integer.')],
+    [('-p', '--payment'), dict(required=False, type=str, default=None, help='Path to the file with payment code')],
+    [('--payment-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the payment; base16 encoded')],
+    [('--payment-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the payment')],
+    [("--payment-entry-point",), dict(required=False, type=str, default=None, help="Name of the method that will be used when calling the payment contract.")],
+    [("--payment-sem-ver",), dict(required=False, type=sem_ver, default=None, help="Semantic version of the called payment contract. Matches the pattern `major.minor.patch`.")],
+    [('--payment-args',), dict(required=False, type=str, help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""")],
+    [('-s', '--session'), dict(required=False, type=str, default=None, help='Path to the file with session code')],
+    [('--session-hash',), dict(required=False, type=str, default=None, help='Hash of the stored contract to be called in the session; base16 encoded')],
+    [('--session-name',), dict(required=False, type=str, default=None, help='Name of the stored contract (associated with the executing account) to be called in the session')],
+    [("--session-entry-point",), dict(required=False, type=str, default=None, help="Name of the method that will be used when calling the session contract.")],
+    [("--session-sem-ver",), dict(required=False, type=sem_ver, default=None, help="Semantic version of the called session contract. Matches the pattern `major.minor.patch`.")],
+    [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
+    [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
+    [('-w', '--wait-for-processed'), dict(action='store_true', help='Wait for deploy status PROCESSED or DISCARDED')],
+    [('--timeout-seconds',), dict(type=int, default=CasperLabsClient.DEPLOY_STATUS_TIMEOUT, help='Timeout in seconds')],
+    [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')]
+]
+DEPLOY_OPTIONS_PRIVATE = DEPLOY_OPTIONS + [
+    [('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]
+]
 # fmt:on
 
 
@@ -550,10 +566,10 @@ def cli(*arguments) -> int:
 
     # fmt: off
     parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      deploy_options())
+                      DEPLOY_OPTIONS_PRIVATE)
 
     parser.addCommand('make-deploy', make_deploy_command, "Constructs a deploy that can be signed and sent to a node.",
-                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_options(private_key_accepted=False))
+                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + DEPLOY_OPTIONS)
 
     parser.addCommand('sign-deploy', sign_deploy_command, "Cryptographically signs a deploy. The signature is appended to existing approvals.",
                       [[('-o', '--signed-deploy-path'), dict(required=False, default=None, help="Path to the file where signed deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")],
@@ -565,16 +581,16 @@ def cli(*arguments) -> int:
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
     parser.addCommand('bond', bond_command, 'Issues bonding request',
-                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + deploy_options())
+                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + DEPLOY_OPTIONS_PRIVATE)
 
     parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
                       [[('-a', '--amount'),
-                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + deploy_options())
+                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + DEPLOY_OPTIONS_PRIVATE)
 
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
                       [[('-a', '--amount'), dict(required=True, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
                        [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
-                       ] + deploy_options(private_key_accepted=True))
+                       ] + DEPLOY_OPTIONS_PRIVATE)
 
     parser.addCommand('propose', propose_command, '[DEPRECATED] Force a node to propose a block based on its accumulated deploys.', [])
 
