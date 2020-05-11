@@ -8,6 +8,7 @@ from . import abi
 from . import casper_pb2 as casper
 from . import consensus_pb2 as consensus
 from . import crypto
+from semver import VersionInfo
 
 
 def _read_binary(file_name: str):
@@ -80,6 +81,13 @@ def _serialize(o) -> bytes:
     return o.SerializeToString()
 
 
+def _requires_sem_ver(argument_type, hash_arg, name_arg, sem_ver_arg):
+    if (hash_arg or name_arg) and sem_ver_arg is None:
+        raise TypeError(
+            f"{argument_type}-sem-ver is required with {argument_type}-hash or {argument_type}-name."
+        )
+
+
 def make_deploy(
     from_addr: bytes = None,
     gas_price: int = 10,
@@ -91,10 +99,10 @@ def make_deploy(
     payment_amount: int = None,
     payment_hash: bytes = None,
     payment_name: str = None,
-    payment_uref: bytes = None,
+    payment_sem_ver: VersionInfo = None,
     session_hash: bytes = None,
     session_name: str = None,
-    session_uref: bytes = None,
+    session_sem_ver: VersionInfo = None,
     ttl_millis: int = 0,
     dependencies: list = None,
     chain_name: str = None,
@@ -112,22 +120,19 @@ def make_deploy(
     if payment_amount:
         payment_args = abi.ABI.args([abi.ABI.big_int("amount", int(payment_amount))])
 
-    session_options = (session, session_hash, session_name, session_uref)
-    payment_options = (payment, payment_hash, payment_name, payment_uref)
+    session_options = (session, session_hash, session_name)
+    payment_options = (payment, payment_hash, payment_name)
 
     if len(list(filter(None, session_options))) != 1:
         raise TypeError(
-            "deploy: exactly one of session, session_hash, session_name or session_uref must be provided"
+            "deploy: exactly one of session, session_hash, or session_name must be provided"
         )
 
     if len(list(filter(None, payment_options))) > 1:
         raise TypeError(
-            "deploy: only one of payment, payment_hash, payment_name or payment_uref can be provided"
+            "deploy: only one of payment, payment_hash, or payment_name can be provided"
         )
 
-    # session_args must go to payment as well for now cause otherwise we'll get GASLIMIT error,
-    # if payment is same as session:
-    # https://github.com/CasperLabs/CasperLabs/blob/dev/casper/src/main/scala/io/casperlabs/casper/util/ProtoUtil.scala#L463
     body = consensus.Deploy.Body(
         session=_encode_contract(session_options, session_args),
         payment=_encode_contract(payment_options, payment_args),

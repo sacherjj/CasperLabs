@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""
-CasperLabs Client API library and command line tool.
-"""
 
 from pathlib import Path
+import os
+import time
+import grpc
+import functools
+import logging
+import tempfile
+import semver
+from semver import VersionInfo
 
-# Hack to fix the relative imports problems #
+# Hack to fix the relative imports problems with grpc #
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
-import os
-import time
-import grpc
+
 from grpc._channel import _Rendezvous
-import functools
-import logging
-import tempfile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -74,6 +74,7 @@ class InternalError(Exception):
     not have to worry about handling any other exceptions.
     """
 
+    # TODO: Is there a reason we need to hide error types?
     def __init__(self, status="", details=""):
         super(InternalError, self).__init__()
         self.status = status
@@ -90,7 +91,7 @@ def api(function):
     It will catch all exceptions and throw InternalError.
 
     :param function: function to be decorated
-    :return:
+    :return: decorated function
     """
 
     @functools.wraps(function)
@@ -292,10 +293,10 @@ class CasperLabsClient:
         payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
-        payment_uref: bytes = None,
+        payment_sem_ver: VersionInfo = None,
         session_hash: bytes = None,
         session_name: str = None,
-        session_uref: bytes = None,
+        session_sem_ver: VersionInfo = None,
         ttl_millis: int = 0,
         dependencies: list = None,
         chain_name: str = None,
@@ -314,10 +315,10 @@ class CasperLabsClient:
             payment_amount=payment_amount,
             payment_hash=payment_hash,
             payment_name=payment_name,
-            payment_uref=payment_uref,
+            payment_sem_ver=payment_sem_ver,
             session_hash=session_hash,
             session_name=session_name,
-            session_uref=session_uref,
+            session_sem_ver=session_sem_ver,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
@@ -341,10 +342,10 @@ class CasperLabsClient:
         payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
-        payment_uref: bytes = None,
+        payment_sem_ver: VersionInfo = None,
         session_hash: bytes = None,
         session_name: str = None,
-        session_uref: bytes = None,
+        session_sem_ver: VersionInfo = None,
         ttl_millis: int = 0,
         dependencies=None,
         chain_name: str = None,
@@ -396,10 +397,10 @@ class CasperLabsClient:
             payment_amount=payment_amount,
             payment_hash=payment_hash,
             payment_name=payment_name,
-            payment_uref=payment_uref,
+            payment_sem_ver=payment_sem_ver,
             session_hash=session_hash,
             session_name=session_name,
-            session_uref=session_uref,
+            session_sem_ver=session_sem_ver,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
