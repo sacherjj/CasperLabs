@@ -313,8 +313,14 @@ function useQuery() {
   return new URLSearchParams(useLocation().search);
 }
 
+// The white list of hostname that enable GA.
+const HOSTNAME_WHITE_LIST = ['testnet-explorer.casperlabs.io', 'clarity.casperlabs.io'];
 
-ReactGA.initialize("UA-133833104-1");
+const ENABLE_GA = HOSTNAME_WHITE_LIST.includes(window.location.hostname);
+
+if (ENABLE_GA) {
+  ReactGA.initialize("UA-133833104-1");
+}
 
 // the hook to send pageView to GA.
 function usePageViews() {
@@ -322,7 +328,9 @@ function usePageViews() {
 
   useEffect(
     () => {
-      ReactGA.pageview(location.pathname);
+      if (ENABLE_GA) {
+        ReactGA.pageview(location.pathname);
+      }
     },
     [location]
   );
