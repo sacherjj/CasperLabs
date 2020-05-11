@@ -1,7 +1,7 @@
 import { action, observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService, decodeBase16, DeployUtil, encodeBase16 } from 'casperlabs-sdk';
+import { CasperService, decodeBase16, DeployUtil, encodeBase16, Signer } from 'casperlabs-sdk';
 import { FieldState, FormState } from 'formstate';
 import { numberGreaterThan, validateBase16, validateInt, valueRequired } from '../lib/FormsValidator';
 import validator from 'validator';
@@ -242,11 +242,11 @@ export class DeployContractsContainer {
   @action.bound
   async _onSubmit() {
     this.deployedHash = null;
-    if (!window.casperlabsHelper?.isConnected()) {
+    if (!Signer.isConnected()) {
       throw new Error('Please install the CasperLabs Sign Helper Plugin first!');
     }
 
-    const publicKeyBase64 = await window.casperlabsHelper!.getSelectedPublicKeyBase64();
+    const publicKeyBase64 = await Signer.getSelectedPublicKeyBase64();
     if (!publicKeyBase64) {
       throw new Error('Please create an account in the Plugin first!');
     }
@@ -259,7 +259,7 @@ export class DeployContractsContainer {
     this.signing = true;
     let sigBase64;
     try {
-      sigBase64 = await window.casperlabsHelper!.sign(encodeBase16(deploy!.getDeployHash_asU8()));
+      sigBase64 = await Signer.sign(encodeBase16(deploy!.getDeployHash_asU8()));
       this.signing = false;
       let signedDeploy = DeployUtil.setSignature(deploy, decodeBase64(sigBase64), publicKey);
       await this.casperService.deploy(signedDeploy);
