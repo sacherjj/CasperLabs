@@ -1063,6 +1063,25 @@ steps:
     echo "Uploading file to bintray:${DRONE_TAG} ..."
     echo -e "\nDEBIAN" && find . -maxdepth 1 -type f -iregex ".*\\.deb" -printf "%f\n" | xargs -I {} sh -c "echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/{} && echo"
     echo -e "\nRPMS" && find . -maxdepth 1 -type f -iregex ".*\\.rpm" -printf "%f\n" | xargs -I {} sh -c "echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/{} && echo"
+    # sleep 10 && echo -e "\nPublishing CL Packages on bintray..."
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/publish
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/publish
+    # sleep 10 && echo -e "\nGPG Signing CL Packages on bintray..."
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/gpg/casperlabs/debian/CasperLabs/versions/${DRONE_TAG}
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/gpg/casperlabs/rpm/CasperLabs/versions/${DRONE_TAG}
+    # sleep 10 && echo -e "\nPublishing GPG Signatures on bintray..."
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/publish
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/publish
+    # sleep 10 && echo -e "\nCalculating repo metadata on bintray..."
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/calc_metadata/casperlabs/debian/CasperLabs/${DRONE_TAG}
+    # curl -X POST -u$BINTRAY_USER:$BINTRAY_API_KEY -H "Content-Type: application/json" --data '{"private_key": "'$BINTRAY_PK'", "passphrase": "'$BINTRAY_GPG_PASSPHRASE'"}' $API_URL/calc_metadata/casperlabs/rpm/CasperLabs/${DRONE_TAG}
+    TEMP_DEB_FILE=uploaded_contents_debian_${GIT_TAG}.json
+    curl -s -X GET -u$BINTRAY_USER:$BINTRAY_API_KEY -H "Content-Type: application/json" $API_URL/packages/casperlabs/debian/CasperLabs/files?include_unpublished=1 > $TEMP_DEB_FILE.json
+    cat $TEMP_DEB_FILE.json | jq -r '.[] | select (.version == "'${GIT_TAG}'") | .path'
+    echo -e "\n\nUploaded files in [ $SUBJECT/$RPM_REPO/$PACKAGE_NAME/$GIT_TAG ]:"
+    TEMP_RPM_FILE=uploaded_contents_rpm_${GIT_TAG}.json
+    curl -s -X GET -u$BINTRAY_USER:$BINTRAY_API_KEY -H "Content-Type: application/json" $API_URL/packages/casperlabs/rpm/CasperLabs/files?include_unpublished=1 > $TEMP_RPM_FILE.json
+    cat $TEMP_RPM_FILE.json | jq -r '.[] | select (.version == "'${GIT_TAG}'") | .path'
   environment:
     BINTRAY_USER:
       from_secret: bintray_username
