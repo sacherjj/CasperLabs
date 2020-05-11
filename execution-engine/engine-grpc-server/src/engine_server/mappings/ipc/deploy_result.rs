@@ -35,6 +35,7 @@ impl From<(EngineStateError, ExecutionEffect, Gas)> for DeployResult {
             | error @ EngineStateError::WasmPreprocessing(_)
             | error @ EngineStateError::WasmSerialization(_)
             | error @ EngineStateError::Exec(ExecutionError::DeploymentAuthorizationFailure)
+            | error @ EngineStateError::InvalidKeyVariant(_)
             | error @ EngineStateError::Authorization => {
                 detail::precondition_error(error.to_string())
             }

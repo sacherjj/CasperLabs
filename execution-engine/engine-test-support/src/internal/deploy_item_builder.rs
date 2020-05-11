@@ -5,7 +5,9 @@ use engine_core::{
     engine_state::{deploy_item::DeployItem, executable_deploy_item::ExecutableDeployItem},
     DeployHash,
 };
-use types::{account::PublicKey, bytesrepr::ToBytes, HashAddr, RuntimeArgs, SemVer, URef};
+use types::{
+    account::PublicKey, bytesrepr::ToBytes, contracts::ContractVersion, HashAddr, RuntimeArgs, URef,
+};
 
 use crate::internal::utils;
 
@@ -57,25 +59,15 @@ impl DeployItemBuilder {
     }
 
     pub(crate) fn with_stored_payment_uref_addr(
-        mut self,
-        uref_addr: Vec<u8>,
-        args: impl ArgsParser,
+        self,
+        _uref_addr: Vec<u8>,
+        _args: impl ArgsParser,
     ) -> Self {
-        let args = Self::serialize_args(args);
-        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref_addr,
-            args,
-        });
-        self
+        todo!("with_stored_payment_uref_addr")
     }
 
-    pub fn with_stored_payment_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref.addr().to_vec(),
-            args,
-        });
-        self
+    pub fn with_stored_payment_uref(self, _uref: URef, _args: impl ArgsParser) -> Self {
+        todo!("with_stored_payment_uref")
     }
 
     pub fn with_stored_payment_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
@@ -107,25 +99,15 @@ impl DeployItemBuilder {
     }
 
     pub(crate) fn with_stored_session_uref_addr(
-        mut self,
-        uref_addr: Vec<u8>,
-        args: impl ArgsParser,
+        self,
+        _uref_addr: Vec<u8>,
+        _args: impl ArgsParser,
     ) -> Self {
-        let args = Self::serialize_args(args);
-        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref_addr,
-            args,
-        });
-        self
+        todo!("with_stored_session_uref_addr")
     }
 
-    pub fn with_stored_session_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref.addr().to_vec(),
-            args,
-        });
-        self
+    pub fn with_stored_session_uref(self, _uref: URef, _args: impl ArgsParser) -> Self {
+        todo!("with_stored_session_uref")
     }
 
     pub fn with_stored_session_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
@@ -140,7 +122,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_contract_by_name(
         mut self,
         key_name: &str,
-        version: SemVer,
+        version: ContractVersion,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {
@@ -156,7 +138,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_contract_by_hash(
         mut self,
         hash: HashAddr,
-        version: SemVer,
+        version: ContractVersion,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {
@@ -172,7 +154,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_payment_contract_by_name(
         mut self,
         key_name: &str,
-        version: SemVer,
+        version: ContractVersion,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {
@@ -188,7 +170,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_payment_contract_by_hash(
         mut self,
         hash: HashAddr,
-        version: SemVer,
+        version: ContractVersion,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {

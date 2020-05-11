@@ -10,8 +10,9 @@ use casperlabs_types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, FromBytes},
-    ApiError, BlockTime, CLTyped, CLValue, ContractPackageHash, Key, Phase, RuntimeArgs, SemVer,
-    URef, BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
+    contracts::ContractVersion,
+    ApiError, BlockTime, CLTyped, CLValue, ContractPackageHash, Key, Phase, RuntimeArgs, URef,
+    BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
 
 use crate::{args_parser::ArgsParser, contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
@@ -77,13 +78,12 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(contract_key: Key, a
 #[allow(clippy::ptr_arg)]
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
     contract_metadata_hash: ContractPackageHash,
-    contract_version: SemVer,
+    contract_version: ContractVersion,
     entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> T {
     let (contract_metadata_hash_ptr, contract_metadata_hash_size, _bytes1) =
         contract_api::to_ptr(contract_metadata_hash);
-    let (version_ptr, _version_size, _bytes2) = contract_api::to_ptr(contract_version);
     let (entry_point_name_ptr, entry_point_name_size, _bytes2) =
         contract_api::to_ptr(entry_point_name);
     let (runtime_args_ptr, runtime_args_size, _bytes2) = contract_api::to_ptr(runtime_args);
@@ -94,7 +94,7 @@ pub fn call_versioned_contract<T: CLTyped + FromBytes>(
             ext_ffi::call_versioned_contract(
                 contract_metadata_hash_ptr,
                 contract_metadata_hash_size,
-                version_ptr,
+                contract_version,
                 entry_point_name_ptr,
                 entry_point_name_size,
                 runtime_args_ptr,
@@ -105,7 +105,6 @@ pub fn call_versioned_contract<T: CLTyped + FromBytes>(
         api_error::result_from(ret).unwrap_or_revert();
         unsafe { bytes_written.assume_init() }
     };
-
     deserialize_contract_result(bytes_written)
 }
 

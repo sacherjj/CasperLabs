@@ -6,7 +6,7 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{runtime_args, ApiError, Key, RuntimeArgs, SemVer};
+use types::{contracts::CONTRACT_INITIAL_VERSION, runtime_args, ApiError, Key, RuntimeArgs};
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const PURSE_NAME_ARG_NAME: &str = "purse_name";
@@ -48,12 +48,16 @@ pub extern "C" fn call() {
     };
 
     // TODO implement SemVer for argument to contract and update this
-    let version_number: u32 = runtime::get_arg(Args::DoNothingVersion as u32)
+    let _version_number: u32 = runtime::get_arg(Args::DoNothingVersion as u32)
         .unwrap_or_revert_with(ApiError::User(CustomError::MissingDoNothingVersion as u16))
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let version = SemVer::new(version_number, 0, 0);
 
     // TODO version and new_purse_name come in correctly, but we are not correctly running the
     // stored contracts.
-    runtime::call_versioned_contract(contract_metadata_hash, version, ENTRY_FUNCTION_NAME, args)
+    runtime::call_versioned_contract(
+        contract_metadata_hash,
+        CONTRACT_INITIAL_VERSION,
+        ENTRY_FUNCTION_NAME,
+        args,
+    )
 }

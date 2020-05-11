@@ -9,7 +9,7 @@ use types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, ToBytes},
-    contracts::EntryPoint,
+    contracts::EntryPoints,
     ContractPackageHash, Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512,
     UREF_SERIALIZED_LENGTH,
 };
@@ -507,6 +507,7 @@ where
                     meta_key_ptr,
                     meta_key_size,
                     access_key_ptr,
+                    _version_ptr,
                     entry_points_ptr,
                     entry_points_size,
                     named_keys_ptr,
@@ -514,19 +515,19 @@ where
                     output_ptr,
                     output_size,
                     bytes_written_ptr,
-                ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
+                ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
 
                 let contract_package_hash =
                     self.key_from_mem(meta_key_ptr, meta_key_size)?.into_seed();
+
                 let access_key = {
                     let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let entry_points: BTreeMap<String, EntryPoint> =
+                let entry_points: EntryPoints =
                     self.t_from_mem(entry_points_ptr, entry_points_size)?;
                 let named_keys: BTreeMap<String, Key> =
                     self.t_from_mem(named_keys_ptr, named_keys_size)?;
-
                 let ret = self.add_contract_version(
                     contract_package_hash,
                     access_key,
@@ -575,7 +576,7 @@ where
                 let (
                     contract_metadata_hash_ptr,
                     contract_metadata_hash_size,
-                    version_ptr,
+                    version,
                     method_ptr,
                     method_size,
                     args_ptr,
@@ -585,10 +586,7 @@ where
 
                 let contract_metadata_hash: ContractPackageHash =
                     self.t_from_mem(contract_metadata_hash_ptr, contract_metadata_hash_size)?;
-                let version = {
-                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
-                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-                };
+
                 let method: String = self.t_from_mem(method_ptr, method_size)?;
                 let args_bytes: Vec<u8> = {
                     let args_size: u32 = args_size;

@@ -252,7 +252,7 @@ where
 
         // Spec #7: Execute pos installer wasm code, passing the initially bonded validators as an
         // argument
-        let proof_of_stake_key: Key = {
+        let (_proof_of_stake_metadata_hash, proof_of_stake_key): (Key, Key) = {
             // Spec #6: Compute initially bonded validators as the contents of accounts_path
             // filtered to non-zero staked amounts.
             let bonded_validators: BTreeMap<PublicKey, U512> = ee_config

@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, format, string::ToString, vec};
+use alloc::{format, string::ToString, vec};
 
 use alloc::boxed::Box;
 use contract::{
@@ -12,7 +12,7 @@ use contract::{
 };
 
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
     ApiError, CLType, Key, URef,
 };
 
@@ -48,11 +48,10 @@ pub extern "C" fn transfer() {
 #[no_mangle]
 pub extern "C" fn call() {
     let methods = {
-        let mut entry_points = BTreeMap::new();
+        let mut entry_points = EntryPoints::new();
 
-        let entry_point_name = ENTRY_FUNCTION_NAME.to_string();
         let entry_point = EntryPoint::new(
-            entry_point_name.clone(),
+            ENTRY_FUNCTION_NAME.to_string(),
             vec![
                 Parameter::new(ARG_0_NAME, CLType::FixedList(Box::new(CLType::U8), 32)),
                 Parameter::new(ARG_1_NAME, CLType::U512),
@@ -61,7 +60,7 @@ pub extern "C" fn call() {
             EntryPointAccess::Public,
             EntryPointType::Session,
         );
-        entry_points.insert(entry_point_name, entry_point);
+        entry_points.add_entry_point(entry_point);
         entry_points
     };
 

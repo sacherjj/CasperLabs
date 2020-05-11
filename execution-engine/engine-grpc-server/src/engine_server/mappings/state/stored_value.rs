@@ -4,7 +4,7 @@ use crate::engine_server::{
     mappings::ParsingError,
     state::{self, StoredValue_oneof_variants},
 };
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 
 impl From<StoredValue> for state::StoredValue {
     fn from(value: StoredValue) -> Self {
@@ -39,11 +39,12 @@ impl TryFrom<state::StoredValue> for StoredValue {
             StoredValue_oneof_variants::account(pb_account) => {
                 StoredValue::Account(pb_account.try_into()?)
             }
-            StoredValue_oneof_variants::contract(pb_contract) => {
-                StoredValue::ContractWasm(pb_contract.try_into()?)
+            StoredValue_oneof_variants::contract(_pb_contract) => {
+                todo!("StoredValue::ContractWasm(pb_contract.try_into()?)")
             }
-            StoredValue_oneof_variants::contract_metadata(pb_contract_metadata) => {
-                StoredValue::ContractPackage(pb_contract_metadata.try_into()?)
+            StoredValue_oneof_variants::contract_metadata(_pb_contract_metadata) => {
+                todo!("TryFrom<state::StoredValue> for StoredValue")
+                // StoredValue::ContractPackage(pb_contract_metadata.try_into()?)
             }
         };
 

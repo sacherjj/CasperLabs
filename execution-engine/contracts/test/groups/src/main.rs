@@ -6,7 +6,7 @@ extern crate alloc;
 
 use alloc::{
     collections::{BTreeMap, BTreeSet},
-    string::{String, ToString},
+    string::ToString,
     vec::Vec,
 };
 
@@ -15,11 +15,12 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType},
-    runtime_args, CLType, Key, Parameter, RuntimeArgs, SemVer, URef,
+    contracts::{
+        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, CONTRACT_INITIAL_VERSION,
+    },
+    runtime_args, CLType, Key, Parameter, RuntimeArgs, URef,
 };
 
-const VERSION_1_0_0: SemVer = SemVer::new(1, 0, 0);
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
 const METADATA_ACCESS_KEY: &str = "metadata_access_key";
 const RESTRICTED_CONTRACT: &str = "restricted_contract";
@@ -29,7 +30,7 @@ const UNRESTRICTED_CONTRACT_CALLER: &str = "unrestricted_contract_caller";
 const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_as_session";
 const UNCALLABLE_SESSION: &str = "uncallable_session";
 const UNCALLABLE_CONTRACT: &str = "uncallable_contract";
-const CALL_RESTRICTED_ENTRYPOINTS: &str = "call_restricted_entrypoints";
+const CALL_RESTRICTED_ENTRY_POINTS: &str = "call_restricted_entry_points";
 
 #[no_mangle]
 pub extern "C" fn restricted_session() {}
@@ -42,7 +43,7 @@ pub extern "C" fn restricted_session_caller() {
     let metadata_hash: Key = runtime::get_named_arg("metadata_hash");
     runtime::call_versioned_contract::<()>(
         metadata_hash.into_seed(),
-        SemVer::V1_0_0,
+        CONTRACT_INITIAL_VERSION,
         RESTRICTED_SESSION,
         runtime_args! {},
     );
@@ -52,7 +53,7 @@ fn contract_caller() {
     let metadata_hash: Key = runtime::get_named_arg("metadata_hash");
     runtime::call_versioned_contract::<()>(
         metadata_hash.into_seed(),
-        SemVer::V1_0_0,
+        CONTRACT_INITIAL_VERSION,
         RESTRICTED_CONTRACT,
         runtime_args! {},
     );
@@ -75,7 +76,7 @@ pub extern "C" fn uncallable_session() {}
 pub extern "C" fn uncallable_contract() {}
 
 #[no_mangle]
-pub extern "C" fn call_restricted_entrypoints() {
+pub extern "C" fn call_restricted_entry_points() {
     // We're aggresively removing exports that aren't exposed through contract header so test
     // ensures that those exports are still inside WASM.
     uncallable_session();
@@ -102,44 +103,46 @@ fn create_group(metadata_hash: Key, access_uref: URef) -> URef {
 }
 
 /// Restricted uref comes from creating a group and will be assigned to a smart contract
-fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
-    let mut entrypoints = BTreeMap::new();
+fn create_entry_points_1() -> EntryPoints {
+    let mut entry_points = EntryPoints::new();
     let restricted_session = EntryPoint::new(
+        RESTRICTED_SESSION.to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::groups(&["Group 1"]),
         EntryPointType::Session,
     );
-    entrypoints.insert(RESTRICTED_SESSION.to_string(), restricted_session);
+    entry_points.add_entry_point(restricted_session);
 
     let restricted_contract = EntryPoint::new(
+        RESTRICTED_CONTRACT.to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::groups(&["Group 1"]),
         EntryPointType::Contract,
     );
-    entrypoints.insert(RESTRICTED_CONTRACT.to_string(), restricted_contract);
+    entry_points.add_entry_point(restricted_contract);
 
     let restricted_session_caller = EntryPoint::new(
+        RESTRICTED_SESSION_CALLER.to_string(),
         vec![Parameter::new("metadata_hash", CLType::Key)],
         CLType::I32,
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(
-        RESTRICTED_SESSION_CALLER.to_string(),
-        restricted_session_caller,
-    );
+    entry_points.add_entry_point(restricted_session_caller);
 
     let restricted_contract = EntryPoint::new(
+        RESTRICTED_CONTRACT.to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::groups(&["Group 1"]),
         EntryPointType::Contract,
     );
-    entrypoints.insert(RESTRICTED_CONTRACT.to_string(), restricted_contract);
+    entry_points.add_entry_point(restricted_contract);
 
     let unrestricted_contract_caller = EntryPoint::new(
+        UNRESTRICTED_CONTRACT_CALLER.to_string(),
         Vec::new(),
         CLType::I32,
         // Made public because we've tested deploy level auth into a contract in
@@ -149,12 +152,10 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         // uref in its named keys
         EntryPointType::Contract,
     );
-    entrypoints.insert(
-        UNRESTRICTED_CONTRACT_CALLER.to_string(),
-        unrestricted_contract_caller,
-    );
+    entry_points.add_entry_point(unrestricted_contract_caller);
 
     let unrestricted_contract_caller_as_session = EntryPoint::new(
+        RESTRICTED_CONTRACT_CALLER_AS_SESSION.to_string(),
         Vec::new(),
         CLType::I32,
         // Made public because we've tested deploy level auth into a contract in
@@ -164,12 +165,10 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         // uref in its named keys
         EntryPointType::Session,
     );
-    entrypoints.insert(
-        RESTRICTED_CONTRACT_CALLER_AS_SESSION.to_string(),
-        unrestricted_contract_caller_as_session,
-    );
+    entry_points.add_entry_point(unrestricted_contract_caller_as_session);
 
     let uncallable_session = EntryPoint::new(
+        UNCALLABLE_SESSION.to_string(),
         Vec::new(),
         CLType::I32,
         // Made public because we've tested deploy level auth into a contract in
@@ -179,9 +178,10 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         // uref in its named keys
         EntryPointType::Session,
     );
-    entrypoints.insert(UNCALLABLE_SESSION.to_string(), uncallable_session);
+    entry_points.add_entry_point(uncallable_session);
 
     let uncallable_contract = EntryPoint::new(
+        UNCALLABLE_CONTRACT.to_string(),
         Vec::new(),
         CLType::I32,
         // Made public because we've tested deploy level auth into a contract in
@@ -191,11 +191,12 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         // uref in its named keys
         EntryPointType::Session,
     );
-    entrypoints.insert(UNCALLABLE_CONTRACT.to_string(), uncallable_contract);
+    entry_points.add_entry_point(uncallable_contract);
 
-    // Directly calls entrypoints that are protected with empty group of lists to verify that even
+    // Directly calls entry_points that are protected with empty group of lists to verify that even
     // though they're not callable externally, they're still visible in the WASM.
-    let call_restricted_entrypoints = EntryPoint::new(
+    let call_restricted_entry_points = EntryPoint::new(
+        CALL_RESTRICTED_ENTRY_POINTS.to_string(),
         Vec::new(),
         CLType::I32,
         // Made public because we've tested deploy level auth into a contract in
@@ -205,12 +206,9 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         // uref in its named keys
         EntryPointType::Session,
     );
-    entrypoints.insert(
-        CALL_RESTRICTED_ENTRYPOINTS.to_string(),
-        call_restricted_entrypoints,
-    );
+    entry_points.add_entry_point(call_restricted_entry_points);
 
-    entrypoints
+    entry_points
 }
 
 fn install_version_1(metadata_hash: Key, access_uref: URef, restricted_uref: URef) {
@@ -223,12 +221,11 @@ fn install_version_1(metadata_hash: Key, access_uref: URef, restricted_uref: URe
         named_keys
     };
 
-    let entrypoints = create_entrypoints_1();
+    let entry_points = create_entry_points_1();
     storage::add_contract_version(
         metadata_hash,
         access_uref,
-        VERSION_1_0_0,
-        entrypoints,
+        entry_points,
         contract_named_keys,
     );
 }

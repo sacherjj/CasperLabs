@@ -1948,7 +1948,7 @@ where
         _entry_point_name: String,
         _args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
-        unreachable!()
+        todo!("call_version_contract");
         // let key = contract_metadata_hash.into();
         // let (context_key, contract, contract_wasm, metadata, entrypoint) =
         //     match self.context.read_gs(&key)? {
@@ -2422,7 +2422,7 @@ where
         &mut self,
         contract_package_hash: ContractPackageHash,
         access_key: URef,
-        entry_points: BTreeMap<String, EntryPoint>,
+        entry_points: EntryPoints,
         named_keys: BTreeMap<String, Key>,
         output_ptr: u32,
         output_size: usize,

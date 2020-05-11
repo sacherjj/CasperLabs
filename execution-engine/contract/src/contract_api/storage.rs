@@ -11,7 +11,7 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    contracts::EntryPoint,
+    contracts::{ContractVersion, EntryPoints},
     AccessRights, ApiError, CLTyped, CLValue, Key, SemVer, URef, UREF_SERIALIZED_LENGTH,
 };
 
@@ -141,7 +141,7 @@ pub fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
 /// if `hash_name` is provided, puts contract hash in current context's named keys under `hash_name`
 /// if `uref_name` is provided, puts access_uref in current context's named keys under `uref_name`
 pub fn new_contract(
-    entry_points: BTreeMap<String, EntryPoint>,
+    entry_points: EntryPoints,
     named_keys: Option<BTreeMap<String, Key>>,
     hash_name: Option<String>,
     uref_name: Option<String>,
@@ -161,15 +161,7 @@ pub fn new_contract(
         None => BTreeMap::new(),
     };
 
-    let version = SemVer::V1_0_0;
-
-    add_contract_version(
-        contract_metadata_key,
-        access_uref,
-        version,
-        entry_points,
-        named_keys,
-    )
+    add_contract_version(contract_metadata_key, access_uref, entry_points, named_keys)
 }
 
 /// Create a new (versioned) contract stored under a Key::Hash. Initially there
@@ -300,26 +292,26 @@ pub fn remove_contract_user_group(
 pub fn add_contract_version(
     contract_metadata_key: Key,
     access_uref: URef,
-    version: SemVer,
-    entry_points: BTreeMap<String, EntryPoint>,
+    entry_points: EntryPoints,
     named_keys: BTreeMap<String, Key>,
 ) -> Key {
     let (contract_metadata_key_ptr, contract_metadata_key_size, _bytes1) =
         contract_api::to_ptr(contract_metadata_key);
     let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_uref);
-    let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
     let (entry_points_ptr, entry_points_size, _bytes4) = contract_api::to_ptr(entry_points);
     let (named_keys_ptr, named_keys_size, _bytes5) = contract_api::to_ptr(named_keys);
 
     let mut key_bytes = vec![0u8; Key::max_serialized_length()];
     let mut total_bytes: usize = 0;
 
+    let mut contract_version: ContractVersion = 0;
+
     let ret = unsafe {
         ext_ffi::add_contract_version(
             contract_metadata_key_ptr,
             contract_metadata_key_size,
             access_ptr,
-            version_ptr,
+            &mut contract_version as *mut ContractVersion,
             entry_points_ptr,
             entry_points_size,
             named_keys_ptr,

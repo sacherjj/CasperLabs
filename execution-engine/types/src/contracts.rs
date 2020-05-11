@@ -1,6 +1,7 @@
 //! Data types for contract metadata (including version and method type signatures)
 
 use crate::{
+    alloc::string::ToString,
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
     uref::URef,
     AccessRights, CLType, ContractHash, ContractPackageHash, ContractWasmHash, Key,
@@ -369,8 +370,65 @@ impl FromBytes for ContractPackage {
         Ok((result, bytes))
     }
 }
+
+/// Type alias for a container used inside [`EntryPoints`].
+pub type EntryPointsMap = BTreeMap<String, EntryPoint>;
+
 /// Collection of named entry points
-pub type EntryPoints = BTreeMap<String, EntryPoint>;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EntryPoints(EntryPointsMap);
+
+impl Default for EntryPoints {
+    fn default() -> Self {
+        let mut entry_points = EntryPoints::new();
+        let entry_point = EntryPoint::default();
+        entry_points.add_entry_point(entry_point);
+        entry_points
+    }
+}
+
+impl ToBytes for EntryPoints {
+    fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
+        self.0.to_bytes()
+    }
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length()
+    }
+}
+
+impl FromBytes for EntryPoints {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
+        let (entry_points_map, rem) = EntryPointsMap::from_bytes(bytes)?;
+        Ok((EntryPoints(entry_points_map), rem))
+    }
+}
+
+impl EntryPoints {
+    /// Creates empty instance of [`EntryPoints`].
+    pub fn new() -> EntryPoints {
+        EntryPoints(EntryPointsMap::new())
+    }
+
+    /// Adds new [`EntryPoint`].
+    pub fn add_entry_point(&mut self, entry_point: EntryPoint) {
+        self.0.insert(entry_point.name().to_string(), entry_point);
+    }
+
+    /// Checks if given [`EntryPoint`] exists.
+    pub fn has_entry_point(&self, entry_point_name: &str) -> bool {
+        self.0.contains_key(entry_point_name)
+    }
+
+    /// Gets an existing [`EntryPoint`] by its name.
+    pub fn get(&self, entry_point_name: &str) -> Option<&EntryPoint> {
+        self.0.get(entry_point_name)
+    }
+
+    /// Returns iterator for existing entry point names.
+    pub fn keys(&self) -> impl Iterator<Item = &String> {
+        self.0.keys()
+    }
+}
 
 /// Collection of named keys
 pub type NamedKeys = BTreeMap<String, Key>;
@@ -410,7 +468,7 @@ impl Contract {
 
     /// Checks whether there is a method with the given name
     pub fn has_entry_point(&self, name: &str) -> bool {
-        self.entry_points.contains_key(name)
+        self.entry_points.has_entry_point(name)
     }
 
     /// Returns the type signature for the given `method`.
@@ -424,8 +482,8 @@ impl Contract {
     }
 
     /// Adds new entry point
-    pub fn add_entry_point<T: Into<String>>(&mut self, name: T, entrypoint: EntryPoint) {
-        self.entry_points.insert(name.into(), entrypoint);
+    pub fn add_entry_point<T: Into<String>>(&mut self, entry_point: EntryPoint) {
+        self.entry_points.add_entry_point(entry_point);
     }
 
     /// Hash for accessing contract bytes
@@ -471,8 +529,7 @@ impl Contract {
 
 impl Default for Contract {
     fn default() -> Self {
-        let mut entry_points = BTreeMap::new();
-        entry_points.insert("call".into(), EntryPoint::default());
+        let entry_points = EntryPoints::default();
         Contract {
             contract_package_hash: [0; 32],
             contract_wasm_hash: [0; 32],
@@ -506,14 +563,14 @@ impl FromBytes for Contract {
         let (contract_package_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
         let (contract_wasm_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
         let (named_keys, bytes) = BTreeMap::<String, Key>::from_bytes(bytes)?;
-        let (entrypoints, bytes) = BTreeMap::<String, EntryPoint>::from_bytes(bytes)?;
+        let (entry_points, bytes) = EntryPoints::from_bytes(bytes)?;
         let (protocol_version, bytes) = ProtocolVersion::from_bytes(bytes)?;
         Ok((
             Contract {
                 contract_package_hash,
                 contract_wasm_hash,
                 named_keys,
-                entry_points: entrypoints,
+                entry_points: entry_points,
                 protocol_version,
             },
             bytes,

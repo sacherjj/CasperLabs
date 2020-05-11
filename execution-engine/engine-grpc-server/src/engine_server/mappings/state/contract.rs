@@ -6,7 +6,7 @@ use crate::engine_server::state::{self, NamedKey};
 impl From<Contract> for state::Contract {
     fn from(contract: Contract) -> Self {
         let mut pb_contract = state::Contract::new();
-        let named_keys: Vec<NamedKey> = NamedKeyMap::new(contract.take_named_keys()).into();
+        let named_keys: Vec<NamedKey> = NamedKeyMap::new(contract.clone().take_named_keys()).into();
         pb_contract.set_named_keys(named_keys.into());
         pb_contract.set_protocol_version(contract.protocol_version().into());
         pb_contract

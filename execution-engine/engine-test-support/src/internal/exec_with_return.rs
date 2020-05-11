@@ -15,8 +15,8 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractPackage,
-    EntryPoint, Key, Phase, ProtocolVersion, URef, U512,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPointType, Key,
+    Phase, ProtocolVersion, URef, U512,
 };
 
 use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
@@ -91,6 +91,7 @@ where
 
     let context = RuntimeContext::new(
         Rc::clone(&tracking_copy),
+        EntryPointType::Session, // Is it always?
         &mut named_keys,
         access_rights,
         arguments.into(),
@@ -107,8 +108,8 @@ where
         correlation_id,
         phase,
         protocol_data,
-        ContractPackage::default(),
-        EntryPoint::default(),
+        /* ContractPackage::default(),
+         * EntryPoint::default(), */
     );
 
     let wasm_bytes = utils::read_wasm_file_bytes(wasm_file);
@@ -132,10 +133,17 @@ where
         )
         .expect("should get wasm module");
 
-    let (instance, memory) = runtime::instance_and_memory(parity_module.clone(), protocol_version)
-        .expect("should be able to make wasm instance from module");
+    let (instance, memory) =
+        runtime::instance_and_memory(parity_module.clone().take_module(), protocol_version)
+            .expect("should be able to make wasm instance from module");
 
-    let mut runtime = Runtime::new(config, Default::default(), memory, parity_module, context);
+    let mut runtime = Runtime::new(
+        config,
+        Default::default(),
+        memory,
+        parity_module.take_module(),
+        context,
+    );
 
     match instance.invoke_export("call", &[], &mut runtime) {
         Ok(_) => None,
