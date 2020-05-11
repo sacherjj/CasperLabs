@@ -1055,14 +1055,15 @@ steps:
 - name: bintray-publish
   image: "casperlabs/buildenv:latest"
   failure: "ignore"
-  commands:
-    - "UPLOAD_DIR=$(pwd)/artifacts/${DRONE_BRANCH}"
-    - "cd $UPLOAD_DIR"
-    - "echo Uploading file to bintray:${DRONE_TAG} ..."
-    - "echo -e \"\nDEBIAN\" && find . -maxdepth 1 -type f -iregex \".*\\.deb\" -printf \"%f\n\" | xargs -I {} sh -c \"echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/{} && echo\""
-    - "echo -e \"\nRPMS\" && find . -maxdepth 1 -type f -iregex \".*\\.rpm\" -printf \"%f\n\" | xargs -I {} sh -c \"echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/{} && echo\""
+  script: |
+    set -ex
+    API_URL="https://api.bintray.com"
+    UPLOAD_DIR=$(pwd)/artifacts/${DRONE_BRANCH}
+    cd $UPLOAD_DIR
+    echo "Uploading file to bintray:${DRONE_TAG} ..."
+    echo -e "\nDEBIAN" && find . -maxdepth 1 -type f -iregex ".*\\.deb" -printf "%f\n" | xargs -I {} sh -c "echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/debian/CasperLabs/${DRONE_TAG}/{} && echo"
+    echo -e "\nRPMS" && find . -maxdepth 1 -type f -iregex ".*\\.rpm" -printf "%f\n" | xargs -I {} sh -c "echo Attempting to upload [{}] && curl -T {} -u$BINTRAY_USER:$BINTRAY_API_KEY $API_URL/content/casperlabs/rpm/CasperLabs/${DRONE_TAG}/{} && echo"
   environment:
-    API_URL: https://api.bintray.com
     BINTRAY_USER:
       from_secret: bintray_username
     BINTRAY_API_KEY:
