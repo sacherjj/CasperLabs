@@ -10,7 +10,7 @@ use contract::{
 };
 use standard_payment::ARG_AMOUNT;
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     CLType, CLValue, SemVer,
 };
 

@@ -27,7 +27,7 @@ mod block_time;
 pub mod bytesrepr;
 mod cl_type;
 mod cl_value;
-pub mod contract_header;
+pub mod contracts;
 //mod contract_ref;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
@@ -49,14 +49,15 @@ pub use api_error::ApiError;
 pub use block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH};
 pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
-pub use contract_header::{
-    Contract, ContractPackage, EntryPoint, EntryPointAccess, EntryPointType, Group, Parameter,
+pub use contracts::{
+    Contract, ContractPackage, ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType,
+    Group, Parameter,
 };
 //pub use contract_ref::ContractRef;
 #[doc(inline)]
 pub use key::{
-    ContractHash, ContractMetadataHash, HashAddr, Key, BLAKE2B_DIGEST_LENGTH, KEY_HASH_LENGTH,
-    KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
+    ContractHash, ContractPackageHash, ContractWasmHash, HashAddr, Key, BLAKE2B_DIGEST_LENGTH,
+    KEY_HASH_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
 };
 pub use phase::{Phase, PHASE_SERIALIZED_LENGTH};
 pub use protocol_version::{ProtocolVersion, VersionCheckResult};

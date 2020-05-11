@@ -9,8 +9,8 @@ use types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, ToBytes},
-    contract_header::EntryPoint,
-    ContractMetadataHash, Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512,
+    contracts::EntryPoint,
+    ContractPackageHash, Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512,
     UREF_SERIALIZED_LENGTH,
 };
 
@@ -235,64 +235,6 @@ where
             FunctionIndex::GasFuncIndex => {
                 let gas_arg: u32 = Args::parse(args)?;
                 self.gas(Gas::new(gas_arg.into()))?;
-                Ok(None)
-            }
-
-            FunctionIndex::StoreFnIndex => {
-                // args(0) = pointer to function name in Wasm memory
-                // args(1) = size of the name
-                // args(2) = pointer to named keys to be saved with the function body
-                // args(3) = size of the named keys
-                // args(4) = pointer to a Wasm memory where we will save
-                //           uref address of the new function
-                let (name_ptr, name_size, named_keys_ptr, named_keys_size, uref_addr_ptr): (
-                    _,
-                    u32,
-                    _,
-                    u32,
-                    _,
-                ) = Args::parse(args)?;
-                scoped_timer.add_property("name_size", name_size.to_string());
-                let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
-                let contract_size = named_keys_size as usize + fn_bytes.len();
-                scoped_timer.add_property("contract_size", contract_size.to_string());
-                let named_keys_bytes = self
-                    .memory
-                    .get(named_keys_ptr, named_keys_size as usize)
-                    .map_err(|e| Error::Interpreter(e.into()))?;
-                let named_keys =
-                    bytesrepr::deserialize(named_keys_bytes).map_err(Error::BytesRepr)?;
-                let contract_hash = self.store_function(fn_bytes, named_keys)?;
-                self.function_address(contract_hash, uref_addr_ptr)?;
-                Ok(None)
-            }
-
-            FunctionIndex::StoreFnAtHashIndex => {
-                // args(0) = pointer to function name in Wasm memory
-                // args(1) = size of the name
-                // args(2) = pointer to named keys to be saved with the function body
-                // args(3) = size of the named keys
-                // args(4) = pointer to a Wasm memory where we will save
-                //           hash of the new function
-                let (name_ptr, name_size, named_keys_ptr, named_keys_size, hash_ptr): (
-                    _,
-                    u32,
-                    _,
-                    u32,
-                    _,
-                ) = Args::parse(args)?;
-                scoped_timer.add_property("name_size", name_size.to_string());
-                let fn_bytes = self.get_function_by_name(name_ptr, name_size)?;
-                let contract_size = named_keys_size as usize + fn_bytes.len();
-                scoped_timer.add_property("contract_size", contract_size.to_string());
-                let named_keys_bytes = self
-                    .memory
-                    .get(named_keys_ptr, named_keys_size as usize)
-                    .map_err(|e| Error::Interpreter(e.into()))?;
-                let named_keys =
-                    bytesrepr::deserialize(named_keys_bytes).map_err(Error::BytesRepr)?;
-                let contract_hash = self.store_function_at_hash(fn_bytes, named_keys)?;
-                self.function_address(contract_hash, hash_ptr)?;
                 Ok(None)
             }
 
@@ -554,46 +496,40 @@ where
                 // args(0) = pointer to metadata key in wasm memory
                 // args(1) = size of metadata key in wasm memory
                 // args(2) = pointer to access key in wasm memory
-                // args(3) = pointer to contract version in wasm memory
-                // args(4) = pointer to entrypoints in wasm memory
-                // args(5) = size of entrypoints in wasm memory
-                // args(6) = pointer to named keys in wasm memory
-                // args(7) = size of named keys in wasm memory
-                // args(8) = pointer to output buffer for serialized key
-                // args(9) = size of output buffer
-                // args(10) = pointer to bytes written
+                // args(3) = pointer to entrypoints in wasm memory
+                // args(4) = size of entrypoints in wasm memory
+                // args(5) = pointer to named keys in wasm memory
+                // args(6) = size of named keys in wasm memory
+                // args(7) = pointer to output buffer for serialized key
+                // args(8) = size of output buffer
+                // args(9) = pointer to bytes written
                 let (
                     meta_key_ptr,
                     meta_key_size,
                     access_key_ptr,
-                    version_ptr,
-                    entrypoints_ptr,
-                    entrypoints_size,
+                    entry_points_ptr,
+                    entry_points_size,
                     named_keys_ptr,
                     named_keys_size,
                     output_ptr,
                     output_size,
                     bytes_written_ptr,
-                ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
+                ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
 
-                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let contract_package_hash =
+                    self.key_from_mem(meta_key_ptr, meta_key_size)?.into_seed();
                 let access_key = {
                     let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let version = {
-                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
-                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-                };
                 let entry_points: BTreeMap<String, EntryPoint> =
-                    self.t_from_mem(entrypoints_ptr, entrypoints_size)?;
+                    self.t_from_mem(entry_points_ptr, entry_points_size)?;
                 let named_keys: BTreeMap<String, Key> =
                     self.t_from_mem(named_keys_ptr, named_keys_size)?;
 
                 let ret = self.add_contract_version(
-                    metadata_key,
+                    contract_package_hash,
                     access_key,
-                    version,
                     entry_points,
                     named_keys,
                     output_ptr,
@@ -610,7 +546,8 @@ where
                 // args(3) = pointer to contract version in wasm memory
                 let (meta_key_ptr, meta_key_size, access_key_ptr, version_ptr) = Args::parse(args)?;
 
-                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let contract_package_hash =
+                    self.key_from_mem(meta_key_ptr, meta_key_size)?.into_seed();
                 let access_key = {
                     let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
@@ -620,7 +557,8 @@ where
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
 
-                let result = self.remove_contract_version(metadata_key, access_key, version)?;
+                let result =
+                    self.remove_contract_version(contract_package_hash, access_key, version)?;
 
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(result))))
             }
@@ -645,7 +583,7 @@ where
                     result_size_ptr,
                 ) = Args::parse(args)?;
 
-                let contract_metadata_hash: ContractMetadataHash =
+                let contract_metadata_hash: ContractPackageHash =
                     self.t_from_mem(contract_metadata_hash_ptr, contract_metadata_hash_size)?;
                 let version = {
                     let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;

@@ -9,7 +9,7 @@ use test::{black_box, Bencher};
 use casperlabs_types::{
     account::PublicKey,
     bytesrepr::{self, FromBytes, ToBytes},
-    AccessRights, CLTyped, CLValue, ContractMetadataHash, URef, U128, U256, U512,
+    AccessRights, CLTyped, CLValue, Key, URef, U128, U256, U512,
 };
 
 static KB: usize = 1024;

@@ -13,7 +13,7 @@ use mint_token::{
     METHOD_TRANSFER,
 };
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     CLType, CLValue, SemVer,
 };
 

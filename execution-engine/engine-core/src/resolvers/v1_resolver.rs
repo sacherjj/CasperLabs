@@ -104,14 +104,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 1][..], None),
                 FunctionIndex::GasFuncIndex.into(),
             ),
-            "store_function" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 5][..], None),
-                FunctionIndex::StoreFnIndex.into(),
-            ),
-            "store_function_at_hash" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 5][..], None),
-                FunctionIndex::StoreFnAtHashIndex.into(),
-            ),
             "is_valid_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], Some(ValueType::I32)),
                 FunctionIndex::IsValidURefFnIndex.into(),
@@ -197,7 +189,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::CreateContractUserGroup.into(),
             ),
             "add_contract_version" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 11][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 10][..], Some(ValueType::I32)),
                 FunctionIndex::AddContractVersion.into(),
             ),
             "remove_contract_version" => FuncInstance::alloc_host(

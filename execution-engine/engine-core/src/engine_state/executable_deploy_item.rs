@@ -1,4 +1,4 @@
-use types::{bytesrepr, CLValue, HashAddr, RuntimeArgs, SemVer};
+use types::{bytesrepr, contracts::ContractVersion, CLValue, HashAddr, RuntimeArgs};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ExecutableDeployItem {
@@ -18,20 +18,16 @@ pub enum ExecutableDeployItem {
         // TODO: add entrypoint name
         args: Vec<u8>,
     },
-    StoredContractByURef {
-        uref: Vec<u8>,
-        args: Vec<u8>,
-    },
     StoredVersionedContractByName {
-        name: String,        // named key storing contract metadata hash
-        version: SemVer,     // finds active version
-        entry_point: String, // finds header by entry point name
+        name: String,             // named key storing contract metadata hash
+        version: ContractVersion, // finds active version
+        entry_point: String,      // finds header by entry point name
         args: Vec<u8>,
     },
     StoredVersionedContractByHash {
-        hash: HashAddr,      // named key storing contract metadata hash
-        version: SemVer,     // finds active version
-        entry_point: String, // finds header by entry point name
+        hash: HashAddr,           // named key storing contract metadata hash
+        version: ContractVersion, // finds active version
+        entry_point: String,      // finds header by entry point name
         args: Vec<u8>,
     },
 }
@@ -41,8 +37,7 @@ impl ExecutableDeployItem {
         match self {
             ExecutableDeployItem::ModuleBytes { args, .. }
             | ExecutableDeployItem::StoredContractByHash { args, .. }
-            | ExecutableDeployItem::StoredContractByName { args, .. }
-            | ExecutableDeployItem::StoredContractByURef { args, .. } => {
+            | ExecutableDeployItem::StoredContractByName { args, .. } => {
                 let vec: Vec<CLValue> = bytesrepr::deserialize(args)?;
                 Ok(vec.into())
             }
@@ -62,8 +57,7 @@ impl ExecutableDeployItem {
             }
             ExecutableDeployItem::ModuleBytes { .. }
             | ExecutableDeployItem::StoredContractByHash { .. }
-            | ExecutableDeployItem::StoredContractByName { .. }
-            | ExecutableDeployItem::StoredContractByURef { .. } => "call",
+            | ExecutableDeployItem::StoredContractByName { .. } => "call",
         }
     }
 }

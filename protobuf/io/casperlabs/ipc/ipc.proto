@@ -15,41 +15,38 @@ message DeployCode {
 message StoredContractHash{
   bytes hash = 1; // public hash of a stored contract
   bytes args = 2; // ABI-encoded arguments
+  string entry_point_name = 3; // optional entry point name (defaults to "call")
 }
 
 message StoredContractName{
   // name of a stored contract associated with the executing account (uref or hash)
-  string stored_contract_name = 1;
+  string name = 1;
   bytes args = 2;   // ABI-encoded arguments
+  string entry_point_name = 3; // optional entry point name (defaults to "call")
 }
 
-message StoredContractURef{
-  bytes uref = 1; // uref of a stored contract
-  bytes args = 2; // ABI-encoded arguments
-}
-
-message StoredVersionedContractByName {
+message StoredContractPackage {
     string name = 1; // key name
-    io.casperlabs.casper.consensus.state.SemVer version = 2;     // finds active version
-    string entry_point = 3; // finds header by entrypoint name
-    bytes args = 4; // Serialized runtime arguments
+    uint32 version = 2; // optional specific version (defaults to highest)
+    string entry_point_name = 3; // finds header by entrypoint name
+    bytes args = 4; // ABI-encoded arguments
 }
 
-message StoredVersionedContractByHash {
-    bytes hash = 1; // hash of the metadata
-    io.casperlabs.casper.consensus.state.SemVer version = 2;     // finds active version
-    string entry_point = 3; // finds header by entrypoint name
-    bytes args = 4; // Serialized runtime arguments
+message StoredContractPackageHash {
+    bytes hash = 1; // public hash of a stored contract package
+    uint32 version = 2;     // finds active version
+    string entry_point_name = 3; // finds header by entrypoint name
+    bytes args = 4; // ABI-encoded arguments
 }
 
 message DeployPayload {
+  reserved 4; // StoredContractURef is no longer supported
   oneof payload {
     DeployCode deploy_code = 1;
-    StoredContractHash stored_contract_hash = 2;
-    StoredContractName stored_contract_name = 3;
-    StoredContractURef stored_contract_uref = 4;
-    StoredVersionedContractByName stored_versioned_contract_by_name = 5;
-    StoredVersionedContractByHash stored_versioned_contract_by_hash = 6;
+    StoredContractHash stored_contract_hash = 2;  
+    StoredContractName stored_contract_name = 3;  
+    StoredContractPackage stored_package_by_name = 5; 
+    StoredContractPackageHash stored_package_by_hash = 6; 
   }
 }
 

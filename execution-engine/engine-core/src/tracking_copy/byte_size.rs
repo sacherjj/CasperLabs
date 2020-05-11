@@ -48,7 +48,7 @@ impl ByteSize for StoredValue {
                 StoredValue::Account(account) => account.heap_size(),
                 StoredValue::ContractWasm(contract_wasm) => contract_wasm.heap_size(),
                 StoredValue::Contract(contract_header) => contract_header.serialized_length(),
-                StoredValue::ContractMetadata(metadata) => metadata.serialized_length(),
+                StoredValue::ContractPackage(metadata) => metadata.serialized_length(),
             }
     }
 }
@@ -104,7 +104,7 @@ impl HeapSizeOf for String {
 mod tests {
     use std::{collections::BTreeMap, mem};
 
-    use types::ContractMetadataHash;
+    use types::ContractPackageHash;
 
     use super::ByteSize;
 

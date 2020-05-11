@@ -9,10 +9,7 @@ use engine_test_support::{
 };
 use lazy_static::lazy_static;
 use std::{collections::BTreeSet, iter::FromIterator};
-use types::{
-    contract_header, contract_header::MAX_GROUP_UREFS, runtime_args, Group, Key, RuntimeArgs,
-    SemVer,
-};
+use types::{contracts, contracts::MAX_GROUP_UREFS, runtime_args, Group, Key, RuntimeArgs, SemVer};
 
 const CONTRACT_GROUPS: &str = "manage_groups.wasm";
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
@@ -490,5 +487,5 @@ fn should_limit_max_urefs_while_extending() {
     let exec_response = response.last().expect("should have response");
     let error = exec_response.as_error().expect("should have error");
     let error = assert_matches!(error, Error::Exec(execution::Error::Revert(e)) => e);
-    assert_eq!(error, &contract_header::Error::MaxTotalURefsExceeded.into());
+    assert_eq!(error, &contracts::Error::MaxTotalURefsExceeded.into());
 }

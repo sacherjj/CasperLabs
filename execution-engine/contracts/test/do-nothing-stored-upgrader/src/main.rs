@@ -11,7 +11,7 @@ use contract::{
 use core::convert::TryInto;
 
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType},
     CLType, Key, SemVer,
 };
 

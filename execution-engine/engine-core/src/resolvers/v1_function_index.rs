@@ -20,8 +20,6 @@ pub enum FunctionIndex {
     GasFuncIndex,
     HasKeyFuncIndex,
     PutKeyFuncIndex,
-    StoreFnIndex,
-    StoreFnAtHashIndex,
     IsValidURefFnIndex,
     RevertFuncIndex,
     AddAssociatedKeyFuncIndex,

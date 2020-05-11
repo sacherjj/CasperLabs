@@ -6,7 +6,7 @@ extern crate alloc;
 use alloc::{collections::BTreeMap, string::ToString};
 
 use contract::contract_api::storage;
-use types::contract_header::EntryPoint;
+use types::contracts::EntryPoint;
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const HASH_KEY_NAME: &str = "do_nothing_hash";
@@ -19,7 +19,7 @@ pub extern "C" fn delegate() {}
 pub extern "C" fn call() {
     let methods = {
         let mut methods = BTreeMap::new();
-        methods.insert(ENTRY_FUNCTION_NAME.to_string(), EntryPoint::thunk());
+        methods.insert(ENTRY_FUNCTION_NAME.to_string(), EntryPoint::default());
         methods
     };
 

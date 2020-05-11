@@ -11,7 +11,7 @@ use alloc::{
 
 use contract::contract_api::{runtime, storage};
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType},
     runtime_args, CLType, Key, RuntimeArgs, SemVer, URef,
 };
 

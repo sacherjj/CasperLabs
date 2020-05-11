@@ -12,7 +12,7 @@ use contract::{
 };
 
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     ApiError, CLType, Key, URef,
 };
 
@@ -48,8 +48,11 @@ pub extern "C" fn transfer() {
 #[no_mangle]
 pub extern "C" fn call() {
     let methods = {
-        let mut methods = BTreeMap::new();
+        let mut entry_points = BTreeMap::new();
+
+        let entry_point_name = ENTRY_FUNCTION_NAME.to_string();
         let entry_point = EntryPoint::new(
+            entry_point_name.clone(),
             vec![
                 Parameter::new(ARG_0_NAME, CLType::FixedList(Box::new(CLType::U8), 32)),
                 Parameter::new(ARG_1_NAME, CLType::U512),
@@ -58,8 +61,8 @@ pub extern "C" fn call() {
             EntryPointAccess::Public,
             EntryPointType::Session,
         );
-        methods.insert(ENTRY_FUNCTION_NAME.to_string(), entry_point);
-        methods
+        entry_points.insert(entry_point_name, entry_point);
+        entry_points
     };
 
     storage::new_contract(

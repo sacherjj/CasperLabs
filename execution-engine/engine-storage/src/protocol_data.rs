@@ -177,7 +177,7 @@ mod tests {
     use proptest::proptest;
 
     use engine_wasm_prep::wasm_costs::WasmCosts;
-    use types::{bytesrepr, AccessRights, ContractMetadataHash};
+    use types::{bytesrepr, AccessRights, ContractPackageHash};
 
     use super::{gens, ProtocolData};
 

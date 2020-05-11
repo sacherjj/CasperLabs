@@ -18,7 +18,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType},
     CLType, Key, Parameter, SemVer, URef,
 };
 
@@ -120,9 +120,11 @@ pub extern "C" fn remove_group_urefs() {
 }
 
 /// Restricted uref comes from creating a group and will be assigned to a smart contract
-fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
-    let mut entrypoints = BTreeMap::new();
+fn create_entry_points_1() -> BTreeMap<String, EntryPoint> {
+    let mut entry_points = BTreeMap::new();
+    let entry_point_name = CREATE_GROUP.to_string();
     let restricted_session = EntryPoint::new(
+        entry_point_name.clone(),
         vec![
             Parameter::new(GROUP_NAME_ARG, CLType::String),
             Parameter::new(TOTAL_EXISTING_UREFS_ARG, CLType::U64),
@@ -132,17 +134,21 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(CREATE_GROUP.to_string(), restricted_session);
+    entry_points.insert(entry_point_name, restricted_session);
 
+    let entry_point_name = REMOVE_GROUP.to_string();
     let remove_group = EntryPoint::new(
+        entry_point_name.clone(),
         vec![Parameter::new(GROUP_NAME_ARG, CLType::String)],
         CLType::Unit,
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(REMOVE_GROUP.to_string(), remove_group);
+    entry_points.insert(entry_point_name, remove_group);
 
+    let entry_point_name = EXTEND_GROUP_UREFS.to_string();
     let extend_group_urefs = EntryPoint::new(
+        entry_point_name.clone(),
         vec![
             Parameter::new(GROUP_NAME_ARG, CLType::String),
             Parameter::new(TOTAL_NEW_UREFS_ARG, CLType::U64),
@@ -151,9 +157,11 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(EXTEND_GROUP_UREFS.to_string(), extend_group_urefs);
+    entry_points.insert(entry_point_name, extend_group_urefs);
 
+    let entry_point_name = REMOVE_GROUP_UREFS.to_string();
     let remove_group_urefs = EntryPoint::new(
+        entry_point_name.clone(),
         vec![
             Parameter::new(GROUP_NAME_ARG, CLType::String),
             Parameter::new(UREFS_ARG, CLType::List(Box::new(CLType::URef))),
@@ -162,14 +170,14 @@ fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(REMOVE_GROUP_UREFS.to_string(), remove_group_urefs);
-    entrypoints
+    entry_points.insert(entry_point_name, remove_group_urefs);
+    entry_points
 }
 
 fn install_version_1(metadata_hash: Key, access_uref: URef) {
     let contract_named_keys = BTreeMap::new();
 
-    let entrypoints = create_entrypoints_1();
+    let entrypoints = create_entry_points_1();
     storage::add_contract_version(
         metadata_hash,
         access_uref,

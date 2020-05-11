@@ -1,34 +1,15 @@
-use std::convert::{TryFrom, TryInto};
-
-use engine_shared::contract::ContractWasm;
+use types::contracts::Contract;
 
 use super::NamedKeyMap;
-use crate::engine_server::{
-    mappings::ParsingError,
-    state::{self, NamedKey},
-};
+use crate::engine_server::state::{self, NamedKey};
 
-impl From<ContractWasm> for state::Contract {
-    fn from(contract: ContractWasm) -> Self {
-        let (bytes, named_keys, protocol_version) = contract.destructure();
+impl From<Contract> for state::Contract {
+    fn from(contract: Contract) -> Self {
         let mut pb_contract = state::Contract::new();
-        let named_keys: Vec<NamedKey> = NamedKeyMap::new(named_keys).into();
-        pb_contract.set_body(bytes);
+        let named_keys: Vec<NamedKey> = NamedKeyMap::new(contract.take_named_keys()).into();
         pb_contract.set_named_keys(named_keys.into());
-        pb_contract.set_protocol_version(protocol_version.into());
+        pb_contract.set_protocol_version(contract.protocol_version().into());
         pb_contract
-    }
-}
-
-impl TryFrom<state::Contract> for ContractWasm {
-    type Error = ParsingError;
-
-    fn try_from(mut pb_contract: state::Contract) -> Result<Self, Self::Error> {
-        let named_keys: NamedKeyMap = pb_contract.take_named_keys().into_vec().try_into()?;
-        let protocol_version = pb_contract.take_protocol_version().into();
-        let contract =
-            ContractWasm::new(pb_contract.body, named_keys.into_inner(), protocol_version);
-        Ok(contract)
     }
 }
 
@@ -44,7 +25,7 @@ mod tests {
     proptest! {
         #[test]
         fn round_trip(contract in gens::contract_arb()) {
-            test_utils::protobuf_round_trip::<ContractWasm, state::Contract>(contract);
+            test_utils::protobuf_round_trip::<Contract, state::Contract>(contract);
         }
     }
 }

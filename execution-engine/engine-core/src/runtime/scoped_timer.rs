@@ -99,8 +99,6 @@ impl Drop for ScopedTimer {
             FunctionIndex::GetKeyFuncIndex => "host_function_get_key",
             FunctionIndex::HasKeyFuncIndex => "host_function_has_key",
             FunctionIndex::PutKeyFuncIndex => "host_function_put_key",
-            FunctionIndex::StoreFnIndex => "host_function_store_function",
-            FunctionIndex::StoreFnAtHashIndex => "host_function_store_function_at_hash",
             FunctionIndex::IsValidURefFnIndex => "host_function_is_valid_uref",
             FunctionIndex::RevertFuncIndex => "host_function_revert",
             FunctionIndex::AddAssociatedKeyFuncIndex => "host_function_add_associated_key",

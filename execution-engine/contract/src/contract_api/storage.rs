@@ -11,7 +11,7 @@ use core::{convert::From, mem::MaybeUninit};
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    contract_header::EntryPoint,
+    contracts::EntryPoint,
     AccessRights, ApiError, CLTyped, CLValue, Key, SemVer, URef, UREF_SERIALIZED_LENGTH,
 };
 

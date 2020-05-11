@@ -38,6 +38,8 @@ pub enum Error {
     Serialization(bytesrepr::Error),
     #[fail(display = "Mint error: {}", _0)]
     Mint(mint::Error),
+    #[fail(display = "Unsupported key type: {}", _0)]
+    InvalidKeyVariant(String),
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {
@@ -54,7 +56,12 @@ impl From<parity_wasm::SerializationError> for Error {
 
 impl From<execution::Error> for Error {
     fn from(error: execution::Error) -> Self {
-        Error::Exec(error)
+        match error {
+            execution::Error::WasmPreprocessing(preprocessing_error) => {
+                Error::WasmPreprocessing(preprocessing_error)
+            }
+            _ => Error::Exec(error),
+        }
     }
 }
 

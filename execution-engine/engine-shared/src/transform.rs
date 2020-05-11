@@ -159,7 +159,7 @@ impl Transform {
                     let found = format!("{:?}", cl_value.cl_type());
                     Err(TypeMismatch::new(expected, found).into())
                 }
-                StoredValue::ContractMetadata(_) => {
+                StoredValue::ContractPackage(_) => {
                     let expected = "ContractHeader or Account".to_string();
                     let found = "ContractMetadata".to_string();
                     Err(TypeMismatch::new(expected, found).into())
@@ -309,7 +309,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use types::{account::PublicKey, AccessRights, ProtocolVersion, URef, U128, U256, U512};
+    use types::{account::PublicKey, AccessRights, URef, U128, U256, U512};
 
     use super::*;
     use crate::{

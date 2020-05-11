@@ -26,13 +26,11 @@ use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
-    contract::ContractWasm,
     gas::Gas,
     motes::Motes,
     newtypes::{Blake2bHash, CorrelationId},
     stored_value::StoredValue,
     transform::Transform,
-    wasm,
 };
 use engine_storage::{
     global_state::{CommitResult, StateProvider, StateReader},
@@ -44,9 +42,9 @@ use types::{
     bytesrepr::{self, ToBytes},
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
-    AccessRights, BlockTime, CLValue, Contract, ContractPackage, EntryPoint, EntryPointType, Key,
-    NamedArg, Phase, ProtocolVersion, RuntimeArgs, SemVer, URef, KEY_HASH_LENGTH, U512,
-    UREF_ADDR_LENGTH,
+    AccessRights, BlockTime, CLType, CLValue, Contract, ContractHash, ContractVersionKey,
+    EntryPoint, EntryPointAccess, EntryPointType, Key, NamedArg, Phase, ProtocolVersion,
+    RuntimeArgs, URef, KEY_HASH_LENGTH, U512,
 };
 
 pub use self::{
@@ -92,15 +90,15 @@ pub struct EngineState<S> {
 pub enum GetModuleResult {
     Session {
         module: Module,
-        metadata: ContractPackage,
-        entrypoint: EntryPoint,
+        // named_keys (from account)
+        entry_point: EntryPoint,
     },
     Contract {
-        module: Module,
         base_key: Key,
-        named_keys: BTreeMap<String, Key>,
-        metadata: ContractPackage,
-        entrypoint: EntryPoint,
+        module: Module,
+        contract: Contract,
+        // named_keys (from contract)
+        entry_point: EntryPoint,
     },
 }
 
@@ -220,11 +218,18 @@ where
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
             let protocol_data = ProtocolData::default();
+            let entry_point = EntryPoint::new(
+                "install".to_string(),
+                Vec::new(),
+                CLType::Unit,
+                EntryPointAccess::Public,
+                EntryPointType::Session,
+            );
 
             executor.exec_system(
                 mint_installer_module,
+                entry_point,
                 args,
-                "install",
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -282,11 +287,18 @@ where
             };
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+            let entry_point = EntryPoint::new(
+                "install".to_string(),
+                Vec::new(),
+                CLType::Unit,
+                EntryPointAccess::Public,
+                EntryPointType::Session,
+            );
 
             executor.exec_system(
                 proof_of_stake_installer_module,
+                entry_point,
                 args,
-                "install",
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -339,11 +351,18 @@ where
             let uref_address_generator = Rc::clone(&uref_address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+            let entry_point = EntryPoint::new(
+                "install".to_string(),
+                Vec::new(),
+                CLType::Unit,
+                EntryPointAccess::Public,
+                EntryPointType::Session,
+            );
 
             executor.exec_system(
                 standard_payment_installer_module,
+                entry_point,
                 args,
-                "install",
                 &mut named_keys,
                 initial_base_key,
                 &virtual_system_account,
@@ -414,8 +433,12 @@ where
             let module = {
                 let contract = tracking_copy
                     .borrow_mut()
-                    .get_contract(correlation_id, mint_metadata_key)?;
-                let bytes = contract.take_bytes();
+                    .get_contract(correlation_id, mint_key.into_seed())?;
+
+                let contract_wasm = tracking_copy
+                    .borrow_mut()
+                    .get_contract_wasm(correlation_id, contract.contract_wasm_hash())?;
+                let bytes = contract_wasm.bytes();
                 engine_wasm_prep::deserialize(&bytes)?
             };
             // For each account...
@@ -453,6 +476,7 @@ where
                     // ...call the Mint's "mint" endpoint to create purse with tokens...
                     let (_instance, mut runtime) = executor.create_runtime(
                         module,
+                        EntryPointType::Contract,
                         args.clone(),
                         &mut named_keys_exec,
                         base_key,
@@ -469,14 +493,12 @@ where
                         phase,
                         protocol_data,
                         system_contract_cache,
-                        ContractPackage::default(),
-                        EntryPoint::default(),
                     )?;
 
                     runtime
                         .call_versioned_contract(
                             mint_metadata_key.into_seed(),
-                            SemVer::V1_0_0,
+                            1,
                             "mint".to_string(),
                             args,
                         )?
@@ -649,10 +671,11 @@ where
 
                 let executor = Executor::new(self.config);
 
+                let upgrade_entry_point = EntryPoint::default(); // TODO: implement
                 executor.exec_system(
                     upgrade_installer_module,
+                    upgrade_entry_point,
                     args,
-                    "call",
                     &mut keys,
                     initial_base_key,
                     &system_account,
@@ -770,8 +793,7 @@ where
                 let module = preprocessor.preprocess(&module_bytes)?;
                 Ok(GetModuleResult::Session {
                     module,
-                    metadata: ContractPackage::default(),
-                    entrypoint: EntryPoint::default(),
+                    entry_point: EntryPoint::default(),
                 })
             }
             ExecutableDeployItem::StoredContractByHash { hash, .. } => {
@@ -782,90 +804,38 @@ where
                         actual: hash_len,
                     });
                 }
-                let mut arr = [0u8; KEY_HASH_LENGTH];
-                arr.copy_from_slice(&hash);
-                let (module, contract_header, contract) = self.get_module_from_key(
+                let mut contract_hash = [0u8; KEY_HASH_LENGTH];
+                contract_hash.copy_from_slice(&hash);
+                let module = self.get_module_from_contract_hash(
                     tracking_copy,
-                    Key::Hash(arr),
+                    contract_hash,
                     correlation_id,
                     protocol_version,
                 )?;
                 Ok(GetModuleResult::Session {
                     module,
-                    metadata: ContractPackage::default(),
-                    entrypoint: EntryPoint::default(),
+                    entry_point: EntryPoint::default(),
                 })
             }
             ExecutableDeployItem::StoredContractByName { name, .. } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
-                    error::Error::Exec(execution::Error::URefNotFound(name.to_string()))
+                    error::Error::Exec(execution::Error::NamedKeyNotFound(name.to_string()))
                 })?;
-                if let Key::URef(uref) = stored_contract_key {
-                    if !uref.is_readable() {
-                        return Err(error::Error::Exec(execution::Error::ForgedReference(*uref)));
-                    }
+                if let Key::URef(_) = stored_contract_key {
+                    return Err(error::Error::InvalidKeyVariant(name.to_string()));
                 }
-                let (module, contract_header, _contract) = self.get_module_from_key(
+
+                let contract_hash = stored_contract_key.into_seed();
+
+                let module = self.get_module_from_contract_hash(
                     tracking_copy,
-                    *stored_contract_key,
+                    contract_hash,
                     correlation_id,
                     protocol_version,
                 )?;
                 Ok(GetModuleResult::Session {
                     module,
-                    metadata: ContractPackage::default(),
-                    entrypoint: EntryPoint::default(),
-                })
-            }
-            ExecutableDeployItem::StoredContractByURef { uref, .. } => {
-                let len = uref.len();
-                if len != UREF_ADDR_LENGTH {
-                    return Err(error::Error::InvalidHashLength {
-                        expected: UREF_ADDR_LENGTH,
-                        actual: len,
-                    });
-                }
-                let read_only_uref = {
-                    let mut arr = [0u8; UREF_ADDR_LENGTH];
-                    arr.copy_from_slice(&uref);
-                    URef::new(arr, AccessRights::READ)
-                };
-                let normalized_uref = Key::URef(read_only_uref).normalize();
-                let maybe_named_key = account
-                    .named_keys()
-                    .values()
-                    .find(|&named_key| named_key.normalize() == normalized_uref);
-                let normalized_uref = match maybe_named_key {
-                    Some(Key::URef(uref)) if uref.is_readable() => normalized_uref,
-                    Some(Key::URef(_)) => {
-                        return Err(error::Error::Exec(execution::Error::ForgedReference(
-                            read_only_uref,
-                        )));
-                    }
-                    Some(key) => {
-                        return Err(error::Error::Exec(execution::Error::TypeMismatch(
-                            engine_shared::TypeMismatch::new(
-                                "Key::URef".to_string(),
-                                key.type_string(),
-                            ),
-                        )));
-                    }
-                    None => {
-                        return Err(error::Error::Exec(execution::Error::KeyNotFound(
-                            Key::URef(read_only_uref),
-                        )));
-                    }
-                };
-                let (module, contract_header, _contract) = self.get_module_from_key(
-                    tracking_copy,
-                    normalized_uref,
-                    correlation_id,
-                    protocol_version,
-                )?;
-                Ok(GetModuleResult::Session {
-                    module,
-                    metadata: ContractPackage::default(),
-                    entrypoint: EntryPoint::default(),
+                    entry_point: EntryPoint::default(),
                 })
             }
             ExecutableDeployItem::StoredVersionedContractByName {
@@ -874,41 +844,51 @@ where
                 version,
                 ..
             } => {
-                // TODO: URefNotFound is not the correct error variant
-                let stored_metadata_key = account.named_keys().get(name).ok_or_else(|| {
-                    error::Error::Exec(execution::Error::URefNotFound(name.to_string()))
+                let contract_package_key = account.named_keys().get(name).ok_or_else(|| {
+                    error::Error::Exec(execution::Error::NamedKeyNotFound(name.to_string()))
                 })?;
-                let contract_metadata = tracking_copy
-                    .borrow_mut()
-                    .get_contract_metadata(correlation_id, *stored_metadata_key)?;
 
-                let contract_header = contract_metadata
-                    .get_version(&version)
+                let contract_package_hash = contract_package_key.into_seed();
+
+                let contract_package = tracking_copy
+                    .borrow_mut()
+                    .get_contract_package(correlation_id, contract_package_hash)?;
+
+                let contract_version_key =
+                    ContractVersionKey::new(protocol_version.value().major, *version);
+
+                if !contract_package.is_contract_version_in_use(&contract_version_key) {
+                    return Err(error::Error::Exec(execution::Error::InvalidContractVersion));
+                }
+
+                let contract_hash = *contract_package
+                    .get_contract(&contract_version_key)
                     .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
 
-                let method_entrypoint = contract_header
-                    .get_method(entry_point)
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, contract_hash)?;
+
+                let method_entry_point = contract
+                    .get_entry_point(entry_point)
                     .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
 
-                let (module, contract_header, contract) = self.get_module_from_key(
-                    tracking_copy,
-                    contract_header.contract_key(),
-                    correlation_id,
-                    protocol_version,
-                )?;
+                let contract_wasm = tracking_copy
+                    .borrow_mut()
+                    .get_contract_wasm(correlation_id, contract.contract_wasm_hash())?;
 
-                match method_entrypoint.entry_point_type() {
+                let module = engine_wasm_prep::deserialize(contract_wasm.bytes())?;
+
+                match method_entry_point.entry_point_type() {
                     EntryPointType::Session => Ok(GetModuleResult::Session {
                         module,
-                        metadata: contract_metadata.clone(),
-                        entrypoint: method_entrypoint.clone(),
+                        entry_point: method_entry_point.to_owned(),
                     }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
-                        base_key: contract_header.contract_key(),
-                        named_keys: contract_header.take_named_keys(),
-                        metadata: contract_metadata.clone(),
-                        entrypoint: method_entrypoint.clone(),
+                        base_key: contract_hash.into(),
+                        contract: contract.to_owned(),
+                        entry_point: method_entry_point.to_owned(),
                     }),
                 }
             }
@@ -918,74 +898,81 @@ where
                 entry_point,
                 ..
             } => {
-                let contract_metadata_key = Key::Hash(*hash);
-                let contract_metadata = tracking_copy
-                    .borrow_mut()
-                    .get_contract_metadata(correlation_id, contract_metadata_key)?;
+                let contract_package_hash = *hash;
 
-                let contract_header = contract_metadata
-                    .get_version(&version)
+                let contract_package = tracking_copy
+                    .borrow_mut()
+                    .get_contract_package(correlation_id, contract_package_hash)?;
+
+                let contract_version_key =
+                    ContractVersionKey::new(protocol_version.value().major, *version);
+
+                if !contract_package.is_contract_version_in_use(&contract_version_key) {
+                    return Err(error::Error::Exec(execution::Error::InvalidContractVersion));
+                }
+
+                let contract_hash = *contract_package
+                    .get_contract(&contract_version_key)
                     .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
 
-                let method_entrypoint = contract_header
-                    .get_method(entry_point)
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, contract_hash)?;
+
+                let method_entry_point = contract
+                    .get_entry_point(entry_point)
                     .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
 
-                let (module, contract_header, contract) = self.get_module_from_key(
-                    tracking_copy,
-                    contract_header.contract_key(),
-                    correlation_id,
-                    protocol_version,
-                )?;
+                let contract_wasm = tracking_copy
+                    .borrow_mut()
+                    .get_contract_wasm(correlation_id, contract.contract_wasm_hash())?;
 
-                match method_entrypoint.entry_point_type() {
+                let module = engine_wasm_prep::deserialize(contract_wasm.bytes())?;
+
+                match method_entry_point.entry_point_type() {
                     EntryPointType::Session => Ok(GetModuleResult::Session {
                         module,
-                        metadata: contract_metadata.clone(),
-                        entrypoint: method_entrypoint.clone(),
+                        entry_point: method_entry_point.to_owned(),
                     }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
-                        base_key: contract_header.contract_key(),
-                        named_keys: contract_header.take_named_keys(),
-                        metadata: contract_metadata.clone(),
-                        entrypoint: method_entrypoint.clone(),
+                        base_key: contract_hash.into(),
+                        contract: contract.to_owned(),
+                        entry_point: method_entry_point.to_owned(),
                     }),
                 }
             }
         }
     }
 
-    fn get_module_from_key(
+    fn get_module_from_contract_hash(
         &self,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
-        stored_contract_key: Key,
+        contract_hash: ContractHash,
         correlation_id: CorrelationId,
         protocol_version: &ProtocolVersion,
-    ) -> Result<(Module, Contract, ContractWasm), error::Error> {
-        let contract_header = tracking_copy
+    ) -> Result<Module, error::Error> {
+        let contract = tracking_copy
             .borrow_mut()
-            .get_contract(correlation_id, stored_contract_key)?;
+            .get_contract(correlation_id, contract_hash.into())?;
 
         // A contract may only call a stored contract that has the same protocol major version
         // number.
-        let contract_version = contract_header.protocol_version();
-        if !contract_version.is_compatible_with(&protocol_version) {
+        if !contract.is_compatible_protocol_version(*protocol_version) {
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,
-                actual: contract_version.value().major,
+                actual: contract.protocol_version().value().major,
             };
             return Err(error::Error::Exec(exec_error));
         }
 
-        let contract = tracking_copy
+        let contract_wasm = tracking_copy
             .borrow_mut()
-            .get_contract(correlation_id, contract_header.contract_key())?;
+            .get_contract_wasm(correlation_id, contract.contract_wasm_hash())?;
 
-        let ret = contract.take_bytes();
-        let module = engine_wasm_prep::deserialize(&ret)?;
+        let module = engine_wasm_prep::deserialize(contract_wasm.bytes())?;
 
-        Ok((module, contract_header, contract))
+        Ok(module)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1089,136 +1076,69 @@ where
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
-        let mint_reference = {
-            // Get mint system contract URef from account (an account on a different network
-            // may have a mint contract other than the CLMint)
-            // payment_code_spec_6: system contract validity
-            let mint_reference = protocol_data.mint();
+        let mint_hash = protocol_data.mint();
 
-            if !self.system_contract_cache.has(mint_reference) {
-                let mint_module = match {
-                    if self.config.use_system_contracts() {
-                        let mint_contract = match tracking_copy
-                            .borrow_mut()
-                            .get_contract(correlation_id, mint_reference.into())
-                        {
-                            Ok(contract) => contract,
-                            Err(error) => {
-                                return Ok(ExecutionResult::precondition_failure(error.into()))
-                            }
-                        };
-                        engine_wasm_prep::deserialize(mint_contract.bytes())
-                    } else {
-                        wasm::do_nothing_module(preprocessor)
-                    }
-                } {
-                    Ok(module) => module,
-                    Err(error) => {
-                        return Ok(ExecutionResult::precondition_failure(error.into()));
-                    }
-                };
-                self.system_contract_cache
-                    .insert(mint_reference, mint_module);
-            }
-            mint_reference
-        };
+        // cache mint module
+        if !self.system_contract_cache.has(mint_hash) {
+            let mint_contract = match tracking_copy
+                .borrow_mut()
+                .get_contract(correlation_id, mint_hash)
+            {
+                Ok(contract) => contract,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            };
+
+            let mint_module = match tracking_copy.borrow_mut().get_system_module(
+                correlation_id,
+                mint_contract.contract_wasm_hash(),
+                self.config.use_system_contracts(),
+                preprocessor,
+            ) {
+                Ok(contract) => contract,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            };
+
+            self.system_contract_cache.insert(mint_hash, mint_module);
+        }
 
         // Get proof of stake system contract URef from account (an account on a
         // different network may have a pos contract other than the CLPoS)
         // payment_code_spec_6: system contract validity
-        let (
-            proof_of_stake_reference,
-            proof_of_stake_module,
-            rewards_purse_balance_key,
-            payment_purse_key,
-        ) = {
-            let proof_of_stake_reference = protocol_data.proof_of_stake();
+        let proof_of_stake_hash = protocol_data.proof_of_stake();
 
-            // Get proof of stake system contract details
-            // payment_code_spec_6: system contract validity
-            let proof_of_stake_contract = match tracking_copy
-                .borrow_mut()
-                .get_contract(correlation_id, Key::from(proof_of_stake_reference))
-            {
-                Ok(contract) => contract,
-                Err(error) => {
-                    return Ok(ExecutionResult::precondition_failure(error.into()));
-                }
-            };
-
-            let proof_of_stake_contract_wasm = match tracking_copy
-                .borrow_mut()
-                .get_contract_wasm(correlation_id, proof_of_stake_contract.contract_key())
-            {
-                Ok(contract) => contract,
-                Err(error) => {
-                    return Ok(ExecutionResult::precondition_failure(error.into()));
-                }
-            };
-
-            let proof_of_stake_module =
-                match self.system_contract_cache.get(proof_of_stake_reference) {
-                    Some(module) => module,
-                    None => {
-                        match {
-                            if self.config.use_system_contracts() {
-                                engine_wasm_prep::deserialize(proof_of_stake_contract_wasm.bytes())
-                            } else {
-                                wasm::do_nothing_module(preprocessor)
-                            }
-                        } {
-                            Ok(module) => {
-                                self.system_contract_cache
-                                    .insert(proof_of_stake_reference, module.clone());
-                                module
-                            }
-                            Err(error) => {
-                                return Ok(ExecutionResult::precondition_failure(error.into()));
-                            }
-                        }
-                    }
-                };
-
-            // Get rewards purse balance key
-            // payment_code_spec_6: system contract validity
-            let rewards_purse_balance_key: Key = {
-                // Get reward purse Key from proof of stake contract
-                // payment_code_spec_6: system contract validity
-                let rewards_purse_key: Key =
-                    match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
-                        Some(key) => *key,
-                        None => {
-                            return Ok(ExecutionResult::precondition_failure(Error::Deploy));
-                        }
-                    };
-
-                match tracking_copy.borrow_mut().get_purse_balance_key(
-                    correlation_id,
-                    mint_reference,
-                    rewards_purse_key,
-                ) {
-                    Ok(key) => key,
-                    Err(error) => {
-                        return Ok(ExecutionResult::precondition_failure(error.into()));
-                    }
-                }
-            };
-
-            // Get payment purse Key from proof of stake contract
-            // payment_code_spec_6: system contract validity
-            let payment_purse_key: Key =
-                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
-                    Some(key) => *key,
-                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
-                };
-
-            (
-                proof_of_stake_reference,
-                proof_of_stake_module,
-                rewards_purse_balance_key,
-                payment_purse_key,
-            )
+        // Get proof of stake system contract details
+        // payment_code_spec_6: system contract validity
+        let proof_of_stake_contract = match tracking_copy
+            .borrow_mut()
+            .get_contract(correlation_id, proof_of_stake_hash)
+        {
+            Ok(contract) => contract,
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(error.into()));
+            }
         };
+
+        let proof_of_stake_module = match tracking_copy.borrow_mut().get_system_module(
+            correlation_id,
+            proof_of_stake_contract.contract_wasm_hash(),
+            self.config.use_system_contracts(),
+            preprocessor,
+        ) {
+            Ok(module) => module,
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(error.into()));
+            }
+        };
+
+        // cache proof_of_stake module
+        if !self.system_contract_cache.has(proof_of_stake_hash) {
+            self.system_contract_cache
+                .insert(proof_of_stake_hash, proof_of_stake_module.clone());
+        }
 
         // Get account main purse balance key
         // validation_spec_5: account main purse minimum balance
@@ -1226,7 +1146,7 @@ where
             let account_key = Key::URef(account.main_purse());
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
-                mint_reference,
+                mint_hash,
                 account_key,
             ) {
                 Ok(key) => key,
@@ -1283,31 +1203,28 @@ where
             // Create payment code module from bytes
             // validation_spec_1: valid wasm bytes
             let maybe_payment_module = if module_bytes_is_empty {
-                let standard_payment_key: Key = match self.state.get_protocol_data(protocol_version)
-                {
-                    Ok(Some(protocol_data)) => protocol_data.standard_payment().into(),
-                    Ok(None) => {
-                        return Ok(ExecutionResult::precondition_failure(
-                            Error::InvalidProtocolVersion(protocol_version),
-                        ))
-                    }
-                    Err(_) => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
-                };
-                // If not in "use-system-contracts" mode, the returned module is the "do_nothing"
-                // Wasm.
-                self.get_module_from_key(
+                let standard_payment_hash: ContractHash =
+                    match self.state.get_protocol_data(protocol_version) {
+                        Ok(Some(protocol_data)) => protocol_data.standard_payment(),
+                        Ok(None) => {
+                            return Ok(ExecutionResult::precondition_failure(
+                                Error::InvalidProtocolVersion(protocol_version),
+                            ))
+                        }
+                        Err(_) => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
+                    };
+
+                // if "use-system-contracts" is false, "do_nothing" wasm is returned
+                self.get_module_from_contract_hash(
                     Rc::clone(&tracking_copy),
-                    standard_payment_key,
+                    standard_payment_hash,
                     correlation_id,
                     &protocol_version,
                 )
-                .map(
-                    |(module, contract_header, _contract)| GetModuleResult::Session {
-                        module,
-                        metadata: ContractPackage::default(),
-                        entrypoint: EntryPoint::default(),
-                    },
-                )
+                .map(|module| GetModuleResult::Session {
+                    module,
+                    entry_point: EntryPoint::default(),
+                })
             } else {
                 self.get_module(
                     Rc::clone(&tracking_copy),
@@ -1325,37 +1242,23 @@ where
                     return Ok(ExecutionResult::precondition_failure(error));
                 }
             };
-            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
 
-            let (
-                payment_module,
-                payment_context,
-                mut payment_named_keys,
-                payment_metadata,
-                payment_entrypoint,
-            ) = match payment_module {
-                GetModuleResult::Session {
-                    module,
-                    metadata,
-                    entrypoint,
-                } => (
-                    module,
-                    base_key,
-                    account.named_keys().clone(),
-                    metadata,
-                    entrypoint,
-                ),
-                GetModuleResult::Contract {
-                    module,
-                    base_key,
-                    named_keys,
-                    metadata,
-                    entrypoint,
-                } => (module, base_key, named_keys, metadata, entrypoint),
-            };
+            let (payment_module, payment_base_key, mut payment_named_keys, _payment_entry_point) =
+                match payment_module {
+                    GetModuleResult::Session {
+                        module,
+                        entry_point,
+                    } => (module, base_key, account.named_keys().clone(), entry_point),
+                    GetModuleResult::Contract {
+                        module,
+                        base_key,
+                        contract,
+                        entry_point,
+                    } => (module, base_key, contract.named_keys().clone(), entry_point),
+                };
 
             let payment_args = match payment.clone().take_args() {
                 Ok(args) => args,
@@ -1366,7 +1269,30 @@ where
                 }
             };
 
-            if !self.config.use_system_contracts() && module_bytes_is_empty {
+            let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+
+            if self.config.use_system_contracts() || !module_bytes_is_empty {
+                let payment_entry_point = EntryPoint::default(); // TODO: implement
+                executor.exec(
+                    payment_module,
+                    payment_entry_point,
+                    payment_args,
+                    payment_base_key,
+                    &account,
+                    payment_named_keys,
+                    authorization_keys.clone(),
+                    blocktime,
+                    deploy_hash,
+                    pay_gas_limit,
+                    protocol_version,
+                    correlation_id,
+                    Rc::clone(&tracking_copy),
+                    phase,
+                    protocol_data,
+                    system_contract_cache,
+                )
+            } else {
+                // use host side standard payment
                 let hash_address_generator = {
                     let generator = AddressGenerator::new(&deploy_hash, phase);
                     Rc::new(RefCell::new(generator))
@@ -1378,9 +1304,10 @@ where
 
                 let mut runtime = match executor.create_runtime(
                     payment_module,
+                    EntryPointType::Session,
                     payment_args,
                     &mut payment_named_keys,
-                    payment_context,
+                    payment_base_key,
                     &account,
                     authorization_keys.clone(),
                     blocktime,
@@ -1394,8 +1321,6 @@ where
                     phase,
                     protocol_data,
                     system_contract_cache,
-                    payment_metadata.clone(),
-                    payment_entrypoint.clone(),
                 ) {
                     Ok((_instance, runtime)) => runtime,
                     Err(error) => {
@@ -1405,11 +1330,11 @@ where
 
                 let effects_snapshot = tracking_copy.borrow().effect();
 
-                if let Err(error) = runtime
-                    .validate_entry_point_access(&payment_metadata, &payment_entrypoint.access())
-                {
-                    return Ok(ExecutionResult::precondition_failure(Error::Exec(error)));
-                }
+                // if let Err(error) = runtime
+                //     .validate_entry_point_access(&payment_metadata, &payment_entrypoint.access())
+                // {
+                //     return Ok(ExecutionResult::precondition_failure(Error::Exec(error)));
+                // }
 
                 match runtime.call_host_standard_payment() {
                     Ok(()) => ExecutionResult::Success {
@@ -1422,28 +1347,6 @@ where
                         cost: runtime.context().gas_counter(),
                     },
                 }
-            } else {
-                let payment_entry_point = payment.entry_point_name().to_owned();
-                executor.exec(
-                    payment_module,
-                    &payment_entry_point,
-                    payment_args,
-                    payment_context,
-                    &account,
-                    payment_named_keys,
-                    authorization_keys.clone(),
-                    blocktime,
-                    deploy_hash,
-                    pay_gas_limit,
-                    protocol_version,
-                    correlation_id,
-                    Rc::clone(&tracking_copy),
-                    phase,
-                    protocol_data,
-                    system_contract_cache,
-                    payment_metadata,
-                    payment_entrypoint,
-                )
             }
         };
 
@@ -1451,9 +1354,17 @@ where
         // payment_code_spec_3: fork based upon payment purse balance and cost of
         // payment code execution
         let payment_purse_balance: Motes = {
+            // Get payment purse Key from proof of stake contract
+            // payment_code_spec_6: system contract validity
+            let payment_purse_key: Key =
+                match proof_of_stake_contract.named_keys().get(POS_PAYMENT_PURSE) {
+                    Some(key) => *key,
+                    None => return Ok(ExecutionResult::precondition_failure(Error::Deploy)),
+                };
+
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
-                mint_reference,
+                mint_hash,
                 payment_purse_key,
             ) {
                 Ok(key) => key,
@@ -1474,6 +1385,31 @@ where
         };
 
         if let Some(forced_transfer) = payment_result.check_forced_transfer(payment_purse_balance) {
+            // Get rewards purse balance key
+            // payment_code_spec_6: system contract validity
+            let rewards_purse_balance_key: Key = {
+                // Get reward purse Key from proof of stake contract
+                // payment_code_spec_6: system contract validity
+                let rewards_purse_key: Key =
+                    match proof_of_stake_contract.named_keys().get(POS_REWARDS_PURSE) {
+                        Some(key) => *key,
+                        None => {
+                            return Ok(ExecutionResult::precondition_failure(Error::Deploy));
+                        }
+                    };
+
+                match tracking_copy.borrow_mut().get_purse_balance_key(
+                    correlation_id,
+                    mint_hash,
+                    rewards_purse_key,
+                ) {
+                    Ok(key) => key,
+                    Err(error) => {
+                        return Ok(ExecutionResult::precondition_failure(error.into()));
+                    }
+                }
+            };
+
             let error = match forced_transfer {
                 ForcedTransferResult::InsufficientPayment => Error::InsufficientPayment,
                 ForcedTransferResult::PaymentFailure => payment_result.take_error().unwrap(),
@@ -1494,32 +1430,19 @@ where
 
         // session_code_spec_2: execute session code
 
-        let (
-            session_module,
-            session_context,
-            session_named_keys,
-            session_metadata,
-            session_entrypoint,
-        ) = match session_module {
-            GetModuleResult::Session {
-                module,
-                metadata,
-                entrypoint,
-            } => (
-                module,
-                base_key,
-                account.named_keys().clone(),
-                metadata,
-                entrypoint,
-            ),
-            GetModuleResult::Contract {
-                module,
-                base_key,
-                named_keys,
-                metadata,
-                entrypoint,
-            } => (module, base_key, named_keys, metadata, entrypoint),
-        };
+        let (session_module, session_base_key, session_named_keys, _session_contract) =
+            match session_module {
+                GetModuleResult::Session {
+                    module,
+                    entry_point,
+                } => (module, base_key, account.named_keys().clone(), entry_point),
+                GetModuleResult::Contract {
+                    module,
+                    base_key,
+                    contract,
+                    entry_point,
+                } => (module, base_key, contract.named_keys().clone(), entry_point),
+            };
 
         let session_args = match session.clone().take_args() {
             Ok(args) => args,
@@ -1540,13 +1463,14 @@ where
                 - payment_result_cost;
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-            let session_entry_point = session.entry_point_name().to_owned();
+            // TODO: wire up for real
+            let session_entry_point = EntryPoint::default_for_contract();
 
             executor.exec(
                 session_module,
-                &session_entry_point,
+                session_entry_point,
                 session_args,
-                session_context,
+                session_base_key,
                 &account,
                 session_named_keys,
                 authorization_keys.clone(),
@@ -1559,8 +1483,6 @@ where
                 Phase::Session,
                 protocol_data,
                 system_contract_cache,
-                session_metadata,
-                session_entrypoint,
             )
         };
 
@@ -1594,7 +1516,7 @@ where
             // session, so we need to look them up again from the tracking copy
             let proof_of_stake_contract = match finalization_tc
                 .borrow_mut()
-                .get_contract(correlation_id, proof_of_stake_reference.into())
+                .get_contract(correlation_id, proof_of_stake_hash.into())
             {
                 Ok(info) => info,
                 Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
@@ -1602,7 +1524,7 @@ where
 
             let mut proof_of_stake_keys = proof_of_stake_contract.named_keys().to_owned();
 
-            let base_key = Key::from(proof_of_stake_reference);
+            let base_key = Key::from(proof_of_stake_hash);
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
@@ -1687,7 +1609,7 @@ where
         };
 
         let contract = match reader.read(correlation_id, &proof_of_stake_key)? {
-            Some(StoredValue::ContractWasm(contract_wasm)) => contract,
+            Some(StoredValue::Contract(contract)) => contract,
             _ => return Err(MissingSystemContract(PROOF_OF_STAKE.to_string())),
         };
 

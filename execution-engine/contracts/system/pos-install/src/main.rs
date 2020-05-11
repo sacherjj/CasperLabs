@@ -17,9 +17,9 @@ use pos::{
 use proof_of_stake::Stakes;
 use types::{
     account::PublicKey,
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     system_contract_errors::mint,
-    CLType, CLValue, ContractMetadataHash, Key, NamedArg, RuntimeArgs, SemVer, URef, U512,
+    CLType, CLValue, ContractPackageHash, Key, NamedArg, RuntimeArgs, SemVer, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -66,7 +66,7 @@ pub extern "C" fn finalize_payment() {
 
 #[no_mangle]
 pub extern "C" fn install() {
-    let mint_metadata_hash: ContractMetadataHash = runtime::get_named_arg(ARG_MINT_METADATA_HASH);
+    let mint_metadata_hash: ContractPackageHash = runtime::get_named_arg(ARG_MINT_METADATA_HASH);
 
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_named_arg(ARG_GENESIS_VALIDATORS);
@@ -175,7 +175,7 @@ pub extern "C" fn install() {
     runtime::ret(return_value);
 }
 
-fn mint_purse(contract_metadata_hash: ContractMetadataHash, amount: U512) -> URef {
+fn mint_purse(contract_metadata_hash: ContractPackageHash, amount: U512) -> URef {
     let runtime_args = {
         let amount = CLValue::from_t(amount).unwrap_or_revert();
         let arg_amount = NamedArg::new(ARG_AMOUNT.to_string(), amount);

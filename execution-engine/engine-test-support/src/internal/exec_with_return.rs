@@ -132,17 +132,10 @@ where
         )
         .expect("should get wasm module");
 
-    let (instance, memory) =
-        runtime::instance_and_memory(parity_module.clone().take_module(), protocol_version)
-            .expect("should be able to make wasm instance from module");
+    let (instance, memory) = runtime::instance_and_memory(parity_module.clone(), protocol_version)
+        .expect("should be able to make wasm instance from module");
 
-    let mut runtime = Runtime::new(
-        config,
-        Default::default(),
-        memory,
-        parity_module.take_module(),
-        context,
-    );
+    let mut runtime = Runtime::new(config, Default::default(), memory, parity_module, context);
 
     match instance.invoke_export("call", &[], &mut runtime) {
         Ok(_) => None,

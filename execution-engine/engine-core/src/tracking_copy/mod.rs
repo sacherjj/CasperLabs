@@ -6,7 +6,7 @@ mod tests;
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    convert::{From, TryInto},
+    convert::From,
     iter,
 };
 
@@ -20,7 +20,7 @@ use engine_shared::{
     TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
-use types::{bytesrepr, CLType, CLValueError, Key, SemVer};
+use types::{bytesrepr, CLType, CLValueError, Key};
 
 use crate::engine_state::{execution_effect::ExecutionEffect, op::Op};
 
@@ -369,16 +369,6 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                     }
                 }
 
-                StoredValue::ContractWasm(contract_wasm) => {
-                    let name = query.next_name();
-                    if let Some(key) = contract.named_keys().get(name) {
-                        query.current_key = key.normalize();
-                    } else {
-                        let msg_prefix = format!("Name {} not found in Contract", name);
-                        return Ok(query.into_not_found_result(&msg_prefix));
-                    }
-                }
-
                 StoredValue::CLValue(cl_value) if cl_value.cl_type() == &CLType::Key => {
                     if let Ok(key) = cl_value.into_t::<Key>() {
                         query.current_key = key.normalize();
@@ -396,42 +386,18 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                     return Ok(query.into_not_found_result(&msg_prefix));
                 }
 
-                StoredValue::ContractMetadata(metadata) => {
+                StoredValue::Contract(contract) => {
                     let name = query.next_name();
-                    let sem_ver: SemVer = match name.as_str().try_into() {
-                        Ok(sem_ver) => sem_ver,
-                        Err(_error) => {
-                            let msg_prefix = format!(
-                                "Query cannot continue as {} is not a valid version string",
-                                name
-                            );
-                            return Ok(query.into_not_found_result(&msg_prefix));
-                        }
-                    };
-
-                    // TODO
-                    // Inactive versions are returning errors without going deeper through
-                    // reconstructed local key.
-                    todo!("Querying with protocol version");
-                    // if metadata.is_version_removed(&sem_ver) {
-                    //     let msg_prefix =
-                    //         format!("Query cannot continue as version {} is removed", name);
-                    //     return Ok(query.into_not_found_result(&msg_prefix));
-                    // }
-
-                    // let contract_header = match metadata.get_version(&sem_ver) {
-                    //     Some(contract_header) => contract_header,
-                    //     None => {
-                    //         let msg_prefix = format!(
-                    //             "Query cannot continue as version {} does not exists",
-                    //             name
-                    //         );
-                    //         return Ok(query.into_not_found_result(&msg_prefix));
-                    //     }
-                    // };
-                    // query.current_key = contract_header.contract_key()
+                    if let Some(key) = contract.named_keys().get(name) {
+                        query.current_key = key.normalize();
+                    } else {
+                        let msg_prefix = format!("Name {} not found in Contract", name);
+                        return Ok(query.into_not_found_result(&msg_prefix));
+                    }
                 }
-                StoredValue::Contract(_) => {}
+
+                StoredValue::ContractPackage(_) => {}
+                StoredValue::ContractWasm(_) => {}
             }
         }
     }

@@ -326,7 +326,7 @@ message NamedKey {
 }
 
 message Contract {
-	bytes body = 1;
+	reserved 1;
 	repeated NamedKey named_keys = 2;
     ProtocolVersion protocol_version = 3;
 }

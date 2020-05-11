@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use types::{
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    contract_header::ContractPackage,
+    contracts::ContractPackage,
     CLValue, Contract,
 };
 
@@ -23,7 +23,7 @@ pub enum StoredValue {
     Account(Account),
     ContractWasm(ContractWasm),
     Contract(Contract),
-    ContractMetadata(ContractPackage),
+    ContractPackage(ContractPackage),
 }
 
 impl StoredValue {
@@ -50,7 +50,7 @@ impl StoredValue {
 
     pub fn as_contract_metadata(&self) -> Option<&ContractPackage> {
         match self {
-            StoredValue::ContractMetadata(metadata) => Some(&metadata),
+            StoredValue::ContractPackage(metadata) => Some(&metadata),
             _ => None,
         }
     }
@@ -61,7 +61,7 @@ impl StoredValue {
             StoredValue::Account(_) => "Account".to_string(),
             StoredValue::ContractWasm(_) => "Contract".to_string(),
             StoredValue::Contract(_) => "Contract".to_string(),
-            StoredValue::ContractMetadata(_) => "ContractMetadata".to_string(),
+            StoredValue::ContractPackage(_) => "ContractMetadata".to_string(),
         }
     }
 }
@@ -101,7 +101,7 @@ impl TryFrom<StoredValue> for ContractWasm {
         match stored_value {
             StoredValue::ContractWasm(contract_wasm) => Ok(contract_wasm),
             _ => Err(TypeMismatch::new(
-                "Contract".to_string(),
+                "ContractWasm".to_string(),
                 stored_value.type_name(),
             )),
         }
@@ -113,7 +113,21 @@ impl TryFrom<StoredValue> for ContractPackage {
 
     fn try_from(stored_value: StoredValue) -> Result<Self, Self::Error> {
         match stored_value {
-            StoredValue::ContractMetadata(metadata) => Ok(metadata),
+            StoredValue::ContractPackage(metadata) => Ok(metadata),
+            _ => Err(TypeMismatch::new(
+                "ContractPackage".to_string(),
+                stored_value.type_name(),
+            )),
+        }
+    }
+}
+
+impl TryFrom<StoredValue> for Contract {
+    type Error = TypeMismatch;
+
+    fn try_from(stored_value: StoredValue) -> Result<Self, Self::Error> {
+        match stored_value {
+            StoredValue::Contract(contract) => Ok(contract),
             _ => Err(TypeMismatch::new(
                 "Contract".to_string(),
                 stored_value.type_name(),
@@ -132,9 +146,7 @@ impl ToBytes for StoredValue {
                 (Tag::ContractWasm, contract_wasm.to_bytes()?)
             }
             StoredValue::Contract(contract_header) => (Tag::Contract, contract_header.to_bytes()?),
-            StoredValue::ContractMetadata(metadata) => {
-                (Tag::ContractMetadata, metadata.to_bytes()?)
-            }
+            StoredValue::ContractPackage(metadata) => (Tag::ContractMetadata, metadata.to_bytes()?),
         };
         result.push(tag as u8);
         result.append(&mut serialized_data);
@@ -148,7 +160,7 @@ impl ToBytes for StoredValue {
                 StoredValue::Account(account) => account.serialized_length(),
                 StoredValue::ContractWasm(contract_wasm) => contract_wasm.serialized_length(),
                 StoredValue::Contract(contract_header) => contract_header.serialized_length(),
-                StoredValue::ContractMetadata(metadata) => metadata.serialized_length(),
+                StoredValue::ContractPackage(metadata) => metadata.serialized_length(),
             }
     }
 }
@@ -167,7 +179,7 @@ impl FromBytes for StoredValue {
                 })
             }
             tag if tag == Tag::ContractMetadata as u8 => ContractPackage::from_bytes(remainder)
-                .map(|(metadata, remainder)| (StoredValue::ContractMetadata(metadata), remainder)),
+                .map(|(metadata, remainder)| (StoredValue::ContractPackage(metadata), remainder)),
             _ => Err(bytesrepr::Error::Formatting),
         }
     }

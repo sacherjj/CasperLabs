@@ -25,37 +25,35 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
             }
             DeployPayload_oneof_payload::stored_contract_name(pb_stored_contract_name) => {
                 ExecutableDeployItem::StoredContractByName {
-                    name: pb_stored_contract_name.stored_contract_name,
+                    name: pb_stored_contract_name.name,
                     args: pb_stored_contract_name.args,
                 }
             }
-            DeployPayload_oneof_payload::stored_contract_uref(pb_stored_contract_uref) => {
-                ExecutableDeployItem::StoredContractByURef {
-                    uref: pb_stored_contract_uref.uref,
-                    args: pb_stored_contract_uref.args,
+            DeployPayload_oneof_payload::stored_package_by_name(mut pb_stored_package_by_name) => {
+                ExecutableDeployItem::StoredVersionedContractByName {
+                    name: pb_stored_package_by_name.take_name(),
+                    version: pb_stored_package_by_name
+                        .get_version()
+                        .try_into()
+                        .map_err(|_| MappingError::MissingPayload)?,
+                    entry_point: pb_stored_package_by_name.entry_point_name,
+                    args: pb_stored_package_by_name.args,
                 }
             }
-            DeployPayload_oneof_payload::stored_versioned_contract_by_name(
-                mut pb_stored_versioned_contract_by_name,
-            ) => ExecutableDeployItem::StoredVersionedContractByName {
-                name: pb_stored_versioned_contract_by_name.take_name(),
-                version: pb_stored_versioned_contract_by_name.take_version().into(),
-                entry_point: pb_stored_versioned_contract_by_name.entry_point,
-                args: pb_stored_versioned_contract_by_name.args,
-            },
-            DeployPayload_oneof_payload::stored_versioned_contract_by_hash(
-                mut pb_stored_versioned_contract_by_hash,
-            ) => {
-                let hash_bytes = pb_stored_versioned_contract_by_hash.take_hash();
+            DeployPayload_oneof_payload::stored_package_by_hash(mut pb_stored_package_by_hash) => {
+                let hash_bytes = pb_stored_package_by_hash.take_hash();
                 let hash = hash_bytes
                     .as_slice()
                     .try_into()
                     .map_err(|_| MappingError::invalid_hash_length(hash_bytes.len()))?;
                 ExecutableDeployItem::StoredVersionedContractByHash {
                     hash,
-                    version: pb_stored_versioned_contract_by_hash.take_version().into(),
-                    entry_point: pb_stored_versioned_contract_by_hash.entry_point,
-                    args: pb_stored_versioned_contract_by_hash.args,
+                    version: pb_stored_package_by_hash
+                        .get_version()
+                        .try_into()
+                        .map_err(|_| MappingError::MissingPayload)?,
+                    entry_point: pb_stored_package_by_hash.entry_point_name,
+                    args: pb_stored_package_by_hash.args,
                 }
             }
         })
@@ -78,12 +76,7 @@ impl From<ExecutableDeployItem> for DeployPayload {
             }
             ExecutableDeployItem::StoredContractByName { name, args } => {
                 let inner = result.mut_stored_contract_name();
-                inner.set_stored_contract_name(name);
-                inner.set_args(args);
-            }
-            ExecutableDeployItem::StoredContractByURef { uref, args } => {
-                let inner = result.mut_stored_contract_uref();
-                inner.set_uref(uref);
+                inner.set_name(name);
                 inner.set_args(args);
             }
             ExecutableDeployItem::StoredVersionedContractByName {
@@ -92,10 +85,10 @@ impl From<ExecutableDeployItem> for DeployPayload {
                 entry_point,
                 args,
             } => {
-                let inner = result.mut_stored_versioned_contract_by_name();
+                let inner = result.mut_stored_package_by_name();
                 inner.set_name(name);
                 inner.set_version(version.into());
-                inner.set_entry_point(entry_point);
+                inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }
             ExecutableDeployItem::StoredVersionedContractByHash {
@@ -104,10 +97,10 @@ impl From<ExecutableDeployItem> for DeployPayload {
                 entry_point,
                 args,
             } => {
-                let inner = result.mut_stored_versioned_contract_by_hash();
+                let inner = result.mut_stored_package_by_hash();
                 inner.set_hash(hash.to_vec());
                 inner.set_version(version.into());
-                inner.set_entry_point(entry_point);
+                inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }
         }

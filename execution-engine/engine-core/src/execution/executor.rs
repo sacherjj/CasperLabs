@@ -12,8 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractPackage,
-    EntryPoint, Key, Phase, ProtocolVersion, RuntimeArgs,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPoint,
+    EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
     },
     execution::{address_generator::AddressGenerator, Error},
     runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
-    runtime_context::{self, RuntimeContext},
+    runtime_context::RuntimeContext,
     tracking_copy::TrackingCopy,
 };
 
@@ -83,8 +83,8 @@ impl Executor {
 
     pub fn exec<R>(
         &self,
-        parity_module: Module,
-        entry_point_name: &str,
+        module: Module,
+        entry_point: EntryPoint,
         args: RuntimeArgs,
         base_key: Key,
         account: &Account,
@@ -99,21 +99,20 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-        metadata: ContractPackage,
-        entrypoint: EntryPoint,
     ) -> ExecutionResult
     where
         R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
+        let entry_point_name = entry_point.name();
+        let entry_point_type = entry_point.entry_point_type();
+        let _entry_point_access = entry_point.access();
+
         let (instance, memory) =
-            on_fail_charge!(instance_and_memory(parity_module.clone(), protocol_version));
+            on_fail_charge!(instance_and_memory(module.clone(), protocol_version));
 
         let access_rights = {
             let keys: Vec<Key> = named_keys.values().cloned().collect();
-            // keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
-            //     Key::from(runtime_context::attenuate_uref_for_account(account, uref))
-            // }));
             extract_access_rights_from_keys(keys)
         };
 
@@ -133,6 +132,7 @@ impl Executor {
 
         let context = RuntimeContext::new(
             tracking_copy,
+            entry_point_type,
             &mut named_keys,
             access_rights,
             args.clone(),
@@ -149,28 +149,20 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
-            metadata.clone(),
-            entrypoint.clone(),
         );
 
-        let mut runtime = Runtime::new(
-            self.config,
-            system_contract_cache,
-            memory,
-            parity_module,
-            context,
-        );
+        let mut runtime = Runtime::new(self.config, system_contract_cache, memory, module, context);
 
-        let accounts_access_rights = {
-            let keys: Vec<Key> = account.named_keys().values().cloned().collect();
-            extract_access_rights_from_keys(keys)
-        };
-
-        on_fail_charge!(runtime_context::validate_entry_point_access_with(
-            &metadata,
-            entrypoint.access(),
-            |uref| runtime_context::uref_has_access_rights(uref, &accounts_access_rights)
-        ));
+        // let accounts_access_rights = {
+        //     let keys: Vec<Key> = account.named_keys().values().cloned().collect();
+        //     extract_access_rights_from_keys(keys)
+        // };
+        //
+        // on_fail_charge!(runtime_context::validate_entry_point_access_with(
+        //     &metadata,
+        //     entry_point_access,
+        //     |uref| runtime_context::uref_has_access_rights(uref, &accounts_access_rights)
+        // ));
 
         if !self.config.use_system_contracts() {
             if runtime.is_mint(base_key) {
@@ -281,6 +273,7 @@ impl Executor {
 
         let context = RuntimeContext::new(
             tracking_copy,
+            EntryPointType::Session,
             &mut named_keys,
             access_rights,
             args.clone(),
@@ -297,8 +290,6 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
-            ContractPackage::default(),
-            EntryPoint::default(),
         );
 
         let (instance, memory) =
@@ -381,8 +372,9 @@ impl Executor {
     pub fn create_runtime<'a, R>(
         &self,
         module: Module,
+        entry_point_type: EntryPointType,
         args: RuntimeArgs,
-        keys: &'a mut BTreeMap<String, Key>,
+        named_keys: &'a mut BTreeMap<String, Key>,
         base_key: Key,
         account: &'a Account,
         authorization_keys: BTreeSet<PublicKey>,
@@ -397,18 +389,13 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
-        metadata: ContractPackage,
-        entrypoint: EntryPoint,
     ) -> Result<(ModuleRef, Runtime<'a, R>), Error>
     where
         R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
         let access_rights = {
-            let keys: Vec<Key> = keys.values().cloned().collect();
-            // keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
-            //     Key::from(runtime_context::attenuate_uref_for_account(account, uref))
-            // }));
+            let keys: Vec<Key> = named_keys.values().cloned().collect();
             extract_access_rights_from_keys(keys)
         };
 
@@ -416,7 +403,8 @@ impl Executor {
 
         let runtime_context = RuntimeContext::new(
             tracking_copy,
-            keys,
+            entry_point_type,
+            named_keys,
             access_rights,
             args,
             authorization_keys,
@@ -432,8 +420,6 @@ impl Executor {
             correlation_id,
             phase,
             protocol_data,
-            metadata,
-            entrypoint,
         );
 
         let (instance, memory) = instance_and_memory(module.clone(), protocol_version)?;
@@ -452,9 +438,9 @@ impl Executor {
     pub fn exec_system<R, T>(
         &self,
         module: Module,
+        entry_point: EntryPoint,
         args: RuntimeArgs,
-        entry_point_name: &str,
-        keys: &mut BTreeMap<String, Key>,
+        named_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
@@ -477,8 +463,9 @@ impl Executor {
     {
         let (instance, mut runtime) = self.create_runtime(
             module,
+            entry_point.entry_point_type(),
             args,
-            keys,
+            named_keys,
             base_key,
             account,
             authorization_keys,
@@ -493,25 +480,24 @@ impl Executor {
             phase,
             protocol_data,
             system_contract_cache,
-            ContractPackage::default(),
-            EntryPoint::default(),
         )?;
 
-        let error: wasmi::Error = match instance.invoke_export(entry_point_name, &[], &mut runtime)
-        {
-            Err(error) => error,
-            Ok(_) => {
-                // This duplicates the behavior of sub_call, but is admittedly rather questionable.
-                //
-                // If `instance.invoke_export` returns `Ok` and the `host_buffer` is `None`, the
-                // contract's execution succeeded but did not explicitly call `runtime::ret()`.
-                // Treat as though the execution returned the unit type `()` as per Rust functions
-                // which don't specify a return value.
-                let result = runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?);
-                let ret = result.into_t()?;
-                return Ok(ret);
-            }
-        };
+        let error: wasmi::Error =
+            match instance.invoke_export(entry_point.name(), &[], &mut runtime) {
+                Err(error) => error,
+                Ok(_) => {
+                    // This duplicates the behavior of sub_call, but is admittedly rather
+                    // questionable.
+                    //
+                    // If `instance.invoke_export` returns `Ok` and the `host_buffer` is `None`, the
+                    // contract's execution succeeded but did not explicitly call `runtime::ret()`.
+                    // Treat as though the execution returned the unit type `()` as per Rust
+                    // functions which don't specify a return value.
+                    let result = runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?);
+                    let ret = result.into_t()?;
+                    return Ok(ret);
+                }
+            };
 
         let return_value: CLValue = match error
             .as_host_error()

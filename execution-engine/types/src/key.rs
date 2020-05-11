@@ -55,7 +55,9 @@ impl From<HashAddr> for Key {
 /// An alias for [`Key`]s hash variant.
 pub type ContractHash = HashAddr;
 /// An alias for [`Key`]s hash variant.
-pub type ContractMetadataHash = HashAddr;
+pub type ContractWasmHash = HashAddr;
+/// An alias for [`Key`]s hash variant.
+pub type ContractPackageHash = HashAddr;
 
 /// The type under which data (e.g. [`CLValue`](crate::CLValue)s, smart contracts, user accounts)
 /// are indexed on the network.

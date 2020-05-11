@@ -14,7 +14,7 @@ use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider
 use types::{
     account::{PublicKey, Weight, ED25519_LENGTH},
     gens::*,
-    AccessRights, CLValue, ContractMetadataHash, ProtocolVersion, URef,
+    AccessRights, CLValue, ContractPackageHash, ProtocolVersion, URef,
 };
 
 use super::{

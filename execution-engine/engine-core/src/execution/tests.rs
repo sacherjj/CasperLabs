@@ -1,5 +1,5 @@
 use engine_shared::{gas::Gas, transform::Transform};
-use types::{ContractMetadataHash, U512};
+use types::{ContractPackageHash, U512};
 
 use super::Error;
 use crate::engine_state::{

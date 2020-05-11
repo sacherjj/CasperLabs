@@ -10,7 +10,7 @@ use casperlabs_types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, FromBytes},
-    ApiError, BlockTime, CLTyped, CLValue, ContractMetadataHash, Key, Phase, RuntimeArgs, SemVer,
+    ApiError, BlockTime, CLTyped, CLValue, ContractPackageHash, Key, Phase, RuntimeArgs, SemVer,
     URef, BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
 
@@ -76,7 +76,7 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(contract_key: Key, a
 /// `call_versioned_contract` doesn't return. Otherwise `call_versioned_contract` returns `()`.
 #[allow(clippy::ptr_arg)]
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
-    contract_metadata_hash: ContractMetadataHash,
+    contract_metadata_hash: ContractPackageHash,
     contract_version: SemVer,
     entry_point_name: &str,
     runtime_args: RuntimeArgs,

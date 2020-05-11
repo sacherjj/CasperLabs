@@ -6,7 +6,6 @@ mod big_int;
 mod cl_type;
 mod cl_value;
 mod contract;
-mod contract_headers;
 mod key;
 mod named_key;
 mod protocol_version;

@@ -10,7 +10,7 @@ use crate::{
         AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, TryFromIntError,
         TryFromSliceForPublicKeyError, UpdateKeyFailure,
     },
-    bytesrepr, contract_header,
+    bytesrepr, contracts,
     system_contract_errors::{mint, pos},
     CLValueError,
 };
@@ -183,7 +183,7 @@ const HEADER_ERROR_MAX: u32 = HEADER_ERROR_OFFSET + u8::MAX as u32;
 /// 34 => HostBufferFull
 /// # );
 /// // Contract header errors:
-/// use casperlabs_types::contract_header::Error as ContractHeaderError;
+/// use casperlabs_types::contracts::Error as ContractHeaderError;
 /// # show_and_check!(
 /// 64_769 => ContractHeaderError::InvalidAccessKey
 /// # );
@@ -501,8 +501,8 @@ impl From<CLValueError> for ApiError {
     }
 }
 
-impl From<contract_header::Error> for ApiError {
-    fn from(error: contract_header::Error) -> Self {
+impl From<contracts::Error> for ApiError {
+    fn from(error: contracts::Error) -> Self {
         ApiError::ContractHeader(error as u8)
     }
 }

@@ -17,6 +17,8 @@ pub enum Error {
     Storage(engine_storage::error::Error),
     #[fail(display = "Serialization error: {}", _0)]
     BytesRepr(bytesrepr::Error),
+    #[fail(display = "Named key {} not found", _0)]
+    NamedKeyNotFound(String),
     #[fail(display = "Key {} not found", _0)]
     KeyNotFound(Key),
     #[fail(display = "Account {:?} not found", _0)]
@@ -77,6 +79,14 @@ pub enum Error {
     InvalidContractVersion,
     #[fail(display = "No such method")]
     NoSuchMethod,
+    #[fail(display = "Wasm preprocessing error: {}", _0)]
+    WasmPreprocessing(engine_wasm_prep::PreprocessingError),
+}
+
+impl From<engine_wasm_prep::PreprocessingError> for Error {
+    fn from(error: engine_wasm_prep::PreprocessingError) -> Self {
+        Error::WasmPreprocessing(error)
+    }
 }
 
 impl Error {

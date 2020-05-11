@@ -144,8 +144,7 @@ mod tests {
 
     use engine_shared::{additive_map::AdditiveMap, transform::Transform};
     use types::{
-        bytesrepr::Error as BytesReprError, AccessRights, ApiError, ContractMetadataHash, URef,
-        U512,
+        bytesrepr::Error as BytesReprError, AccessRights, ApiError, ContractPackageHash, URef, U512,
     };
 
     use super::*;

@@ -1,9 +1,4 @@
-use std::collections::BTreeMap;
-
-use types::{
-    bytesrepr::{self, Error, FromBytes, ToBytes},
-    Key, ProtocolVersion,
-};
+use types::bytesrepr::{self, Error, FromBytes, ToBytes};
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ContractWasm {
@@ -45,8 +40,6 @@ impl FromBytes for ContractWasm {
 
 pub mod gens {
     use proptest::{collection::vec, prelude::*};
-
-    use types::gens::{named_keys_arb, protocol_version_arb};
 
     use super::ContractWasm;
 

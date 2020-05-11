@@ -7,7 +7,7 @@ use alloc::{collections::BTreeMap, string::ToString, vec};
 
 use contract::contract_api::storage;
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
     CLType,
 };
 

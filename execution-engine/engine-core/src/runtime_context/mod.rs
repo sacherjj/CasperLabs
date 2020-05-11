@@ -12,8 +12,7 @@ use blake2::{
 };
 
 use engine_shared::{
-    account::Account, contract::ContractWasm, gas::Gas, newtypes::CorrelationId,
-    stored_value::StoredValue,
+    account::Account, gas::Gas, newtypes::CorrelationId, stored_value::StoredValue,
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
@@ -21,7 +20,7 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
-    bytesrepr, AccessRights, BlockTime, CLType, CLValue, ContractPackage, EntryPoint,
+    bytesrepr, AccessRights, BlockTime, CLType, CLValue, Contract, ContractPackage,
     EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
     KEY_LOCAL_SEED_LENGTH,
 };
@@ -54,7 +53,7 @@ pub(crate) fn uref_has_access_rights(
 }
 
 pub fn validate_entry_point_access_with(
-    metadata: &ContractPackage,
+    contract_package: &ContractPackage,
     access: &EntryPointAccess,
     validator: impl Fn(&URef) -> bool,
 ) -> Result<(), Error> {
@@ -66,7 +65,7 @@ pub fn validate_entry_point_access_with(
         }
 
         let find_result = groups.iter().find(|g| {
-            metadata
+            contract_package
                 .groups()
                 .get(g)
                 .and_then(|set| set.iter().find(|u| validator(u)))
@@ -82,7 +81,7 @@ pub fn validate_entry_point_access_with(
 
 /// Holds information specific to the deployed contract.
 pub struct RuntimeContext<'a, R> {
-    state: Rc<RefCell<TrackingCopy<R>>>,
+    tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
     // Enables look up of specific uref based on human-readable name
     named_keys: &'a mut BTreeMap<String, Key>,
     // Used to check uref is known before use (prevents forging urefs)
@@ -104,8 +103,7 @@ pub struct RuntimeContext<'a, R> {
     correlation_id: CorrelationId,
     phase: Phase,
     protocol_data: ProtocolData,
-    _metadata: ContractPackage,
-    entrypoint: EntryPoint,
+    entry_point_type: EntryPointType,
 }
 
 impl<'a, R> RuntimeContext<'a, R>
@@ -116,6 +114,7 @@ where
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
+        entry_point_type: EntryPointType,
         named_keys: &'a mut BTreeMap<String, Key>,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
         args: RuntimeArgs,
@@ -132,11 +131,10 @@ where
         correlation_id: CorrelationId,
         phase: Phase,
         protocol_data: ProtocolData,
-        metadata: ContractPackage,
-        entrypoint: EntryPoint,
     ) -> Self {
         RuntimeContext {
-            state: tracking_copy,
+            tracking_copy,
+            entry_point_type,
             named_keys,
             access_rights,
             args,
@@ -153,8 +151,6 @@ where
             correlation_id,
             phase,
             protocol_data,
-            _metadata: metadata,
-            entrypoint,
         }
     }
 
@@ -182,15 +178,14 @@ where
     fn remove_key_from_contract(
         &mut self,
         key: Key,
-        mut contract: ContractWasm,
+        mut contract: Contract,
         name: &str,
     ) -> Result<(), Error> {
-        todo!();
-        // contract.named_keys_mut().remove(name);
+        contract.named_keys_mut().remove(name);
 
-        let contract_value = StoredValue::ContractWasm(contract_wasm);
+        let contract_value = StoredValue::Contract(contract);
 
-        self.state.borrow_mut().write(key, contract_value);
+        self.tracking_copy.borrow_mut().write(key, contract_value);
 
         Ok(())
     }
@@ -209,13 +204,15 @@ where
                 };
                 self.named_keys.remove(name);
                 let account_value = self.account_to_validated_value(account)?;
-                self.state.borrow_mut().write(public_key, account_value);
+                self.tracking_copy
+                    .borrow_mut()
+                    .write(public_key, account_value);
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
-                let contract: ContractWasm = {
+                let contract: Contract = {
                     let value: StoredValue = self
-                        .state
+                        .tracking_copy
                         .borrow_mut()
                         .read(self.correlation_id, &contract_uref)
                         .map_err(Into::into)?
@@ -228,12 +225,12 @@ where
                 self.remove_key_from_contract(contract_uref, contract, name)
             }
             contract_hash @ Key::Hash(_) => {
-                let contract: ContractWasm = self.read_gs_typed(&contract_hash)?;
+                let contract: Contract = self.read_gs_typed(&contract_hash)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
             }
             contract_local @ Key::Local { .. } => {
-                let contract: ContractWasm = self.read_gs_typed(&contract_local)?;
+                let contract: Contract = self.read_gs_typed(&contract_local)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_local, contract, name)
             }
@@ -273,7 +270,7 @@ where
     }
 
     pub fn state(&self) -> Rc<RefCell<TrackingCopy<R>>> {
-        Rc::clone(&self.state)
+        Rc::clone(&self.tracking_copy)
     }
 
     pub fn gas_limit(&self) -> Gas {
@@ -308,13 +305,8 @@ where
         self.phase
     }
 
-    /// Generates new function address.
-    /// Function address is deterministic. It is a hash of public key, nonce and
-    /// `fn_store_id`, which is a counter that is being incremented after
-    /// every function generation. If function address was based only on
-    /// account's public key and deploy's nonce, then all function addresses
-    /// generated within one deploy would have been the same.
-    pub fn new_function_address(&mut self) -> Result<[u8; 32], Error> {
+    /// Generates new deterministic hash for uses as an address.
+    pub fn new_hash_address(&mut self) -> Result<[u8; 32], Error> {
         let pre_hash_bytes = self.hash_address_generator.borrow_mut().create_address();
 
         let mut hasher = VarBlake2b::new(32).unwrap();
@@ -366,7 +358,7 @@ where
     ) -> Result<Option<CLValue>, Error> {
         let key = Key::local(seed, key_bytes);
         let maybe_stored_value = self
-            .state
+            .tracking_copy
             .borrow_mut()
             .read(self.correlation_id, &key)
             .map_err(Into::into)?;
@@ -381,7 +373,7 @@ where
     pub fn write_ls(&mut self, key_bytes: &[u8], cl_value: CLValue) -> Result<(), Error> {
         let seed = self.seed();
         let key = Key::local(seed, key_bytes);
-        self.state
+        self.tracking_copy
             .borrow_mut()
             .write(key, StoredValue::CLValue(cl_value));
         Ok(())
@@ -391,7 +383,7 @@ where
         self.validate_readable(key)?;
         self.validate_key(key)?;
 
-        self.state
+        self.tracking_copy
             .borrow_mut()
             .read(self.correlation_id, key)
             .map_err(Into::into)
@@ -399,7 +391,7 @@ where
 
     /// DO NOT EXPOSE THIS VIA THE FFI
     pub fn read_gs_direct(&mut self, key: &Key) -> Result<Option<StoredValue>, Error> {
-        self.state
+        self.tracking_copy
             .borrow_mut()
             .read(self.correlation_id, key)
             .map_err(Into::into)
@@ -431,14 +423,14 @@ where
         self.validate_writeable(&key)?;
         self.validate_key(&key)?;
         self.validate_value(&value)?;
-        self.state.borrow_mut().write(key, value);
+        self.tracking_copy.borrow_mut().write(key, value);
         Ok(())
     }
 
     pub fn read_account(&mut self, key: &Key) -> Result<Option<StoredValue>, Error> {
         if let Key::Account(_) = key {
             self.validate_key(key)?;
-            self.state
+            self.tracking_copy
                 .borrow_mut()
                 .read(self.correlation_id, key)
                 .map_err(Into::into)
@@ -451,7 +443,7 @@ where
         if let Key::Account(_) = key {
             self.validate_key(&key)?;
             let account_value = self.account_to_validated_value(account)?;
-            self.state.borrow_mut().write(key, account_value);
+            self.tracking_copy.borrow_mut().write(key, account_value);
             Ok(())
         } else {
             panic!("Do not use this function for writing non-account keys")
@@ -464,10 +456,10 @@ where
     }
 
     pub fn store_function_at_hash(&mut self, contract: StoredValue) -> Result<[u8; 32], Error> {
-        let new_hash = self.new_function_address()?;
+        let new_hash = self.new_hash_address()?;
         self.validate_value(&contract)?;
         let hash_key = Key::Hash(new_hash);
-        self.state.borrow_mut().write(hash_key, contract);
+        self.tracking_copy.borrow_mut().write(hash_key, contract);
         Ok(new_hash)
     }
 
@@ -488,7 +480,7 @@ where
     }
 
     pub fn effect(&self) -> ExecutionEffect {
-        self.state.borrow_mut().effect()
+        self.tracking_copy.borrow_mut().effect()
     }
 
     /// Validates whether keys used in the `value` are not forged.
@@ -542,7 +534,7 @@ where
                 .values()
                 .try_for_each(|key| self.validate_key(key)),
             // TODO: anything to validate here?
-            StoredValue::ContractMetadata(_) => Ok(()),
+            StoredValue::ContractPackage(_) => Ok(()),
         }
     }
 
@@ -667,7 +659,11 @@ where
     }
 
     fn add_unsafe(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {
-        match self.state.borrow_mut().add(self.correlation_id, key, value) {
+        match self
+            .tracking_copy
+            .borrow_mut()
+            .add(self.correlation_id, key, value)
+        {
             Err(storage_error) => Err(storage_error.into()),
             Ok(AddResult::Success) => Ok(()),
             Ok(AddResult::KeyNotFound(key)) => Err(Error::KeyNotFound(key)),
@@ -711,7 +707,7 @@ where
 
         let account_value = self.account_to_validated_value(account)?;
 
-        self.state.borrow_mut().write(key, account_value);
+        self.tracking_copy.borrow_mut().write(key, account_value);
 
         Ok(())
     }
@@ -745,7 +741,7 @@ where
 
         let account_value = self.account_to_validated_value(account)?;
 
-        self.state.borrow_mut().write(key, account_value);
+        self.tracking_copy.borrow_mut().write(key, account_value);
 
         Ok(())
     }
@@ -783,7 +779,7 @@ where
 
         let account_value = self.account_to_validated_value(account)?;
 
-        self.state.borrow_mut().write(key, account_value);
+        self.tracking_copy.borrow_mut().write(key, account_value);
 
         Ok(())
     }
@@ -821,26 +817,27 @@ where
 
         let account_value = self.account_to_validated_value(account)?;
 
-        self.state.borrow_mut().write(key, account_value);
+        self.tracking_copy.borrow_mut().write(key, account_value);
 
         Ok(())
     }
 
     pub fn upgrade_contract_at_uref(
         &mut self,
-        key: Key,
-        bytes: Vec<u8>,
-        named_keys: BTreeMap<String, Key>,
+        _key: Key,
+        _bytes: Vec<u8>,
+        _named_keys: BTreeMap<String, Key>,
     ) -> Result<(), Error> {
-        let protocol_version = self.protocol_version();
-        let contract = ContractWasm::new(bytes);
-        let contract = StoredValue::ContractWasm(contract_wasm);
-
-        self.validate_writeable(&key)?;
-        self.validate_key(&key)?;
-
-        self.state.borrow_mut().write(key, contract);
-        Ok(())
+        unreachable!(); /* TODO: this method should be removed */
+        //     let protocol_version = self.protocol_version();
+        //     let contract = ContractWasm::new(bytes);
+        //     let contract = StoredValue::ContractWasm(contract_wasm);
+        //
+        //     self.validate_writeable(&key)?;
+        //     self.validate_key(&key)?;
+        //
+        //     self.tracking_copy.borrow_mut().write(key, contract);
+        //     Ok(())
     }
 
     pub fn protocol_data(&self) -> ProtocolData {
@@ -869,7 +866,7 @@ where
 
     /// Gets entry point type.
     pub fn entry_point_type(&self) -> EntryPointType {
-        self.entrypoint.entry_point_type()
+        self.entry_point_type
     }
 
     /// Extends given user group with new urefs

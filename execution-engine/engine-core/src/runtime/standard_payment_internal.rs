@@ -56,7 +56,7 @@ where
     R::Error: Into<execution::Error>,
 {
     fn get_payment_purse(&mut self) -> Result<URef, ApiError> {
-        let pos_contract_key = Key::from(self.get_pos_contract());
+        let pos_contract_key = self.get_pos_contract().into();
 
         let cl_value = self
             .call_contract(pos_contract_key, SERIALIZED_GET_PAYMENT_PURSE.clone())

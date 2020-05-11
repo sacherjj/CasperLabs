@@ -15,7 +15,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contract_header::{EntryPoint, EntryPointAccess, EntryPointType},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType},
     runtime_args, CLType, Key, Parameter, RuntimeArgs, SemVer, URef,
 };
 
