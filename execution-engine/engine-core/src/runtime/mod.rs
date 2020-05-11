@@ -2,7 +2,7 @@ mod args;
 mod externals;
 mod mint_internal;
 mod proof_of_stake_internal;
-mod scoped_timer;
+mod scoped_instrumenter;
 mod standard_payment_internal;
 
 use std::{
@@ -38,7 +38,7 @@ use crate::{
     runtime_context::RuntimeContext,
     Address,
 };
-use scoped_timer::ScopedTimer;
+use scoped_instrumenter::ScopedInstrumenter;
 
 pub struct Runtime<'a, R> {
     system_contract_cache: SystemContractCache,
@@ -1630,7 +1630,13 @@ where
 
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
     /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
-    fn ret(&mut self, value_ptr: u32, value_size: usize) -> Trap {
+    fn ret(
+        &mut self,
+        value_ptr: u32,
+        value_size: usize,
+        scoped_instrumenter: &mut ScopedInstrumenter,
+    ) -> Trap {
+        const UREF_COUNT: &str = "uref_count";
         self.host_buffer = None;
         let mem_get = self
             .memory
@@ -1647,11 +1653,20 @@ where
                     None => Ok(vec![]),
                 };
                 match urefs {
-                    Ok(urefs) => Error::Ret(urefs).into(),
-                    Err(e) => e.into(),
+                    Ok(urefs) => {
+                        scoped_instrumenter.add_property(UREF_COUNT, urefs.len());
+                        Error::Ret(urefs).into()
+                    }
+                    Err(e) => {
+                        scoped_instrumenter.add_property(UREF_COUNT, 0);
+                        e.into()
+                    }
                 }
             }
-            Err(e) => e.into(),
+            Err(e) => {
+                scoped_instrumenter.add_property(UREF_COUNT, 0);
+                e.into()
+            }
         }
     }
 
@@ -2060,16 +2075,16 @@ where
         key: Key,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
-        scoped_timer: &mut ScopedTimer,
+        scoped_instrumenter: &mut ScopedInstrumenter,
     ) -> Result<Result<(), ApiError>, Error> {
         if !self.can_write_to_host_buffer() {
             // Exit early if the host buffer is already occupied
             return Ok(Err(ApiError::HostBufferFull));
         }
 
-        scoped_timer.pause();
+        scoped_instrumenter.pause();
         let result = self.call_contract(key, args_bytes);
-        scoped_timer.unpause();
+        scoped_instrumenter.unpause();
         let result = result?;
         let result_size = result.inner_bytes().len() as u32; // considered to be safe
 
@@ -2092,16 +2107,15 @@ where
         &mut self,
         total_keys_ptr: u32,
         result_size_ptr: u32,
-        scoped_timer: &mut ScopedTimer,
+        scoped_instrumenter: &mut ScopedInstrumenter,
     ) -> Result<Result<(), ApiError>, Trap> {
-        scoped_timer.add_property(
+        scoped_instrumenter.add_property(
             "names_total_length",
             self.context
                 .named_keys()
                 .keys()
                 .map(|name| name.len())
-                .sum::<usize>()
-                .to_string(),
+                .sum::<usize>(),
         );
 
         if !self.can_write_to_host_buffer() {
@@ -2709,7 +2723,7 @@ where
         name_size: u32,
         key_ptr: u32,
         key_size: u32,
-        scoped_timer: &mut ScopedTimer,
+        scoped_timer: &mut ScopedInstrumenter,
     ) -> Result<Result<(), ApiError>, Trap> {
         let key = self.key_from_mem(key_ptr, key_size)?;
         let named_keys = match self.context.read_gs(&key)? {
@@ -2717,7 +2731,7 @@ where
             Some(StoredValue::Contract(contract)) => {
                 let old_contract_size =
                     contract.named_keys().serialized_length() + contract.bytes().len();
-                scoped_timer.add_property("old_contract_size", old_contract_size.to_string());
+                scoped_timer.add_property("old_contract_size", old_contract_size);
                 Ok(contract.named_keys().clone())
             }
             Some(_) => Err(Error::FunctionNotFound(format!(
@@ -2727,7 +2741,7 @@ where
         }?;
         let bytes = self.get_function_by_name(name_ptr, name_size)?;
         let new_contract_size = named_keys.serialized_length() + bytes.len();
-        scoped_timer.add_property("new_contract_size", new_contract_size.to_string());
+        scoped_timer.add_property("new_contract_size", new_contract_size);
         match self
             .context
             .upgrade_contract_at_uref(key, bytes, named_keys)

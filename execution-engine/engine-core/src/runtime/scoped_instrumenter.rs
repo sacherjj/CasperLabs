@@ -46,16 +46,16 @@ impl PauseState {
     }
 }
 
-pub(super) struct ScopedTimer {
+pub(super) struct ScopedInstrumenter {
     start: Instant,
     pause_state: PauseState,
     function_index: FunctionIndex,
     properties: BTreeMap<&'static str, String>,
 }
 
-impl ScopedTimer {
+impl ScopedInstrumenter {
     pub fn new(function_index: FunctionIndex) -> Self {
-        ScopedTimer {
+        ScopedInstrumenter {
             start: Instant::now(),
             pause_state: PauseState::new(),
             function_index,
@@ -63,8 +63,8 @@ impl ScopedTimer {
         }
     }
 
-    pub fn add_property(&mut self, key: &'static str, value: String) {
-        assert!(self.properties.insert(key, value).is_none());
+    pub fn add_property<T: ToString>(&mut self, key: &'static str, value: T) {
+        assert!(self.properties.insert(key, value.to_string()).is_none());
     }
 
     /// Can be called once only to effectively pause the running timer.  `unpause` can likewise be
@@ -82,8 +82,9 @@ impl ScopedTimer {
     }
 }
 
-impl Drop for ScopedTimer {
+impl Drop for ScopedInstrumenter {
     fn drop(&mut self) {
+        let duration = self.duration();
         let host_function = match self.function_index {
             FunctionIndex::GasFuncIndex => return,
             FunctionIndex::WriteFuncIndex => "host_function_write",
@@ -133,7 +134,7 @@ impl Drop for ScopedTimer {
         let mut properties = mem::take(&mut self.properties);
         properties.insert(
             "duration_in_seconds",
-            format!("{:.06e}", self.duration().as_secs_f64()),
+            format!("{:.06e}", duration.as_secs_f64()),
         );
 
         log_host_function_metrics(host_function, properties);
