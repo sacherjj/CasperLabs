@@ -14,7 +14,7 @@ enum Tag {
     Account = 1,
     ContractWasm = 2,
     Contract = 3,
-    ContractMetadata = 4,
+    ContractPackage = 4,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug)]
@@ -146,7 +146,7 @@ impl ToBytes for StoredValue {
                 (Tag::ContractWasm, contract_wasm.to_bytes()?)
             }
             StoredValue::Contract(contract_header) => (Tag::Contract, contract_header.to_bytes()?),
-            StoredValue::ContractPackage(metadata) => (Tag::ContractMetadata, metadata.to_bytes()?),
+            StoredValue::ContractPackage(metadata) => (Tag::ContractPackage, metadata.to_bytes()?),
         };
         result.push(tag as u8);
         result.append(&mut serialized_data);
@@ -178,8 +178,10 @@ impl FromBytes for StoredValue {
                     (StoredValue::ContractWasm(contract_wasm), remainder)
                 })
             }
-            tag if tag == Tag::ContractMetadata as u8 => ContractPackage::from_bytes(remainder)
+            tag if tag == Tag::ContractPackage as u8 => ContractPackage::from_bytes(remainder)
                 .map(|(metadata, remainder)| (StoredValue::ContractPackage(metadata), remainder)),
+            tag if tag == Tag::Contract as u8 => Contract::from_bytes(remainder)
+                .map(|(contract, remainder)| (StoredValue::Contract(contract), remainder)),
             _ => Err(bytesrepr::Error::Formatting),
         }
     }

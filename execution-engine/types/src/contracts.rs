@@ -278,6 +278,11 @@ impl ContractPackage {
         &mut self.versions
     }
 
+    /// Consumes the object and returns versions
+    pub fn take_versions(self) -> ContractVersions {
+        self.versions
+    }
+
     /// Get removed versions set.
     pub fn removed_versions(&self) -> &RemovedVersions {
         &self.disabled_versions
@@ -428,6 +433,14 @@ impl EntryPoints {
     pub fn keys(&self) -> impl Iterator<Item = &String> {
         self.0.keys()
     }
+
+    /// Takes all entry points.
+    pub fn take_entry_points(self) -> Vec<EntryPoint> {
+        self.0
+            .into_iter()
+            .map(|(_name, value)| value.into())
+            .collect()
+    }
 }
 
 /// Collection of named keys
@@ -441,6 +454,34 @@ pub struct Contract {
     named_keys: NamedKeys,
     entry_points: EntryPoints,
     protocol_version: ProtocolVersion,
+}
+
+impl
+    Into<(
+        ContractPackageHash,
+        ContractWasmHash,
+        NamedKeys,
+        EntryPoints,
+        ProtocolVersion,
+    )> for Contract
+{
+    fn into(
+        self,
+    ) -> (
+        ContractPackageHash,
+        ContractWasmHash,
+        NamedKeys,
+        EntryPoints,
+        ProtocolVersion,
+    ) {
+        (
+            self.contract_package_hash,
+            self.contract_wasm_hash,
+            self.named_keys,
+            self.entry_points,
+            self.protocol_version,
+        )
+    }
 }
 
 impl Contract {
@@ -466,6 +507,11 @@ impl Contract {
         self.contract_package_hash
     }
 
+    /// Hash for accessing contract WASM
+    pub fn contract_wasm_hash(&self) -> ContractWasmHash {
+        self.contract_wasm_hash
+    }
+
     /// Checks whether there is a method with the given name
     pub fn has_entry_point(&self, name: &str) -> bool {
         self.entry_points.has_entry_point(name)
@@ -484,11 +530,6 @@ impl Contract {
     /// Adds new entry point
     pub fn add_entry_point<T: Into<String>>(&mut self, entry_point: EntryPoint) {
         self.entry_points.add_entry_point(entry_point);
-    }
-
-    /// Hash for accessing contract bytes
-    pub fn contract_wasm_hash(&self) -> ContractWasmHash {
-        self.contract_wasm_hash
     }
 
     /// Hash for accessing contract bytes
@@ -555,6 +596,7 @@ impl ToBytes for Contract {
             + ToBytes::serialized_length(&self.contract_package_hash)
             + ToBytes::serialized_length(&self.contract_wasm_hash)
             + ToBytes::serialized_length(&self.protocol_version)
+            + ToBytes::serialized_length(&self.named_keys)
     }
 }
 
@@ -562,8 +604,8 @@ impl FromBytes for Contract {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (contract_package_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
         let (contract_wasm_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
-        let (named_keys, bytes) = BTreeMap::<String, Key>::from_bytes(bytes)?;
         let (entry_points, bytes) = EntryPoints::from_bytes(bytes)?;
+        let (named_keys, bytes) = BTreeMap::<String, Key>::from_bytes(bytes)?;
         let (protocol_version, bytes) = ProtocolVersion::from_bytes(bytes)?;
         Ok((
             Contract {

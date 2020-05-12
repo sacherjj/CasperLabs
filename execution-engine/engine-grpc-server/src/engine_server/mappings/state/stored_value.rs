@@ -16,8 +16,12 @@ impl From<StoredValue> for state::StoredValue {
             StoredValue::Contract(contract) => {
                 pb_value.set_contract(contract.into());
             }
-            StoredValue::ContractWasm(_) => {} // todo
-            StoredValue::ContractPackage(_) => {}
+            StoredValue::ContractWasm(contract_wasm) => {
+                pb_value.set_contract_wasm(contract_wasm.into())
+            }
+            StoredValue::ContractPackage(contract_package) => {
+                pb_value.set_contract_package(contract_package.into())
+            }
         }
 
         pb_value
@@ -39,12 +43,14 @@ impl TryFrom<state::StoredValue> for StoredValue {
             StoredValue_oneof_variants::account(pb_account) => {
                 StoredValue::Account(pb_account.try_into()?)
             }
-            StoredValue_oneof_variants::contract(_pb_contract) => {
-                todo!("StoredValue::ContractWasm(pb_contract.try_into()?)")
+            StoredValue_oneof_variants::contract(pb_contract) => {
+                StoredValue::Contract(pb_contract.try_into()?)
             }
-            StoredValue_oneof_variants::contract_metadata(_pb_contract_metadata) => {
-                todo!("TryFrom<state::StoredValue> for StoredValue")
-                // StoredValue::ContractPackage(pb_contract_metadata.try_into()?)
+            StoredValue_oneof_variants::contract_package(pb_contract_package) => {
+                StoredValue::ContractPackage(pb_contract_package.try_into()?)
+            }
+            StoredValue_oneof_variants::contract_wasm(pb_contract_wasm) => {
+                StoredValue::ContractWasm(pb_contract_wasm.into())
             }
         };
 
