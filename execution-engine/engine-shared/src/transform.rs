@@ -155,18 +155,18 @@ impl Transform {
                     Ok(StoredValue::Account(account))
                 }
                 StoredValue::CLValue(cl_value) => {
-                    let expected = "ContractHeader or Account".to_string();
+                    let expected = "Contract or Account".to_string();
                     let found = format!("{:?}", cl_value.cl_type());
                     Err(TypeMismatch::new(expected, found).into())
                 }
                 StoredValue::ContractPackage(_) => {
-                    let expected = "ContractHeader or Account".to_string();
-                    let found = "ContractMetadata".to_string();
+                    let expected = "Contract or Account".to_string();
+                    let found = "ContractPackage".to_string();
                     Err(TypeMismatch::new(expected, found).into())
                 }
                 StoredValue::ContractWasm(_) => {
-                    let expected = "ContractHeader or Account".to_string();
-                    let found = "Contract".to_string();
+                    let expected = "Contract or Account".to_string();
+                    let found = "ContractWasm".to_string();
                     Err(TypeMismatch::new(expected, found).into())
                 }
             },

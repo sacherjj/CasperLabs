@@ -168,6 +168,7 @@ impl Executor {
             if runtime.is_mint(base_key) {
                 match runtime.call_host_mint(
                     protocol_version,
+                    &entry_point,
                     runtime.context().named_keys().to_owned(),
                     &args,
                     Default::default(),

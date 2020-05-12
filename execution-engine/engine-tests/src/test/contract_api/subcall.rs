@@ -8,7 +8,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{RuntimeArgs, SemVer, U512};
+use types::{RuntimeArgs, SemVer, U512, contracts::CONTRACT_INITIAL_VERSION};
 
 #[ignore]
 #[test]
@@ -157,7 +157,6 @@ fn expensive_subcall_should_cost_more() {
     const EXPENSIVE_CALCULATION: &str = "expensive_calculation.wasm";
     const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
     const EXPENSIVE_CALCULATION_KEY: &str = "expensive-calculation";
-    const INITIAL_VERSION: SemVer = SemVer::new(1, 0, 0);
     const ENTRY_FUNCTION_NAME: &str = "delegate";
 
     let store_do_nothing_request =
@@ -195,7 +194,7 @@ fn expensive_subcall_should_cost_more() {
     let call_do_nothing_request = ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
         DEFAULT_ACCOUNT_ADDR,
         DO_NOTHING_HASH_KEY_NAME,
-        INITIAL_VERSION,
+        CONTRACT_INITIAL_VERSION,
         ENTRY_FUNCTION_NAME,
         RuntimeArgs::new(),
     )

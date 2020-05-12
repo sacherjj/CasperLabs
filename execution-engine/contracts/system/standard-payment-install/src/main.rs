@@ -10,8 +10,8 @@ use contract::{
 };
 use standard_payment::ARG_AMOUNT;
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
-    CLType, CLValue, SemVer,
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
+    CLType, CLValue,
 };
 
 const METHOD_CALL: &str = "call";
@@ -26,9 +26,10 @@ pub extern "C" fn call() {
 #[no_mangle]
 pub extern "C" fn install() {
     let entry_points = {
-        let mut entry_points = BTreeMap::new();
+        let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
+            METHOD_CALL.to_string(),
             vec![Parameter::new(ARG_AMOUNT, CLType::U512)],
             CLType::Result {
                 ok: Box::new(CLType::Unit),
@@ -37,7 +38,7 @@ pub extern "C" fn install() {
             EntryPointAccess::Public,
             EntryPointType::Session,
         );
-        entry_points.insert(METHOD_CALL.to_string(), entry_point);
+        entry_points.add_entry_point(entry_point);
 
         entry_points
     };
@@ -47,15 +48,9 @@ pub extern "C" fn install() {
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
     let named_keys = BTreeMap::new();
-    let version = SemVer::V1_0_0;
 
-    let contract_key = storage::add_contract_version(
-        contract_metadata_key,
-        access_uref,
-        version,
-        entry_points,
-        named_keys,
-    );
+    let contract_key =
+        storage::add_contract_version(contract_metadata_key, access_uref, entry_points, named_keys);
 
     let return_value = CLValue::from_t(contract_key).unwrap_or_revert();
     runtime::ret(return_value);

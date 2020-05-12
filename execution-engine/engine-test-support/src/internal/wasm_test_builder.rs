@@ -640,7 +640,7 @@ where
             .expect("should have contract value");
 
         if let StoredValue::ContractWasm(contract_wasm) = contract_value {
-            Some(contract)
+            Some(contract_wasm)
         } else {
             None
         }

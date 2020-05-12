@@ -4,7 +4,7 @@ use rand::Rng;
 
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
-use types::{account::PublicKey, ProtocolVersion, RuntimeArgs, SemVer};
+use types::{account::PublicKey, contracts::ContractVersion, ProtocolVersion, RuntimeArgs};
 
 use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
 
@@ -87,7 +87,7 @@ impl ExecuteRequestBuilder {
     pub fn versioned_contract_call_by_hash_key_name(
         sender: PublicKey,
         hash_key_name: &str,
-        version: SemVer,
+        version: ContractVersion,
         entry_point_name: &str,
         args: RuntimeArgs,
     ) -> Self {

@@ -11,14 +11,13 @@ use contract::{
 use core::convert::TryInto;
 
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType},
-    CLType, Key, SemVer,
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
+    CLType, Key,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
 const DO_NOTHING_ACCESS_KEY_NAME: &str = "do_nothing_access";
-const UPGRADED_VERSION: SemVer = SemVer::new(2, 0, 0);
 
 #[no_mangle]
 pub extern "C" fn delegate() {
@@ -28,18 +27,19 @@ pub extern "C" fn delegate() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let methods = {
-        let mut methods = BTreeMap::new();
+    let entry_points = {
+        let mut entry_points = EntryPoints::new();
 
         let delegate = EntryPoint::new(
+            ENTRY_FUNCTION_NAME.to_string(),
             Vec::new(),
             CLType::Unit,
             EntryPointAccess::Public,
             EntryPointType::Session,
         );
-        methods.insert(ENTRY_FUNCTION_NAME.to_string(), delegate);
+        entry_points.add_entry_point(delegate);
 
-        methods
+        entry_points
     };
 
     let do_nothing_hash = runtime::get_key(DO_NOTHING_HASH_KEY_NAME).unwrap_or_revert();
@@ -51,8 +51,7 @@ pub extern "C" fn call() {
     let key = storage::add_contract_version(
         do_nothing_hash,
         do_nothing_uref,
-        UPGRADED_VERSION,
-        methods,
+        entry_points,
         BTreeMap::new(),
     );
     runtime::put_key("end of upgrade", key);

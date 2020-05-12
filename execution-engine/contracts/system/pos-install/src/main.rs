@@ -17,9 +17,12 @@ use pos::{
 use proof_of_stake::Stakes;
 use types::{
     account::PublicKey,
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{
+        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter,
+        CONTRACT_INITIAL_VERSION,
+    },
     system_contract_errors::mint,
-    CLType, CLValue, ContractPackageHash, Key, NamedArg, RuntimeArgs, SemVer, URef, U512,
+    CLType, CLValue, ContractPackageHash, Key, NamedArg, RuntimeArgs, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -67,7 +70,6 @@ pub extern "C" fn finalize_payment() {
 #[no_mangle]
 pub extern "C" fn install() {
     let mint_metadata_hash: ContractPackageHash = runtime::get_named_arg(ARG_MINT_METADATA_HASH);
-
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_named_arg(ARG_GENESIS_VALIDATORS);
 
@@ -79,9 +81,7 @@ pub extern "C" fn install() {
     // matter.
     let mut named_keys: BTreeMap<String, Key> =
         stakes.strings().map(|key| (key, PLACEHOLDER_KEY)).collect();
-
     let total_bonds: U512 = stakes.total_bonds();
-
     let bonding_purse = mint_purse(mint_metadata_hash, total_bonds);
     let payment_purse = mint_purse(mint_metadata_hash, U512::zero());
     let rewards_purse = mint_purse(mint_metadata_hash, U512::zero());
@@ -98,9 +98,10 @@ pub extern "C" fn install() {
     });
 
     let entry_points = {
-        let mut entry_points = BTreeMap::new();
+        let mut entry_points = EntryPoints::new();
 
         let bond = EntryPoint::new(
+            METHOD_BOND.to_string(),
             vec![
                 Parameter::new(ARG_AMOUNT, CLType::U512),
                 Parameter::new(ARG_PURSE, CLType::URef),
@@ -109,41 +110,46 @@ pub extern "C" fn install() {
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_BOND.to_string(), bond);
+        entry_points.add_entry_point(bond);
 
         let unbond = EntryPoint::new(
+            METHOD_UNBOND.to_string(),
             vec![Parameter::new(ARG_AMOUNT, CLType::U512)],
             CLType::Unit,
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_UNBOND.to_string(), unbond);
+        entry_points.add_entry_point(unbond);
 
         let get_payment_purse = EntryPoint::new(
+            METHOD_GET_PAYMENT_PURSE.to_string(),
             vec![],
             CLType::URef,
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_GET_PAYMENT_PURSE.to_string(), get_payment_purse);
+        entry_points.add_entry_point(get_payment_purse);
 
         let set_refund_purse = EntryPoint::new(
+            METHOD_SET_REFUND_PURSE.to_string(),
             vec![Parameter::new(ARG_PURSE, CLType::URef)],
             CLType::Unit,
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_SET_REFUND_PURSE.to_string(), set_refund_purse);
+        entry_points.add_entry_point(set_refund_purse);
 
         let get_refund_purse = EntryPoint::new(
+            METHOD_GET_REFUND_PURSE.to_string(),
             vec![],
             CLType::Option(Box::new(CLType::URef)),
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_GET_REFUND_PURSE.to_string(), get_refund_purse);
+        entry_points.add_entry_point(get_refund_purse);
 
         let finalize_payment = EntryPoint::new(
+            METHOD_FINALIZE_PAYMENT.to_string(),
             vec![
                 Parameter::new(ARG_AMOUNT, CLType::U512),
                 Parameter::new(ARG_ACCOUNT_KEY, CLType::FixedList(Box::new(CLType::U8), 32)),
@@ -152,7 +158,7 @@ pub extern "C" fn install() {
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_FINALIZE_PAYMENT.to_string(), finalize_payment);
+        entry_points.add_entry_point(finalize_payment);
 
         entry_points
     };
@@ -161,17 +167,10 @@ pub extern "C" fn install() {
     runtime::put_key(HASH_KEY_NAME, contract_metadata_key);
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
-    let version = SemVer::V1_0_0;
+    let contract_key =
+        storage::add_contract_version(contract_metadata_key, access_uref, entry_points, named_keys);
 
-    let contract_key = storage::add_contract_version(
-        contract_metadata_key,
-        access_uref,
-        version,
-        entry_points,
-        named_keys,
-    );
-
-    let return_value = CLValue::from_t(contract_key).unwrap_or_revert();
+    let return_value = CLValue::from_t((contract_metadata_key, contract_key)).unwrap_or_revert();
     runtime::ret(return_value);
 }
 
@@ -184,7 +183,7 @@ fn mint_purse(contract_metadata_hash: ContractPackageHash, amount: U512) -> URef
 
     let result: Result<URef, mint::Error> = runtime::call_versioned_contract(
         contract_metadata_hash,
-        SemVer::V1_0_0,
+        CONTRACT_INITIAL_VERSION,
         ENTRY_POINT_MINT,
         runtime_args,
     );

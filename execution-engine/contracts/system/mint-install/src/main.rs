@@ -13,8 +13,8 @@ use mint_token::{
     METHOD_TRANSFER,
 };
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
-    CLType, CLValue, SemVer,
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
+    CLType, CLValue,
 };
 
 const HASH_KEY_NAME: &str = "mint_hash";
@@ -43,9 +43,10 @@ pub extern "C" fn transfer() {
 #[no_mangle]
 pub extern "C" fn install() {
     let entry_points = {
-        let mut entry_points = BTreeMap::new();
+        let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
+            METHOD_MINT.to_string(),
             vec![Parameter::new(ARG_AMOUNT, CLType::U512)],
             CLType::Result {
                 ok: Box::new(CLType::URef),
@@ -54,25 +55,28 @@ pub extern "C" fn install() {
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_MINT.to_string(), entry_point);
+        entry_points.add_entry_point(entry_point);
 
         let entry_point = EntryPoint::new(
+            METHOD_CREATE.to_string(),
             vec![],
             CLType::URef,
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_CREATE.to_string(), entry_point);
+        entry_points.add_entry_point(entry_point);
 
         let entry_point = EntryPoint::new(
+            METHOD_BALANCE.to_string(),
             vec![Parameter::new(ARG_PURSE, CLType::URef)],
             CLType::Option(Box::new(CLType::U512)),
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_BALANCE.to_string(), entry_point);
+        entry_points.add_entry_point(entry_point);
 
         let entry_point = EntryPoint::new(
+            METHOD_TRANSFER.to_string(),
             vec![
                 Parameter::new(ARG_SOURCE, CLType::URef),
                 Parameter::new(ARG_TARGET, CLType::URef),
@@ -85,7 +89,7 @@ pub extern "C" fn install() {
             EntryPointAccess::Public,
             EntryPointType::Contract,
         );
-        entry_points.insert(METHOD_TRANSFER.to_string(), entry_point);
+        entry_points.add_entry_point(entry_point);
 
         entry_points
     };
@@ -95,15 +99,9 @@ pub extern "C" fn install() {
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
     let named_keys = BTreeMap::new();
-    let version = SemVer::V1_0_0;
 
-    let contract_key = storage::add_contract_version(
-        contract_metadata_key,
-        access_uref,
-        version,
-        entry_points,
-        named_keys,
-    );
+    let contract_key =
+        storage::add_contract_version(contract_metadata_key, access_uref, entry_points, named_keys);
 
     let return_value = CLValue::from_t((contract_metadata_key, contract_key)).unwrap_or_revert();
     runtime::ret(return_value);

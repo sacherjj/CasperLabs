@@ -3,10 +3,13 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::ToString};
+use alloc::{string::ToString, vec::Vec};
 
 use contract::contract_api::storage;
-use types::contracts::EntryPoint;
+use types::{
+    contracts::{EntryPoint, EntryPoints},
+    CLType, EntryPointAccess, EntryPointType,
+};
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const HASH_KEY_NAME: &str = "do_nothing_hash";
@@ -17,14 +20,21 @@ pub extern "C" fn delegate() {}
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let methods = {
-        let mut methods = BTreeMap::new();
-        methods.insert(ENTRY_FUNCTION_NAME.to_string(), EntryPoint::default());
-        methods
+    let entry_points = {
+        let mut entry_points = EntryPoints::new();
+        let entry_point = EntryPoint::new(
+            ENTRY_FUNCTION_NAME.to_string(),
+            Vec::new(),
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
+        entry_points.add_entry_point(entry_point);
+        entry_points
     };
 
     storage::new_contract(
-        methods,
+        entry_points,
         None,
         Some(HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),

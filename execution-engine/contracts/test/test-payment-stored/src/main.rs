@@ -3,11 +3,11 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::ToString, vec};
+use alloc::{string::ToString, vec};
 
 use contract::contract_api::storage;
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
     CLType,
 };
 
@@ -23,20 +23,21 @@ pub extern "C" fn pay() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let methods = {
-        let mut methods = BTreeMap::new();
+    let entry_points = {
+        let mut entry_points = EntryPoints::new();
         let entry_point = EntryPoint::new(
+            ENTRY_FUNCTION_NAME.to_string(),
             vec![Parameter::new(ARG_NAME, CLType::U512)],
             CLType::Unit,
             EntryPointAccess::Public,
             EntryPointType::Session,
         );
-        methods.insert(ENTRY_FUNCTION_NAME.to_string(), entry_point);
-        methods
+        entry_points.add_entry_point(entry_point);
+        entry_points
     };
 
     storage::new_contract(
-        methods,
+        entry_points,
         None,
         Some(HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),

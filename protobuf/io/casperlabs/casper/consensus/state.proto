@@ -7,7 +7,7 @@ message SemVer {
     uint32 patch = 3;
 }
 
-message ContractHeader {
+message Contract {
     message EntryPoint {
 
         message Arg {
@@ -26,42 +26,49 @@ message ContractHeader {
             repeated Group groups = 1;
         }
 
-        repeated Arg args = 1;
-        CLType ret = 2;
+        string name = 1;
+
+        repeated Arg args = 2;
+        CLType ret = 3;
         oneof access {
-            Public public = 3;
-            Groups groups = 4;
+            Public public = 4;
+            Groups groups = 5;
         }
 
 
         oneof entry_point_type {
-            Session session = 5;
-            Contract contract = 6;
+            Session session = 6;
+            Contract contract = 7;
         }
     }
 
-    message MethodEntry {
-        string name = 1;
-        EntryPoint entrypoint = 2;
-    }
-    repeated MethodEntry methods = 1;
-    Key contract_key = 2;
-    ProtocolVersion protocol_version = 3;
+    bytes contract_package_hash = 1;
+    bytes contract_wasm_hash = 2;
+    repeated NamedKey named_keys = 3;
+    repeated EntryPoint entry_points = 4;
+    Key contract_key = 5;
+    ProtocolVersion protocol_version = 6;
+
 }
 
-message ContractMetadata {
+message ContractVersionKey {
+    uint32 protocol_version_major = 1;
+    uint32 contract_version = 2;
+}
+
+message ContractPackage {
     
-    message ActiveVersion {
-        SemVer version = 1;
-        ContractHeader contract_header = 2;
+    message Version {
+        ContractVersionKey version = 1;
+        bytes contract_hash = 2;
     }
     message Group {
-        ContractHeader.EntryPoint.Group group = 1;
+        Contract.EntryPoint.Group group = 1;
         repeated Key.URef urefs = 2;
     }
     Key.URef access_key = 1;
-    repeated ActiveVersion active_versions = 2;
-    repeated SemVer removed_versions = 3;
+    repeated Version active_versions = 2;
+    repeated ContractVersionKey removed_versions = 3;
     repeated Group groups = 4;
 }
 
@@ -232,13 +239,18 @@ message CLValueInstance {
 
 }
 
+message ContractWasm {
+    bytes wasm = 1;
+}
+
 // Value stored under a key in global state.
 message StoredValue {
     oneof variants {
         CLValue cl_value = 1;
         Account account = 2;
         Contract contract = 3;
-	    ContractMetadata contract_metadata = 4;
+        ContractPackage contract_package = 4;
+        ContractWasm contract_wasm = 5;
     }
 }
 
@@ -323,12 +335,6 @@ message Key {
 message NamedKey {
 	string name = 1;
 	Key key = 2;
-}
-
-message Contract {
-	reserved 1;
-	repeated NamedKey named_keys = 2;
-    ProtocolVersion protocol_version = 3;
 }
 
 message Account {

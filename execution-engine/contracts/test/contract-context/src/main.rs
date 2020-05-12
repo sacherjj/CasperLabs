@@ -3,19 +3,16 @@
 
 extern crate alloc;
 
-use alloc::{
-    collections::BTreeMap,
-    string::{String, ToString},
-    vec::Vec,
-};
+use alloc::{collections::BTreeMap, string::ToString, vec::Vec};
 
 use contract::contract_api::{runtime, storage};
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType},
-    runtime_args, CLType, Key, RuntimeArgs, SemVer, URef,
+    contracts::{
+        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, CONTRACT_INITIAL_VERSION,
+    },
+    runtime_args, CLType, Key, RuntimeArgs, URef,
 };
 
-const VERSION_1_0_0: SemVer = SemVer::new(1, 0, 0);
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
 const METADATA_ACCESS_KEY: &str = "metadata_access_key";
 const CONTRACT_CODE: &str = "contract_code_test";
@@ -44,7 +41,7 @@ pub extern "C" fn session_code_caller_as_session() {
         .into_seed();
     runtime::call_versioned_contract::<()>(
         metadata_hash,
-        SemVer::V1_0_0,
+        CONTRACT_INITIAL_VERSION,
         SESSION_CODE,
         runtime_args! {},
     );
@@ -65,7 +62,7 @@ pub extern "C" fn add_new_key_as_session() {
     assert!(runtime::get_key(NEW_KEY).is_none());
     runtime::call_versioned_contract::<()>(
         metadata_hash,
-        SemVer::V1_0_0,
+        CONTRACT_INITIAL_VERSION,
         "add_new_key",
         runtime_args! {},
     );
@@ -78,68 +75,68 @@ pub extern "C" fn session_code_caller_as_contract() {
     let metadata_hash = metadata_hash_key.into_seed();
     runtime::call_versioned_contract::<()>(
         metadata_hash,
-        SemVer::V1_0_0,
+        CONTRACT_INITIAL_VERSION,
         SESSION_CODE,
         runtime_args! {},
     );
 }
 
-fn create_entrypoints_1() -> BTreeMap<String, EntryPoint> {
-    let mut entrypoints = BTreeMap::new();
+fn create_entrypoints_1() -> EntryPoints {
+    let mut entry_points = EntryPoints::new();
     let session_code_test = EntryPoint::new(
+        SESSION_CODE.to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(SESSION_CODE.to_string(), session_code_test);
+    entry_points.add_entry_point(session_code_test);
 
     let contract_code_test = EntryPoint::new(
+        CONTRACT_CODE.to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::Public,
         EntryPointType::Contract,
     );
-    entrypoints.insert(CONTRACT_CODE.to_string(), contract_code_test);
+    entry_points.add_entry_point(contract_code_test);
 
     let session_code_caller_as_session = EntryPoint::new(
+        "session_code_caller_as_session".to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert(
-        "session_code_caller_as_session".to_string(),
-        session_code_caller_as_session,
-    );
+    entry_points.add_entry_point(session_code_caller_as_session);
 
     let session_code_caller_as_contract = EntryPoint::new(
+        "session_code_caller_as_contract".to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::Public,
         EntryPointType::Contract,
     );
-    entrypoints.insert(
-        "session_code_caller_as_contract".to_string(),
-        session_code_caller_as_contract,
-    );
+    entry_points.add_entry_point(session_code_caller_as_contract);
 
     let add_new_key = EntryPoint::new(
+        "add_new_key".to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert("add_new_key".to_string(), add_new_key);
+    entry_points.add_entry_point(add_new_key);
     let add_new_key_as_session = EntryPoint::new(
+        "add_new_key_as_session".to_string(),
         Vec::new(),
         CLType::I32,
         EntryPointAccess::Public,
         EntryPointType::Session,
     );
-    entrypoints.insert("add_new_key_as_session".to_string(), add_new_key_as_session);
+    entry_points.add_entry_point(add_new_key_as_session);
 
-    entrypoints
+    entry_points
 }
 
 fn install_version_1(metadata_hash: Key, access_uref: URef) -> Key {
@@ -151,12 +148,11 @@ fn install_version_1(metadata_hash: Key, access_uref: URef) -> Key {
         named_keys
     };
 
-    let entrypoints = create_entrypoints_1();
+    let entry_points = create_entrypoints_1();
     storage::add_contract_version(
         metadata_hash,
         access_uref,
-        VERSION_1_0_0,
-        entrypoints,
+        entry_points,
         contract_named_keys,
     )
 }
