@@ -28,6 +28,9 @@ types = { version = "0.4.1", path = "../types", package = "casperlabs-types", fe
 uuid = { version = "0.8.1", features = ["serde", "v4"] }
 wabt = "0.9.2"
 
+[features]
+no-unstable-features = ["engine-wasm-prep/no-unstable-features", "types/no-unstable-features"]
+
 [[test]]
 name = "trace-level-metrics-disabled"
 path = "tests/logging/trace_level_metrics_disabled.rs"
@@ -55,3 +58,6 @@ path = "tests/logging/logging_disabled_metrics_enabled.rs"
 [[test]]
 name = "logging-disabled-metrics-disabled"
 path = "tests/logging/logging_disabled_metrics_disabled.rs"
+
+[package.metadata.docs.rs]
+features = ["no-unstable-features"]

@@ -34,3 +34,15 @@ enable-bonding = []
 use-as-wasm = []
 use-system-contracts = []
 test-support = ["engine-core/test-support", "engine-grpc-server/test-support", "contract/test-support"]
+no-unstable-features = [
+    "contract/no-unstable-features",
+    "engine-core/no-unstable-features",
+    "engine-grpc-server/no-unstable-features",
+    "engine-shared/no-unstable-features",
+    "engine-storage/no-unstable-features",
+    "engine-wasm-prep/no-unstable-features",
+    "types/no-unstable-features"
+]
+
+[package.metadata.docs.rs]
+features = ["no-unstable-features"]

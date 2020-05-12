@@ -342,6 +342,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "no-unstable-features", ignore)]
     fn abuse_vec_key() {
         // Prefix is 2^32-1 = shouldn't allocate that much
         let bytes: Vec<u8> = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];

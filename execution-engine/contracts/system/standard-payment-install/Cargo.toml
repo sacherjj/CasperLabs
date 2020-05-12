@@ -13,6 +13,7 @@ test = false
 
 [features]
 std = ["contract/std", "types/std"]
+no-unstable-features = ["contract/no-unstable-features", "types/no-unstable-features"]
 
 [dependencies]
 contract = { path = "../../../contract", package = "casperlabs-contract" }

@@ -1,5 +1,3 @@
-#![feature(never_type)]
-
 pub mod engine_state;
 pub mod execution;
 pub mod resolvers;

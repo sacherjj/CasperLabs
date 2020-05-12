@@ -9,7 +9,7 @@ EE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 # should remain ordered from least-dependent to most.
 #
 # Note: 'cargo-casperlabs' is treated specially since it needs '--allow-dirty' passed to the publish call
-PACKAGE_DIRS=( types contract engine-wasm-prep engine-shared engine-storage engine-core engine-grpc-server engine-test-support )
+PACKAGE_DIRS=( types contract engine-wasm-prep mint proof-of-stake standard-payment engine-shared engine-storage engine-core engine-grpc-server engine-test-support )
 
 run_curl() {
     set +e
@@ -75,9 +75,11 @@ publish() {
     else
         printf "Publishing '%s'\n" $CRATE_NAME
         pushd $EE_DIR/$DIR_IN_EE
-        cargo publish
+        cargo publish $2
         popd
         printf "Published '%s' at version %s\n" $CRATE_NAME $DEV_VERSION
+        printf "Sleeping for 60 seconds...\n"
+        sleep 60
     fi
     printf "================================================================================\n\n"
 }

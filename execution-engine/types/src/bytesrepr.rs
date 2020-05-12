@@ -3,11 +3,9 @@
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
-use alloc::{
-    collections::{BTreeMap, TryReserveError},
-    string::String,
-    vec::Vec,
-};
+#[cfg(not(feature = "no-unstable-features"))]
+use alloc::collections::TryReserveError;
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::mem::{size_of, MaybeUninit};
 
 use failure::Fail;
@@ -97,6 +95,7 @@ pub enum Error {
     OutOfMemory,
 }
 
+#[cfg(not(feature = "no-unstable-features"))]
 impl From<TryReserveError> for Error {
     fn from(_: TryReserveError) -> Error {
         Error::OutOfMemory
@@ -300,55 +299,108 @@ impl FromBytes for String {
     }
 }
 
+#[allow(clippy::ptr_arg)]
+fn vec_to_bytes<T: ToBytes>(vec: &Vec<T>) -> Result<Vec<u8>, Error> {
+    let mut result = allocate_buffer(vec)?;
+    result.append(&mut (vec.len() as u32).to_bytes()?);
+
+    for item in vec.iter() {
+        result.append(&mut item.to_bytes()?);
+    }
+
+    Ok(result)
+}
+
+fn vec_into_bytes<T: ToBytes>(vec: Vec<T>) -> Result<Vec<u8>, Error> {
+    let mut result = allocate_buffer(&vec)?;
+    result.append(&mut (vec.len() as u32).to_bytes()?);
+
+    for item in vec {
+        result.append(&mut item.into_bytes()?);
+    }
+
+    Ok(result)
+}
+
+fn vec_serialized_length<T: ToBytes>(vec: &[T]) -> usize {
+    U32_SERIALIZED_LENGTH + vec.iter().map(ToBytes::serialized_length).sum::<usize>()
+}
+
+#[cfg(feature = "no-unstable-features")]
+impl<T: ToBytes> ToBytes for Vec<T> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        vec_to_bytes(self)
+    }
+
+    fn into_bytes(self) -> Result<Vec<u8>, Error> {
+        vec_into_bytes(self)
+    }
+
+    fn serialized_length(&self) -> usize {
+        vec_serialized_length(self)
+    }
+}
+
+#[cfg(not(feature = "no-unstable-features"))]
 impl<T: ToBytes> ToBytes for Vec<T> {
     default fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = allocate_buffer(self)?;
-        result.append(&mut (self.len() as u32).to_bytes()?);
-
-        for item in self.iter() {
-            result.append(&mut item.to_bytes()?);
-        }
-
-        Ok(result)
+        vec_to_bytes(self)
     }
 
     default fn into_bytes(self) -> Result<Vec<u8>, Error> {
-        let mut result = allocate_buffer(&self)?;
-        result.append(&mut (self.len() as u32).to_bytes()?);
-
-        for item in self {
-            result.append(&mut item.into_bytes()?);
-        }
-
-        Ok(result)
+        vec_into_bytes(self)
     }
 
     default fn serialized_length(&self) -> usize {
-        U32_SERIALIZED_LENGTH + self.iter().map(ToBytes::serialized_length).sum::<usize>()
+        vec_serialized_length(self)
     }
 }
 
+fn vec_from_bytes<T: FromBytes>(bytes: &[u8]) -> Result<(Vec<T>, &[u8]), Error> {
+    let (size, mut stream) = u32::from_bytes(bytes)?;
+
+    let mut result: Vec<T> = Vec::new();
+    #[cfg(feature = "no-unstable-features")]
+    result.reserve_exact(size as usize);
+    #[cfg(not(feature = "no-unstable-features"))]
+    result.try_reserve_exact(size as usize)?;
+
+    for _ in 0..size {
+        let (value, remainder) = T::from_bytes(stream)?;
+        result.push(value);
+        stream = remainder;
+    }
+
+    Ok((result, stream))
+}
+
+fn vec_from_vec<T: FromBytes>(bytes: Vec<u8>) -> Result<(Vec<T>, Vec<u8>), Error> {
+    Vec::<T>::from_bytes(bytes.as_slice()).map(|(x, remainder)| (x, Vec::from(remainder)))
+}
+
+#[cfg(feature = "no-unstable-features")]
+impl<T: FromBytes> FromBytes for Vec<T> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        vec_from_bytes(bytes)
+    }
+
+    fn from_vec(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
+        vec_from_vec(bytes)
+    }
+}
+
+#[cfg(not(feature = "no-unstable-features"))]
 impl<T: FromBytes> FromBytes for Vec<T> {
     default fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (size, mut stream) = u32::from_bytes(bytes)?;
-
-        let mut result: Vec<T> = Vec::new();
-        result.try_reserve_exact(size as usize)?;
-
-        for _ in 0..size {
-            let (value, remainder) = T::from_bytes(stream)?;
-            result.push(value);
-            stream = remainder;
-        }
-
-        Ok((result, stream))
+        vec_from_bytes(bytes)
     }
 
     default fn from_vec(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), Error> {
-        Self::from_bytes(bytes.as_slice()).map(|(x, remainder)| (x, Vec::from(remainder)))
+        vec_from_vec(bytes)
     }
 }
 
+#[cfg(not(feature = "no-unstable-features"))]
 impl ToBytes for Vec<u8> {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result = allocate_buffer(self)?;
@@ -369,6 +421,7 @@ impl ToBytes for Vec<u8> {
     }
 }
 
+#[cfg(not(feature = "no-unstable-features"))]
 impl FromBytes for Vec<u8> {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (size, remainder) = u32::from_bytes(bytes)?;
@@ -391,8 +444,48 @@ impl FromBytes for Vec<u8> {
 macro_rules! impl_to_from_bytes_for_array {
     ($($N:literal)+) => {
         $(
+            #[cfg(feature = "no-unstable-features")]
             impl<T: ToBytes> ToBytes for [T; $N] {
-               default fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+                fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+                    let mut result = allocate_buffer(self)?;
+                    for item in self.iter() {
+                        result.append(&mut item.to_bytes()?);
+                    }
+                    Ok(result)
+                }
+
+                fn serialized_length(&self) -> usize {
+                    self.iter().map(ToBytes::serialized_length).sum::<usize>()
+                }
+            }
+
+            #[cfg(feature = "no-unstable-features")]
+            impl<T: FromBytes> FromBytes for [T; $N] {
+                fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+                    let mut result: MaybeUninit<[T; $N]> = MaybeUninit::uninit();
+                    let result_ptr = result.as_mut_ptr() as *mut T;
+                    unsafe {
+                        for i in 0..$N {
+                            let (t, remainder) = match T::from_bytes(bytes) {
+                                Ok(success) => success,
+                                Err(error) => {
+                                    for j in 0..i {
+                                        result_ptr.add(j).drop_in_place();
+                                    }
+                                    return Err(error);
+                                }
+                            };
+                            result_ptr.add(i).write(t);
+                            bytes = remainder;
+                        }
+                        Ok((result.assume_init(), bytes))
+                    }
+                }
+            }
+
+            #[cfg(not(feature = "no-unstable-features"))]
+            impl<T: ToBytes> ToBytes for [T; $N] {
+                default fn to_bytes(&self) -> Result<Vec<u8>, Error> {
                     let mut result = allocate_buffer(self)?;
                     for item in self.iter() {
                         result.append(&mut item.to_bytes()?);
@@ -405,8 +498,9 @@ macro_rules! impl_to_from_bytes_for_array {
                 }
             }
 
+            #[cfg(not(feature = "no-unstable-features"))]
             impl<T: FromBytes> FromBytes for [T; $N] {
-               default fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+                default fn from_bytes(mut bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
                     let mut result: MaybeUninit<[T; $N]> = MaybeUninit::uninit();
                     let result_ptr = result.as_mut_ptr() as *mut T;
                     unsafe {
@@ -439,6 +533,7 @@ impl_to_from_bytes_for_array! {
     64 128 256 512
 }
 
+#[cfg(not(feature = "no-unstable-features"))]
 macro_rules! impl_to_from_bytes_for_byte_array {
     ($($len:expr)+) => {
         $(
@@ -462,6 +557,7 @@ macro_rules! impl_to_from_bytes_for_byte_array {
     }
 }
 
+#[cfg(not(feature = "no-unstable-features"))]
 impl_to_from_bytes_for_byte_array! {
      0  1  2  3  4  5  6  7  8  9
     10 11 12 13 14 15 16 17 18 19
