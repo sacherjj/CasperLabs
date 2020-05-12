@@ -1,6 +1,6 @@
 package io.casperlabs.comm.gossiping
 
-// A copy of https://github.com/monix/monix/blob/3.0.0/monix-tail/shared/src/main/scala/monix/tail/internal/IterantFromReactivePublisher.scala#L60
+// A copy of https://github.com/monix/monix/blob/3.0.0/monix-tail/shared/src/main/scala/monix/tail/internal/IterantFromReactivePublisher.scala
 // until https://github.com/monix/monix/issues/1180 is fixed.
 
 import cats.effect.Async
@@ -39,17 +39,22 @@ private[gossiping] object IterantFromReactivePublisher {
       implicit F: Async[F]
   ) extends Subscriber[A] {
 
-    private[this] val sub   = SingleAssignSubscription()
-    private[this] val state = Atomic.withPadding(null: State[F, A], LeftRight128)
+    private[this] val sub     = SingleAssignSubscription()
+    private[this] val state   = Atomic.withPadding(Empty(bufferSize): State[F, A], LeftRight128)
+    private[this] val started = Atomic(false)
 
     def start: F[Iterant[F, A]] =
       F.async { cb =>
-        if (state.compareAndSet(null, Empty(bufferSize))) {
-          sub.request(
-            // Requesting unlimited?
-            if (bufferSize < Int.MaxValue) bufferSize.toLong
-            else Long.MaxValue
-          )
+        state.get match {
+          case Enqueue(_, _, _) =>
+            if (started.compareAndSet(false, true)) {
+              sub.request(
+                // Requesting unlimited?
+                if (bufferSize < Int.MaxValue) bufferSize.toLong
+                else Long.MaxValue
+              )
+            }
+          case _ =>
         }
         // Go, go, go
         take(cb)
