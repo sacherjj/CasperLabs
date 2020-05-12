@@ -39,33 +39,24 @@ private[gossiping] object IterantFromReactivePublisher {
       implicit F: Async[F]
   ) extends Subscriber[A] {
 
-    private[this] val sub = SingleAssignSubscription()
-    // Initializing to non-null state so that if the publisher calls onError on onComplete
-    // before `start` is executed in the `use` section of the `Scope` created in `apply` we
-    // don't get a `MatchError: null`.
-    private[this] val state = Atomic.withPadding(Empty(bufferSize): State[F, A], LeftRight128)
-    // Originally state was initialized with `null` and iff `start` replaced it with an empty buffer
-    // then it asked the subscription for items. Now that state is non-null, we use a flag to make
-    // sure that only happens once.
-    private[this] val started = Atomic(false)
+    private[this] val sub   = SingleAssignSubscription()
+    private[this] val state = Atomic.withPadding(Uninitialized: State[F, A], LeftRight128)
 
     def start: F[Iterant[F, A]] =
       F.async { cb =>
-        state.get match {
-          // Only request items if the state hasn't been completed already.
-          case Enqueue(_, _, _) =>
-            if (started.compareAndSet(false, true)) {
-              sub.request(
-                // Requesting unlimited?
-                if (bufferSize < Int.MaxValue) bufferSize.toLong
-                else Long.MaxValue
-              )
-            }
-          case _ =>
+        if (initialize()) {
+          sub.request(
+            // Requesting unlimited?
+            if (bufferSize < Int.MaxValue) bufferSize.toLong
+            else Long.MaxValue
+          )
         }
         // Go, go, go
         take(cb)
       }
+
+    private def initialize(): Boolean =
+      state.compareAndSet(Uninitialized, Empty(bufferSize))
 
     private[this] val generate: (Int => F[Iterant[F, A]]) = {
       if (eagerBuffer) {
@@ -95,6 +86,10 @@ private[gossiping] object IterantFromReactivePublisher {
 
     @tailrec def onNext(a: A): Unit =
       state.get match {
+        case Uninitialized =>
+          initialize()
+          onNext(a)
+
         case current @ Enqueue(queue, length, toReceive) =>
           if (!state.compareAndSet(current, Enqueue(queue.enqueue(a), length + 1, toReceive)))
             onNext(a)
@@ -116,6 +111,10 @@ private[gossiping] object IterantFromReactivePublisher {
 
     @tailrec private def finish(fa: Iterant[F, A]): Unit =
       state.get match {
+        case Uninitialized =>
+          initialize()
+          finish(fa)
+
         case current @ Enqueue(queue, length, _) =>
           val update: Iterant[F, A] = length match {
             case 0 => fa
@@ -150,8 +149,12 @@ private[gossiping] object IterantFromReactivePublisher {
     def onComplete(): Unit =
       finish(Iterant.empty)
 
-    private def take(cb: Either[Throwable, Iterant[F, A]] => Unit): Unit =
+    @tailrec private def take(cb: Either[Throwable, Iterant[F, A]] => Unit): Unit =
       state.get match {
+        case Uninitialized =>
+          initialize()
+          take(cb)
+
         case current @ Enqueue(queue, length, toReceive) =>
           if (length == 0) {
             val update = Take(cb, toReceive)
@@ -191,6 +194,8 @@ private[gossiping] object IterantFromReactivePublisher {
 
   private sealed abstract class State[+F[_], +A]
 
+  private case object Uninitialized extends State[Nothing, Nothing]
+
   private final case class Stop[F[_], A](fa: Iterant[F, A]) extends State[F, A]
 
   private final case class Enqueue[F[_], A](queue: Queue[A], length: Int, toReceive: Int)
@@ -203,4 +208,5 @@ private[gossiping] object IterantFromReactivePublisher {
 
   private def Empty[F[_], A](toReceive: Int): State[F, A] =
     Enqueue(Queue.empty, 0, toReceive)
+
 }
