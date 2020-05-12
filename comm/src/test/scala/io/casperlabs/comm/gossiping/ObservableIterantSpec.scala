@@ -1,12 +1,13 @@
 package io.casperlabs.comm.gossiping
 
 import monix.eval.Task
-import monix.execution.Scheduler
+import monix.execution.{Cancelable, Scheduler}
 import monix.reactive.Observable
 import monix.reactive.observers.Subscriber
+import monix.tail.Iterant
 import org.scalatest._
-import monix.execution.Cancelable
 import scala.concurrent.duration._
+import scala.util.control.NonFatal
 
 class ObservableIterantSpec extends FlatSpec {
 
