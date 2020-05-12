@@ -39,13 +39,20 @@ private[gossiping] object IterantFromReactivePublisher {
       implicit F: Async[F]
   ) extends Subscriber[A] {
 
-    private[this] val sub     = SingleAssignSubscription()
-    private[this] val state   = Atomic.withPadding(Empty(bufferSize): State[F, A], LeftRight128)
+    private[this] val sub = SingleAssignSubscription()
+    // Initializing to non-null state so that if the publisher calls onError on onComplete
+    // before `start` is executed in the `use` section of the `Scope` created in `apply` we
+    // don't get a `MatchError: null`.
+    private[this] val state = Atomic.withPadding(Empty(bufferSize): State[F, A], LeftRight128)
+    // Originally state was initialized with `null` and iff `start` replaced it with an empty buffer
+    // then it asked the subscription for items. Now that state is non-null, we use a flag to make
+    // sure that only happens once.
     private[this] val started = Atomic(false)
 
     def start: F[Iterant[F, A]] =
       F.async { cb =>
         state.get match {
+          // Only request items if the state hasn't been completed already.
           case Enqueue(_, _, _) =>
             if (started.compareAndSet(false, true)) {
               sub.request(
