@@ -2,7 +2,7 @@ import pytest
 import semver
 import argparse
 
-from casperlabs_client.cli import sem_ver
+from casperlabs_client.arg_types import sem_ver
 
 
 @pytest.mark.parametrize(
@@ -20,10 +20,9 @@ def test_good_sem_ver(sem_ver_str, values_tuple):
 
 
 @pytest.mark.parametrize(
-    "sem_ver_str",
-    ("1,2,3", "0.0", "11 12 31", "notvalid", "1.2.3-pre.4"),
+    "sem_ver_str", ("1,2,3", "0.0", "11 12 31", "notvalid", "1.2.3-pre.4")
 )
 def test_bad_sem_ver(sem_ver_str):
     """ We only allow major.minor.patch so test "valid" but bad. """
     with pytest.raises(argparse.ArgumentTypeError):
-        sv = sem_ver(sem_ver_str)
+        _ = sem_ver(sem_ver_str)

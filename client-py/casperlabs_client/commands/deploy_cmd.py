@@ -1,7 +1,13 @@
-from dataclasses import dataclass
-from semver import VersionInfo
+from ..arg_types import sem_ver
 
-from casperlabs_client.crypto import read_pem_key, private_to_public_key
+COMMAND_NAME = "deploy"
+HELP_TEXT = (
+    "Deploy a smart contract source file to Casper on an existing running node. "
+    "The deploy will be packaged and sent as a block to the network depending "
+    "on the configuration of the Casper instance."
+)
+STATUS_CHECK_DELAY = 0.5
+STATUS_TIMEOUT = 180  # 3 minutes
 
 # fmt: off
 DEPLOY_OPTIONS = [
@@ -24,52 +30,65 @@ DEPLOY_OPTIONS = [
     [('--session-args',), dict(required=False, type=str, help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""")],
     [('--ttl-millis',), dict(required=False, type=int, help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""")],
     [('-w', '--wait-for-processed'), dict(action='store_true', help='Wait for deploy status PROCESSED or DISCARDED')],
-    [('--timeout-seconds',), dict(type=int, default=CasperLabsClient.DEPLOY_STATUS_TIMEOUT, help='Timeout in seconds')],
+    [('--timeout-seconds',), dict(type=int, default=STATUS_TIMEOUT, help='Timeout in seconds')],
     [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')]
 ]
-DEPLOY_OPTIONS_PRIVATE = \
-    [
-     [('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]
-    ] + DEPLOY_OPTIONS
+DEPLOY_OPTIONS_PRIVATE = [
+    [('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]
+] + DEPLOY_OPTIONS
 # fmt:on
 
+# TODO: Encode proper logic for required arguments and testing of arguments at first parsing of dataclass
+# Argument dependency tree to represent in help
+# session (WASM file)
+#   or
+# session-hash or session-name
+#   session-entry-point or 'call' will be used.
+#   session-sem-ver or latest will be used.
 
-@dataclass
-class Deploy:
-    from_: bytes = None
-    gas_price: int = 10
-    payment: str = None
-    session: str = None
-    public_key: str = None
-    session_args: bytes = None
-    payment_args: bytes = None
-    payment_amount: int = None
-    payment_hash: bytes = None
-    payment_name: str = None
-    payment_sem_ver: VersionInfo = None
-    session_hash: bytes = None
-    session_name: str = None
-    session_sem_ver: VersionInfo = None
-    ttl_millis: int = 0
-    dependencies: list = None
-    chain_name: str = None
-    private_key: str = None
 
-    @staticmethod
-    def from_args(args) -> 'Deploy':
-        # TODO: Parse and convert args for loaded Deploy dataclass
-        pass
-
-    @property
-    def from_addr(self):
-        """ Attempts to guess which from account we should use for the user. """
-        # TODO: Should this be required explicitly `from`?
-        if self.from_:
-            return self.from_
-        elif self.public_key:
-            return read_pem_key(self.public_key)
-        elif self.private_key:
-            return private_to_public_key(self.private_key)
-        else:
-            raise TypeError("Unable to generate from address using `from`, `public_key`, or `private_key`.")
-
+# TODO: Verify that we can move to Python 3.7 to use dataclasses to clean up
+# from dataclasses import dataclass
+# from semver import VersionInfo
+#
+# from casperlabs_client.crypto import read_pem_key, private_to_public_key
+#
+# @dataclass
+# class Deploy:
+#     from_: bytes = None
+#     gas_price: int = 10
+#     payment: str = None
+#     session: str = None
+#     public_key: str = None
+#     session_args: bytes = None
+#     payment_args: bytes = None
+#     payment_amount: int = None
+#     payment_hash: bytes = None
+#     payment_name: str = None
+#     payment_sem_ver: VersionInfo = None
+#     session_hash: bytes = None
+#     session_name: str = None
+#     session_sem_ver: VersionInfo = None
+#     ttl_millis: int = 0
+#     dependencies: list = None
+#     chain_name: str = None
+#     private_key: str = None
+#
+#     @staticmethod
+#     def from_args(args) -> 'Deploy':
+#         # TODO: Parse and convert args for loaded Deploy dataclass
+#         pass
+#
+#     @property
+#     def from_addr(self):
+#         """ Attempts to guess which from account we should use for the user. """
+#         # TODO: Should this be required explicitly `from`?
+#         if self.from_:
+#             return self.from_
+#         elif self.public_key:
+#             return read_pem_key(self.public_key)
+#         elif self.private_key:
+#             return private_to_public_key(self.private_key)
+#         else:
+#             raise TypeError("Unable to generate from address using `from`, `public_key`, or `private_key`.")
+#

@@ -7,8 +7,9 @@ import grpc
 import functools
 import logging
 import tempfile
-import semver
 from semver import VersionInfo
+
+from casperlabs_client.commands import deploy_cmd
 
 # Hack to fix the relative imports problems with grpc #
 import sys
@@ -218,9 +219,6 @@ class CasperLabsClient:
     gRPC CasperLabs client.
     """
 
-    DEPLOY_STATUS_CHECK_DELAY = 0.5
-    DEPLOY_STATUS_TIMEOUT = 180  # 3 minutes
-
     def __init__(
         self,
         host: str = DEFAULT_HOST,
@@ -293,9 +291,11 @@ class CasperLabsClient:
         payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
+        payment_entry_point: str = None,
         payment_sem_ver: VersionInfo = None,
         session_hash: bytes = None,
         session_name: str = None,
+        session_entry_point: str = None,
         session_sem_ver: VersionInfo = None,
         ttl_millis: int = 0,
         dependencies: list = None,
@@ -315,9 +315,11 @@ class CasperLabsClient:
             payment_amount=payment_amount,
             payment_hash=payment_hash,
             payment_name=payment_name,
+            payment_entry_point=payment_entry_point,
             payment_sem_ver=payment_sem_ver,
             session_hash=session_hash,
             session_name=session_name,
+            session_entry_point=session_entry_point,
             session_sem_ver=session_sem_ver,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
@@ -326,6 +328,7 @@ class CasperLabsClient:
 
     @api
     def sign_deploy(self, deploy, public_key, private_key_file):
+        print("capserlabs_client.py::sign_deploy")
         return sign_deploy(deploy, public_key, private_key_file)
 
     @api
@@ -342,9 +345,11 @@ class CasperLabsClient:
         payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
+        payment_entry_point: str = None,
         payment_sem_ver: VersionInfo = None,
         session_hash: bytes = None,
         session_name: str = None,
+        session_entry_point: str = None,
         session_sem_ver: VersionInfo = None,
         ttl_millis: int = 0,
         dependencies=None,
@@ -355,35 +360,40 @@ class CasperLabsClient:
         The deploy will be packaged and sent as a block to the network depending
         on the configuration of the Casper instance.
 
-        :param from_addr:     Purse address that will be used to pay for the deployment.
-        :param gas_price:     The price of gas for this transaction in units dust/gas.
-                              Must be positive integer.
-        :param payment:       Path to the file with payment code.
-        :param session:       Path to the file with session code.
-        :param public_key:    Path to a file with public key (Ed25519)
-        :param private_key:   Path to a file with private key (Ed25519)
-        :param session_args:  List of ABI encoded arguments of session contract
-        :param payment_args:  List of ABI encoded arguments of payment contract
-        :param session-hash:  Hash of the stored contract to be called in the
-                              session; base16 encoded.
-        :param session-name:  Name of the stored contract (associated with the
-                              executing account) to be called in the session.
-        :param session-uref:  URef of the stored contract to be called in the
-                              session; base16 encoded.
-        :param payment-hash:  Hash of the stored contract to be called in the
-                              payment; base16 encoded.
-        :param payment-name:  Name of the stored contract (associated with the
-                              executing account) to be called in the payment.
-        :param payment-uref:  URef of the stored contract to be called in the
-                              payment; base16 encoded.
-        :ttl_millis:          Time to live. Time (in milliseconds) that the
-                              deploy will remain valid for.
-        :dependencies:        List of deploy hashes (base16 encoded) which
-                              must be executed before this deploy.
-        :chain_name:          Name of the chain to optionally restrict the
-                              deploy from being accidentally included
-                              anywhere else.
-        :return:              deploy hash in base16 format
+        :param from_addr:           Purse address that will be used to pay for the deployment.
+        :param gas_price:           The price of gas for this transaction in units dust/gas.
+                                    Must be positive integer.
+        :param payment:             Path to the file with payment code.
+        :param session:             Path to the file with session code.
+        :param public_key:          Path to a file with public key (Ed25519)
+        :param private_key:         Path to a file with private key (Ed25519)
+        :param session_args:        List of ABI encoded arguments of session contract
+        :param payment_args:        List of ABI encoded arguments of payment contract
+        :param session_hash:        Hash of the stored contract to be called in the
+                                    session; base16 encoded.
+        :param session_name:        Name of the stored contract (associated with the
+                                    executing account) to be called in the session.
+        :param session_entry_point: Name of Entrypoint in contract to call.
+                                    Defaults to `call` if not given.
+        :param session_sem_ver:     Semantic Version of the session contract Entrypoint to use,
+                                    in the form: `major.minor.patch`
+        :param payment_amount       Amount to be used for payment in the standard payment contract.
+        :param payment_hash:        Hash of the stored contract to be called in the
+                                    payment; base16 encoded.
+        :param payment_name:        Name of the stored contract (associated with the
+                                    executing account) to be called in the payment.
+        :param payment_entry_point: Name of Entrypoint in contract to call.
+                                    Defaults to `call` if not given.
+        :param payment_sem_ver:     Semantic Version of the payment contract Entrypoint to use,
+                                    in the form: `major.minor.patch`
+        :param ttl_millis:          Time to live. Time (in milliseconds) that the
+                                    deploy will remain valid for.
+        :param dependencies:        List of deploy hashes (base16 encoded) which
+                                    must be executed before this deploy.
+        :param chain_name:          Name of the chain to optionally restrict the
+                                    deploy from being accidentally included
+                                    anywhere else.
+        :return:                    deploy hash in base16 format
         """
 
         deploy = self.make_deploy(
@@ -397,9 +407,11 @@ class CasperLabsClient:
             payment_amount=payment_amount,
             payment_hash=payment_hash,
             payment_name=payment_name,
+            payment_entry_point=payment_entry_point,
             payment_sem_ver=payment_sem_ver,
             session_hash=session_hash,
             session_name=session_name,
+            session_entry_point=session_entry_point,
             session_sem_ver=session_sem_ver,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
@@ -535,7 +547,8 @@ class CasperLabsClient:
                 yield self._call_dot(dot_dag_description, file_name(), file_format)
                 previous_block_hashes = block_hashes
 
-    def _call_dot(self, dot_dag_description, file_name, file_format):
+    @staticmethod
+    def _call_dot(dot_dag_description, file_name, file_format):
         with tempfile.NamedTemporaryFile(mode="w") as f:
             f.write(dot_dag_description)
             f.flush()
@@ -584,17 +597,17 @@ class CasperLabsClient:
                 "Account's named_keys map did not contain Mint contract address.",
             )
 
-        mintPublic = urefs[0]
+        mint_public = urefs[0]
 
-        mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = account.main_purse.uref.hex()
-        localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
+        mint_public_hex = mint_public.key.uref.uref.hex()
+        purse_addr_hex = account.main_purse.uref.hex()
+        local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
 
-        balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
-        balanceURefHex = balanceURef.cl_value.value.key.uref.uref.hex()
-        balance = self.queryState(block_hash, balanceURefHex, "", "uref")
-        balanceStrValue = balance.cl_value.value.u512.value
-        return int(balanceStrValue)
+        balance_u_ref = self.queryState(block_hash, local_key_value, "", "local")
+        balance_u_ref_hex = balance_u_ref.cl_value.value.key.uref.uref.hex()
+        balance = self.queryState(block_hash, balance_u_ref_hex, "", "uref")
+        balance_str_value = balance.cl_value.value.u512.value
+        return int(balance_str_value)
 
     @api
     def showDeploy(
@@ -602,8 +615,8 @@ class CasperLabsClient:
         deploy_hash_base16: str,
         full_view: bool = False,
         wait_for_processed: bool = False,
-        delay: int = DEPLOY_STATUS_CHECK_DELAY,
-        timeout_seconds: int = DEPLOY_STATUS_TIMEOUT,
+        delay: int = deploy_cmd.STATUS_CHECK_DELAY,
+        timeout_seconds: int = deploy_cmd.STATUS_TIMEOUT,
     ):
         """
         Retrieve information about a single deploy by hash.
@@ -709,8 +722,8 @@ class CasperLabsClient:
         self,
         deploy_hash,
         on_error_raise=True,
-        delay=DEPLOY_STATUS_CHECK_DELAY,
-        timeout_seconds=DEPLOY_STATUS_TIMEOUT,
+        delay=deploy_cmd.STATUS_CHECK_DELAY,
+        timeout_seconds=deploy_cmd.STATUS_TIMEOUT,
     ):
         start_time = time.time()
         result = None

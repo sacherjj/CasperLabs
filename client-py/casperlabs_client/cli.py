@@ -8,9 +8,8 @@ import base64
 import sys
 import os
 import functools
-import logging
 from pathlib import Path
-import semver
+from casperlabs_client.arg_types import natural
 
 from casperlabs_client import (
     CasperLabsClient,
@@ -19,7 +18,7 @@ from casperlabs_client import (
     DEFAULT_INTERNAL_PORT,
     bundled_contract,
 )
-from casperlabs_client.commands import deploy
+from casperlabs_client.commands import deploy_cmd
 from casperlabs_client.utils import hexify, jsonify
 from casperlabs_client.abi import ABI
 from casperlabs_client.crypto import (
@@ -88,34 +87,6 @@ def _set_session(args, file_name):
 
 
 @guarded_command
-def bond_command(casperlabs_client, args):
-    logging.info(f"BOND {args}")
-    _set_session(args, "bonding.wasm")
-
-    if not args.session_args:
-        args.session_args = ABI.args_to_json(
-            ABI.args([ABI.long_value("amount", args.amount)])
-        )
-
-    return deploy_command(casperlabs_client, args)
-
-
-@guarded_command
-def unbond_command(casperlabs_client, args):
-    logging.info(f"UNBOND {args}")
-    _set_session(args, "unbonding.wasm")
-
-    if not args.session_args:
-        args.session_args = ABI.args_to_json(
-            ABI.args(
-                [ABI.optional_value("amount", ABI.long_value("amount", args.amount))]
-            )
-        )
-
-    return deploy_command(casperlabs_client, args)
-
-
-@guarded_command
 def transfer_command(casperlabs_client, args):
     _set_session(args, "transfer_to_account_u512.wasm")
 
@@ -140,9 +111,10 @@ def transfer_command(casperlabs_client, args):
     return deploy_command(casperlabs_client, args)
 
 
+# TODO: Replace with staticmethod constructor in commands/deploy_cmd.py
 def _deploy_kwargs(args, private_key_accepted=True):
+    print(f"cli.py::_deploy_kwargs {args}")
     from_addr = (
-        # TODO: Clean up this mess
         getattr(args, "from")
         and bytes.fromhex(getattr(args, "from"))
         or getattr(args, "public_key")
@@ -170,14 +142,18 @@ def _deploy_kwargs(args, private_key_accepted=True):
         public_key=args.public_key or None,
         session_args=args.session_args
         and ABI.args_from_json(args.session_args)
-        or None,  # TODO: Why would args_from_json even return None or False?
+        or None,  # TODO: Why would args_from_json ever return None or False?
         payment_args=args.payment_args
         and ABI.args_from_json(args.payment_args)
-        or None,  # TODO: Why would args_from_json even return None or False?
+        or None,  # TODO: Why would args_from_json ever return None or False?
         payment_hash=args.payment_hash and bytes.fromhex(args.payment_hash),
         payment_name=args.payment_name,
+        payment_entry_point=args.payment_entry_point,
+        payment_sem_ver=args.payment_sem_ver,
         session_hash=args.session_hash and bytes.fromhex(args.session_hash),
         session_name=args.session_name,
+        session_entry_point=args.session_entry_point,
+        session_sem_ver=args.session_sem_ver,
         ttl_millis=args.ttl_millis,
         dependencies=args.dependencies,
         chain_name=args.chain_name,
@@ -230,6 +206,7 @@ def send_deploy_command(casperlabs_client, args):
 
 @guarded_command
 def deploy_command(casperlabs_client, args):
+    print(f"cli.py::deploy_command {args}")
     kwargs = _deploy_kwargs(args)
     deploy_hash = casperlabs_client.deploy(**kwargs)
     print(f"Success! Deploy {deploy_hash} deployed")
@@ -309,7 +286,7 @@ def write_file(file_name, text):
         f.write(text)
 
 
-def write_file_binary(file_name, data):
+def write_binary_file(file_name, data):
     with open(file_name, "wb") as f:
         f.write(data)
 
@@ -334,8 +311,8 @@ def keygen_command(casperlabs_client, args):
         validator_public_pem,
         validator_public_bytes,
     ) = generate_validators_keys()
-    write_file_binary(validator_private_path, validator_private_pem)
-    write_file_binary(validator_pub_path, validator_public_pem)
+    write_binary_file(validator_private_path, validator_private_pem)
+    write_binary_file(validator_pub_path, validator_public_pem)
     write_file(validator_id_path, encode_base64(validator_public_bytes))
     write_file(validator_id_hex_path, validator_public_bytes.hex())
 
@@ -343,8 +320,8 @@ def keygen_command(casperlabs_client, args):
 
     node_cert, key_pem = generate_certificates(private_key, public_key)
 
-    write_file_binary(node_priv_path, key_pem)
-    write_file_binary(node_cert_path, node_cert)
+    write_binary_file(node_priv_path, key_pem)
+    write_binary_file(node_cert_path, node_cert)
 
     write_file(node_id_path, public_address(public_key))
     print(f"Keys successfully created in directory: {str(directory.absolute())}")
@@ -393,7 +370,8 @@ def stream_events_command(casperlabs_client, args):
             print(hexify(event))
 
 
-def check_directory(path):
+def directory_for_write(path):
+    """  """
     if not os.path.exists(path):
         raise argparse.ArgumentTypeError(f"Directory '{path}' does not exist")
     if not os.path.isdir(path):
@@ -421,29 +399,8 @@ def dot_output(file_name):
     return file_name
 
 
-def natural(number):
-    """Check number is an integer greater than 0"""
-    n = int(number)
-    if n < 1:
-        raise argparse.ArgumentTypeError(f"{number} is not a positive int value")
-    return n
-
-
-def sem_ver(sem_ver_str):
-    """ Check string is a valid Sym Ver """
-    error_str = f"{sem_ver_str} is not a valid format. Should be `major.minor.patch`"
-    try:
-        version = semver.VersionInfo.parse(sem_ver_str)
-    except Exception as e:
-        raise argparse.ArgumentTypeError(error_str)
-    # We are not using prerelease or build numbers, so should be None
-    if version.prerelease is not None or version.build is not None:
-        raise argparse.ArgumentTypeError(error_str)
-    return version
-
-
 def read_version() -> str:
-    version_path = f"{os.path.dirname(os.path.realpath(__file__))}/VERSION"
+    version_path = Path(os.path.dirname(os.path.realpath(__file__))) / "VERSION"
     with open(version_path, "r") as f:
         return f.read().strip()
 
@@ -537,11 +494,10 @@ def cli(*arguments) -> int:
     parser = Parser()
 
     # fmt: off
-    parser.addCommand('deploy', deploy_command, 'Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance',
-                      deploy.DEPLOY_OPTIONS_PRIVATE)
+    parser.addCommand(deploy_cmd.COMMAND_NAME, deploy_command, deploy_cmd.HELP_TEXT, deploy_cmd.DEPLOY_OPTIONS_PRIVATE)
 
     parser.addCommand('make-deploy', make_deploy_command, "Constructs a deploy that can be signed and sent to a node.",
-                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + DEPLOY_OPTIONS)
+                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_cmd.DEPLOY_OPTIONS)
 
     parser.addCommand('sign-deploy', sign_deploy_command, "Cryptographically signs a deploy. The signature is appended to existing approvals.",
                       [[('-o', '--signed-deploy-path'), dict(required=False, default=None, help="Path to the file where signed deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")],
@@ -552,17 +508,10 @@ def cli(*arguments) -> int:
     parser.addCommand('send-deploy', send_deploy_command, "Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.",
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
-    parser.addCommand('bond', bond_command, 'Issues bonding request',
-                      [[('-a', '--amount'), dict(required=True, type=int, help='amount of motes to bond')]] + DEPLOY_OPTIONS_PRIVATE)
-
-    parser.addCommand('unbond', unbond_command, 'Issues unbonding request',
-                      [[('-a', '--amount'),
-                       dict(required=False, default=None, type=int, help='Amount of motes to unbond. If not provided then a request to unbond with full staked amount is made.')]] + DEPLOY_OPTIONS_PRIVATE)
-
     parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
                       [[('-a', '--amount'), dict(required=True, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
                        [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
-                       ] + DEPLOY_OPTIONS_PRIVATE)
+                       ] + deploy_cmd.DEPLOY_OPTIONS_PRIVATE)
 
     parser.addCommand('propose', propose_command, '[DEPRECATED] Force a node to propose a block based on its accumulated deploys.', [])
 
@@ -575,7 +524,7 @@ def cli(*arguments) -> int:
     parser.addCommand('show-deploy', show_deploy_command, 'View properties of a deploy known by Casper on an existing running node.',
                       [[('hash',), dict(type=str, help='Value of the deploy hash, base16 encoded.')],
                        [('-w', '--wait-for-processed'), dict(action='store_true', help='Wait for deploy status PROCESSED or DISCARDED')],
-                       [('--timeout-seconds',), dict(type=int, default=CasperLabsClient.DEPLOY_STATUS_TIMEOUT, help='Timeout in seconds')]])
+                       [('--timeout-seconds',), dict(type=int, default=deploy_cmd.STATUS_TIMEOUT, help='Timeout in seconds')]])
 
     parser.addCommand('show-deploys', show_deploys_command, 'View deploys included in a block.',
                       [[('hash',), dict(type=str, help='Value of the block hash, base16 encoded.')]])
@@ -612,7 +561,7 @@ def cli(*arguments) -> int:
            validator-id-hex      # validator ID in hex, derived from validator.public.pem
            validator-private.pem # ed25519 private key
            validator-public.pem  # ed25519 public key"""),
-                      [[('directory',), dict(type=check_directory, help="Output directory for keys. Should already exists.")]])
+                      [[('directory',), dict(type=directory_for_write, help="Output directory for keys. Should already exists.")]])
 
     parser.addCommand('show-peers', show_peers_command, "Show peers connected to the node.", [])
 

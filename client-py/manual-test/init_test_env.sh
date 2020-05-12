@@ -10,7 +10,5 @@ make docker-build-all
 popd
 
 pushd ../../hack/docker
-make node-0 up
+make node-0/up
 popd
-
-casperlabs_client
