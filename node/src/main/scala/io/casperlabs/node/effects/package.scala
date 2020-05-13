@@ -4,22 +4,28 @@ import java.nio.file.Path
 
 import cats._
 import cats.effect._
+import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl._
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import org.apache.commons.io.FileUtils
+import org.apache.commons.io.filefilter.WildcardFileFilter
+import org.apache.commons.io.filefilter.IOFileFilter
 
 package object effects {
   import com.zaxxer.hikari.HikariConfig
@@ -150,5 +156,34 @@ package object effects {
       writeXa <- mkTransactor(writeXaConfig, writeThreads)
       readXa  <- mkTransactor(readXaConfig, readThreads)
     } yield (writeXa, readXa)
+  }
+
+  def periodicStorageSizeMetrics[F[_]: Concurrent: Timer: Metrics](
+      conf: Configuration,
+      updatePeriod: FiniteDuration = 15.seconds
+  ): Resource[F, F[Unit]] = {
+    implicit val metricsSource      = Metrics.BaseSource / "storage"
+    val serverDataDir               = conf.server.dataDir.toFile
+    val sqlFileFilter: IOFileFilter = new WildcardFileFilter("sqlite*")
+    val sqlDirFilter: IOFileFilter  = null
+
+    val getSizes = Sync[F].delay {
+      val dataDirSize = FileUtils.sizeOfDirectory(serverDataDir)
+      val sqliteFiles = FileUtils.listFiles(serverDataDir, sqlFileFilter, sqlDirFilter)
+      val sqliteSize  = sqliteFiles.asScala.map(_.length).sum
+      // The node configuraiton doesn't know the file name(s) for Global State,
+      // but it's somewhere in the data-dir, so the difference between the whole
+      // director and the SQLite files (multiple, because of WAL) is indicative.
+      (dataDirSize, sqliteSize)
+    }
+
+    val update = for {
+      (dataDirSize, sqliteSize) <- getSizes
+      _                         <- Metrics[F].setGauge("data-dir-size", dataDirSize)
+      _                         <- Metrics[F].setGauge("sqlite-size", sqliteSize)
+      _                         <- Timer[F].sleep(updatePeriod)
+    } yield ()
+
+    update.forever.background
   }
 }

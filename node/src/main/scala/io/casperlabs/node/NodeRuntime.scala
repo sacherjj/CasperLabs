@@ -144,6 +144,8 @@ class NodeRuntime private[node] (
                                           )
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
+      _ <- effects.periodicStorageSizeMetrics(conf)
+
       implicit0(
         storage: SQLiteStorage.CombinedStorage[Task]
       ) <- Resource.liftF(
