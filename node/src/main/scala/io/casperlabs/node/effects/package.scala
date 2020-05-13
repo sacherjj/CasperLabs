@@ -162,26 +162,31 @@ package object effects {
       conf: Configuration,
       updatePeriod: FiniteDuration = 15.seconds
   ): Resource[F, F[Unit]] = {
-    implicit val metricsSource      = Metrics.BaseSource / "storage"
-    val serverDataDir               = conf.server.dataDir.toFile
+    implicit val metricsSource = Metrics.BaseSource / "storage"
+    val serverDataDir          = conf.server.dataDir.toFile
+    // The node configuration doesn't know where the global state is,
+    // but by default it's .mdb files under a subdirectory of the data dir.
+    // NOTE: Doesn't work with docker, separate containers.
+    val maybeGlobalStateDir =
+      Option(conf.server.dataDir.resolve("global_state")).map(_.toFile).filter(_.exists)
+
     val sqlFileFilter: IOFileFilter = new WildcardFileFilter("sqlite*")
     val sqlDirFilter: IOFileFilter  = null
 
     val getSizes = Sync[F].delay {
-      val dataDirSize = FileUtils.sizeOfDirectory(serverDataDir)
-      val sqliteFiles = FileUtils.listFiles(serverDataDir, sqlFileFilter, sqlDirFilter)
-      val sqliteSize  = sqliteFiles.asScala.map(_.length).sum
-      // The node configuraiton doesn't know the file name(s) for Global State,
-      // but it's somewhere in the data-dir, so the difference between the whole
-      // director and the SQLite files (multiple, because of WAL) is indicative.
-      (dataDirSize, sqliteSize)
+      val dataDirSize        = FileUtils.sizeOfDirectory(serverDataDir)
+      val sqliteFiles        = FileUtils.listFiles(serverDataDir, sqlFileFilter, sqlDirFilter)
+      val sqliteSize         = sqliteFiles.asScala.map(_.length).sum
+      val globalStateDirSize = maybeGlobalStateDir.fold(0L)(FileUtils.sizeOfDirectory)
+      (dataDirSize, sqliteSize, globalStateDirSize)
     }
 
     val update = for {
-      (dataDirSize, sqliteSize) <- getSizes
-      _                         <- Metrics[F].setGauge("data-dir-size-bytes", dataDirSize)
-      _                         <- Metrics[F].setGauge("sqlite-size-bytes", sqliteSize)
-      _                         <- Timer[F].sleep(updatePeriod)
+      (dirS, sqlS, gsS) <- getSizes
+      _                 <- Metrics[F].setGauge("data-dir-size-bytes", dirS)
+      _                 <- Metrics[F].setGauge("sqlite-size-bytes", sqlS)
+      _                 <- Metrics[F].setGauge("global-state-size-bytes", gsS)
+      _                 <- Timer[F].sleep(updatePeriod)
     } yield ()
 
     update.forever.background
