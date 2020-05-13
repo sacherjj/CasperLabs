@@ -368,7 +368,6 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                         return Ok(query.into_not_found_result(&msg_prefix));
                     }
                 }
-
                 StoredValue::CLValue(cl_value) if cl_value.cl_type() == &CLType::Key => {
                     if let Ok(key) = cl_value.into_t::<Key>() {
                         query.current_key = key.normalize();
@@ -376,7 +375,6 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                         return Ok(query.into_not_found_result("Failed to parse CLValue as Key"));
                     }
                 }
-
                 StoredValue::CLValue(cl_value) => {
                     let msg_prefix = format!(
                         "Query cannot continue as {:?} is not an account, contract nor key to \
@@ -385,7 +383,6 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                     );
                     return Ok(query.into_not_found_result(&msg_prefix));
                 }
-
                 StoredValue::Contract(contract) => {
                     let name = query.next_name();
                     if let Some(key) = contract.named_keys().get(name) {
@@ -395,9 +392,12 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
                         return Ok(query.into_not_found_result(&msg_prefix));
                     }
                 }
-
-                StoredValue::ContractPackage(_) => {}
-                StoredValue::ContractWasm(_) => {}
+                StoredValue::ContractPackage(_) => {
+                    return Ok(query.into_not_found_result(&"ContractPackage value found."));
+                }
+                StoredValue::ContractWasm(_) => {
+                    return Ok(query.into_not_found_result(&"ContractWasm value found."));
+                }
             }
         }
     }
