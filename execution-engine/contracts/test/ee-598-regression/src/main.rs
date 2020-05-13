@@ -11,11 +11,11 @@ const POS_BOND: &str = "bond";
 const POS_UNBOND: &str = "unbond";
 
 fn bond(contract_key: Key, amount: U512, source: URef) {
-    runtime::call_contract::<_, ()>(contract_key, (POS_BOND, amount, source));
+    runtime::call_contract::<_, ()>(contract_key, POS_BOND, (amount, source));
 }
 
 fn unbond(contract_key: Key, amount: Option<U512>) {
-    runtime::call_contract::<_, ()>(contract_key, (POS_UNBOND, amount));
+    runtime::call_contract::<_, ()>(contract_key, POS_UNBOND, (amount,));
 }
 
 #[no_mangle]

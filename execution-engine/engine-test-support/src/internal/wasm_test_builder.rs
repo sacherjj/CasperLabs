@@ -48,7 +48,7 @@ use engine_storage::{
 use types::{
     account::PublicKey,
     bytesrepr::{self, ToBytes},
-    CLValue, ContractHash, Key, URef, U512,
+    CLValue, Contract, ContractHash, Key, URef, U512,
 };
 
 use crate::internal::utils;
@@ -634,7 +634,19 @@ where
         }
     }
 
-    pub fn get_contract(&self, contract_hash: ContractHash) -> Option<ContractWasm> {
+    pub fn get_contract(&self, contract_hash: ContractHash) -> Option<Contract> {
+        let contract_value: StoredValue = self
+            .query(None, contract_hash.into(), &[])
+            .expect("should have contract value");
+
+        if let StoredValue::Contract(contract) = contract_value {
+            Some(contract)
+        } else {
+            None
+        }
+    }
+
+    pub fn get_contract_wasm(&self, contract_hash: ContractHash) -> Option<ContractWasm> {
         let contract_value: StoredValue = self
             .query(None, contract_hash.into(), &[])
             .expect("should have contract value");

@@ -41,14 +41,21 @@ impl StoredValue {
         }
     }
 
-    pub fn as_contract(&self) -> Option<&ContractWasm> {
+    pub fn as_contract(&self) -> Option<&Contract> {
+        match self {
+            StoredValue::Contract(contract) => Some(contract),
+            _ => None,
+        }
+    }
+
+    pub fn as_contract_wasm(&self) -> Option<&ContractWasm> {
         match self {
             StoredValue::ContractWasm(contract_wasm) => Some(contract_wasm),
             _ => None,
         }
     }
 
-    pub fn as_contract_metadata(&self) -> Option<&ContractPackage> {
+    pub fn as_contract_package(&self) -> Option<&ContractPackage> {
         match self {
             StoredValue::ContractPackage(metadata) => Some(&metadata),
             _ => None,

@@ -35,7 +35,7 @@ pub extern "C" fn call() {
 
         let pos_pointer = system::get_proof_of_stake();
 
-        let payment_purse: URef = runtime::call_contract(pos_pointer, (GET_PAYMENT_PURSE,));
+        let payment_purse: URef = runtime::call_contract(pos_pointer, GET_PAYMENT_PURSE, ());
 
         system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
     }

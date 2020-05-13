@@ -16,18 +16,18 @@ pub extern "C" fn call() {
     ]);
 
     let amount1 = U512::from(100);
-    let purse1: Key = runtime::call_contract(mint.clone(), ("create", amount1));
+    let purse1: Key = runtime::call_contract(mint.clone(), "create", (amount1,));
 
     let amount2 = U512::from(300);
-    let purse2: Key = runtime::call_contract(mint.clone(), ("create", amount2));
+    let purse2: Key = runtime::call_contract(mint.clone(), "create", (amount2,));
 
     let result: String =
-        runtime::call_contract(mint.clone(), ("transfer", purse1, purse2, U512::from(70)));
+        runtime::call_contract(mint.clone(), "transfer", (purse1, purse2, U512::from(70)));
 
     assert!(&result == "Success!");
 
-    let new_amount1: Option<U512> = runtime::call_contract(mint.clone(), ("balance", purse1));
-    let new_amount2: Option<U512> = runtime::call_contract(mint, ("balance", purse2));
+    let new_amount1: Option<U512> = runtime::call_contract(mint.clone(), "balance", (purse1,));
+    let new_amount2: Option<U512> = runtime::call_contract(mint, "balance", (purse2,));
 
     assert!(new_amount1.unwrap() == U512::from(30));
     assert!(new_amount2.unwrap() == U512::from(370));

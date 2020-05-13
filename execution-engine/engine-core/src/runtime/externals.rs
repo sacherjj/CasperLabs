@@ -149,15 +149,25 @@ where
                 // args(2) = pointer to function arguments in Wasm memory
                 // args(3) = size of arguments
                 // args(4) = pointer to result size (output)
-                let (key_ptr, key_size, args_ptr, args_size, result_size_ptr): (_, _, _, u32, _) =
-                    Args::parse(args)?;
+                let (
+                    key_ptr,
+                    key_size,
+                    entry_point_name_ptr,
+                    entry_point_name_size,
+                    args_ptr,
+                    args_size,
+                    result_size_ptr,
+                ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
                 scoped_timer.add_property("args_size", args_size.to_string());
 
                 let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
+                let entry_point_name: String =
+                    self.t_from_mem(entry_point_name_ptr, entry_point_name_size)?;
                 let args_bytes: Vec<u8> = self.bytes_from_mem(args_ptr, args_size as usize)?;
 
                 let ret = self.call_contract_host_buffer(
                     key_contract,
+                    &entry_point_name,
                     args_bytes,
                     result_size_ptr,
                     &mut scoped_timer,

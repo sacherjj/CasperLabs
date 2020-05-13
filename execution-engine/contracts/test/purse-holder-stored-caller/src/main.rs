@@ -50,7 +50,7 @@ pub extern "C" fn call() {
     match method_name.as_str() {
         METHOD_VERSION => {
             let version: String =
-                runtime::call_contract(purse_holder_contract_pointer, (method_name,));
+                runtime::call_contract(purse_holder_contract_pointer, &method_name, ());
             let version_key = storage::new_uref(version).into();
             runtime::put_key(METHOD_VERSION, version_key);
         }
@@ -61,7 +61,8 @@ pub extern "C" fn call() {
 
             runtime::call_contract::<_, ()>(
                 purse_holder_contract_pointer,
-                (method_name, purse_name),
+                &method_name,
+                (purse_name,),
             );
         }
     };

@@ -19,11 +19,11 @@ enum Error {
 }
 
 fn bond(pos: Key, amount: U512, source: Key) {
-    runtime::call_contract::<_, ()>(pos, (POS_BOND, amount, source));
+    runtime::call_contract::<_, ()>(pos, POS_BOND, (amount, source));
 }
 
 fn unbond(pos: Key, amount: Option<U512>) {
-    runtime::call_contract::<_, ()>(pos, (POS_UNBOND, amount));
+    runtime::call_contract::<_, ()>(pos, POS_UNBOND, (amount,));
 }
 
 const POS_BOND: &str = "bond";

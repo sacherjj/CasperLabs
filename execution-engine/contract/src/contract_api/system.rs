@@ -23,15 +23,15 @@ fn get_system_contract(system_contract: SystemContractType) -> Key {
     let system_contract_index = system_contract.into();
     let contract_hash: ContractHash = {
         let result = {
-            let mut uref_data_raw = [0u8; UREF_SERIALIZED_LENGTH];
+            let mut hash_data_raw = ContractHash::default();
             let value = unsafe {
                 ext_ffi::get_system_contract(
                     system_contract_index,
-                    uref_data_raw.as_mut_ptr(),
-                    uref_data_raw.len(),
+                    hash_data_raw.as_mut_ptr(),
+                    hash_data_raw.len(),
                 )
             };
-            api_error::result_from(value).map(|_| uref_data_raw)
+            api_error::result_from(value).map(|_| hash_data_raw)
         };
         // Revert for any possible error that happened on host side
         let contract_hash_bytes = result.unwrap_or_else(|e| runtime::revert(e));

@@ -4,7 +4,9 @@ use rand::Rng;
 
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
-use types::{account::PublicKey, contracts::ContractVersion, ProtocolVersion, RuntimeArgs};
+use types::{
+    account::PublicKey, contracts::ContractVersion, runtime_args, ProtocolVersion, RuntimeArgs,
+};
 
 use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
 
@@ -56,7 +58,9 @@ impl ExecuteRequestBuilder {
         let deploy = DeployItemBuilder::new()
             .with_address(public_key)
             .with_session_code(session_file, session_args)
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! {
+                "amount" => *DEFAULT_PAYMENT
+            })
             .with_authorization_keys(&[public_key])
             .with_deploy_hash(deploy_hash)
             .build();

@@ -12,8 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPoint,
-    EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLType, CLTyped, CLValue, EntryPoint,
+    EntryPointAccess, EntryPointType, Key, Parameter, Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{
@@ -153,22 +153,11 @@ impl Executor {
 
         let mut runtime = Runtime::new(self.config, system_contract_cache, memory, module, context);
 
-        // let accounts_access_rights = {
-        //     let keys: Vec<Key> = account.named_keys().values().cloned().collect();
-        //     extract_access_rights_from_keys(keys)
-        // };
-        //
-        // on_fail_charge!(runtime_context::validate_entry_point_access_with(
-        //     &metadata,
-        //     entry_point_access,
-        //     |uref| runtime_context::uref_has_access_rights(uref, &accounts_access_rights)
-        // ));
-
         if !self.config.use_system_contracts() {
             if runtime.is_mint(base_key) {
                 match runtime.call_host_mint(
                     protocol_version,
-                    &entry_point,
+                    entry_point.name(),
                     runtime.context().named_keys().to_owned(),
                     &args,
                     Default::default(),
@@ -190,6 +179,7 @@ impl Executor {
             } else if runtime.is_proof_of_stake(base_key) {
                 match runtime.call_host_proof_of_stake(
                     protocol_version,
+                    entry_point.name(),
                     runtime.context().named_keys().to_owned(),
                     &args,
                     Default::default(),
@@ -301,9 +291,12 @@ impl Executor {
             context,
         );
 
+        let finalize_entry_point = "finalize_payment";
+
         if !self.config.use_system_contracts() {
             match runtime.call_host_proof_of_stake(
                 protocol_version,
+                finalize_entry_point,
                 runtime.context().named_keys().to_owned(),
                 &args,
                 Default::default(),
@@ -324,7 +317,7 @@ impl Executor {
             }
         }
 
-        let error = match instance.invoke_export("call", &[], &mut runtime) {
+        let error = match instance.invoke_export(finalize_entry_point, &[], &mut runtime) {
             Err(error) => error,
             Ok(_) => {
                 return ExecutionResult::Success {

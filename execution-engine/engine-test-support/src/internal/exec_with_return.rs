@@ -107,8 +107,6 @@ where
         correlation_id,
         phase,
         protocol_data,
-        /* ContractPackage::default(),
-         * EntryPoint::default(), */
     );
 
     let wasm_bytes = utils::read_wasm_file_bytes(wasm_file);

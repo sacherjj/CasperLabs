@@ -25,5 +25,5 @@ pub extern "C" fn call() {
 
     system::transfer_from_purse_to_purse(source_purse, bonding_purse, bond_amount)
         .unwrap_or_revert();
-    runtime::call_contract(pos_pointer, (BOND_METHOD_NAME, bond_amount, bonding_purse))
+    runtime::call_contract(pos_pointer, BOND_METHOD_NAME, (bond_amount, bonding_purse))
 }

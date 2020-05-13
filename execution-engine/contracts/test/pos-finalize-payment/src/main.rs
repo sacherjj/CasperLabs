@@ -8,11 +8,11 @@ use contract::{
 use types::{account::PublicKey, ApiError, Key, URef, U512};
 
 fn set_refund_purse(contract_key: Key, p: &URef) {
-    runtime::call_contract(contract_key, ("set_refund_purse", *p))
+    runtime::call_contract(contract_key, "set_refund_purse", (*p,))
 }
 
 fn get_payment_purse(contract_key: Key) -> URef {
-    runtime::call_contract(contract_key, ("get_payment_purse",))
+    runtime::call_contract(contract_key, "get_payment_purse", ())
 }
 
 fn submit_payment(contract_key: Key, amount: U512) {
@@ -22,7 +22,7 @@ fn submit_payment(contract_key: Key, amount: U512) {
 }
 
 fn finalize_payment(contract_key: Key, amount_spent: U512, account: PublicKey) {
-    runtime::call_contract(contract_key, ("finalize_payment", amount_spent, account))
+    runtime::call_contract(contract_key, "finalize_payment", (amount_spent, account))
 }
 
 #[no_mangle]

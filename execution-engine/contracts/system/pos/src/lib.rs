@@ -193,7 +193,6 @@ pub fn unbond() {
 
 pub fn get_payment_purse() {
     let pos_contract = ProofOfStakeContract;
-
     let rights_controlled_purse = pos_contract.get_payment_purse().unwrap_or_revert();
     let return_value = CLValue::from_t(rights_controlled_purse).unwrap_or_revert();
     runtime::ret(return_value);

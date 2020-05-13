@@ -4,17 +4,14 @@ use contract::args_parser::ArgsParser;
 use engine_shared::stored_value::StoredValue;
 use engine_storage::global_state::StateReader;
 use standard_payment::{AccountProvider, MintProvider, ProofOfStakeProvider, StandardPayment};
-use types::{system_contract_errors, ApiError, Key, RuntimeArgs, URef, U512};
+use types::{
+    system_contract_errors, ApiError, CLType, EntryPoint, EntryPointAccess, EntryPointType, Key,
+    RuntimeArgs, URef, U512,
+};
 
 use crate::{execution, runtime::Runtime};
 
-lazy_static! {
-    static ref SERIALIZED_GET_PAYMENT_PURSE: RuntimeArgs = {
-        let args = ArgsParser::parse(("get_payment_purse",))
-            .expect("args should convert to `Vec<CLValue>`");
-        RuntimeArgs::from(args)
-    };
-}
+pub const METHOD_GET_PAYMENT_PURSE: &str = "get_payment_purse";
 
 impl<'a, R> AccountProvider for Runtime<'a, R>
 where
@@ -59,7 +56,11 @@ where
         let pos_contract_key = self.get_pos_contract().into();
 
         let cl_value = self
-            .call_contract(pos_contract_key, SERIALIZED_GET_PAYMENT_PURSE.clone())
+            .call_contract(
+                pos_contract_key,
+                METHOD_GET_PAYMENT_PURSE,
+                RuntimeArgs::new(),
+            )
             .map_err(|_| {
                 ApiError::ProofOfStake(
                     system_contract_errors::pos::Error::PaymentPurseNotFound as u8,

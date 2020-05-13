@@ -46,7 +46,7 @@ pub extern "C" fn install() {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
-            METHOD_MINT.to_string(),
+            METHOD_MINT,
             vec![Parameter::new(ARG_AMOUNT, CLType::U512)],
             CLType::Result {
                 ok: Box::new(CLType::URef),
@@ -58,7 +58,7 @@ pub extern "C" fn install() {
         entry_points.add_entry_point(entry_point);
 
         let entry_point = EntryPoint::new(
-            METHOD_CREATE.to_string(),
+            METHOD_CREATE,
             vec![],
             CLType::URef,
             EntryPointAccess::Public,
@@ -67,7 +67,7 @@ pub extern "C" fn install() {
         entry_points.add_entry_point(entry_point);
 
         let entry_point = EntryPoint::new(
-            METHOD_BALANCE.to_string(),
+            METHOD_BALANCE,
             vec![Parameter::new(ARG_PURSE, CLType::URef)],
             CLType::Option(Box::new(CLType::U512)),
             EntryPointAccess::Public,
@@ -76,7 +76,7 @@ pub extern "C" fn install() {
         entry_points.add_entry_point(entry_point);
 
         let entry_point = EntryPoint::new(
-            METHOD_TRANSFER.to_string(),
+            METHOD_TRANSFER,
             vec![
                 Parameter::new(ARG_SOURCE, CLType::URef),
                 Parameter::new(ARG_TARGET, CLType::URef),

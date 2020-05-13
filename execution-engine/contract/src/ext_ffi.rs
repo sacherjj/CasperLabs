@@ -36,6 +36,8 @@ extern "C" {
     pub fn call_contract(
         key_ptr: *const u8,
         key_size: usize,
+        entry_point_name_ptr: *const u8,
+        entry_point_name_size: usize,
         args_ptr: *const u8,
         args_size: usize,
         result_size: *mut usize,

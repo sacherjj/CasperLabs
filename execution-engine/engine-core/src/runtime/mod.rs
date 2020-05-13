@@ -30,11 +30,12 @@ use types::{
     contracts::{
         self, Contract, ContractPackage, EntryPoint, EntryPointAccess, EntryPoints, Group,
     },
-    system_contract_errors,
+    runtime_args, system_contract_errors,
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, ContractHash, ContractPackageHash,
-    ContractVersionKey, EntryPointType, Key, ProtocolVersion, RuntimeArgs, SystemContractType,
-    TransferResult, TransferredTo, URef, U128, U256, U512, UREF_SERIALIZED_LENGTH,
+    ContractVersionKey, EntryPointType, Key, Parameter, ProtocolVersion, RuntimeArgs,
+    SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
+    UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -1708,7 +1709,7 @@ where
     pub fn call_host_mint(
         &mut self,
         protocol_version: ProtocolVersion,
-        entry_point: &EntryPoint,
+        entry_point_name: &str,
         mut named_keys: NamedKeys,
         args: &RuntimeArgs,
         extra_urefs: &[Key],
@@ -1760,7 +1761,7 @@ where
             protocol_data,
         );
 
-        let ret: CLValue = match entry_point.name() {
+        let ret: CLValue = match entry_point_name {
             // Type: `fn mint(amount: U512) -> Result<URef, Error>`
             METHOD_MINT => {
                 let amount: U512 = Self::get_named_argument(&args, "amount")?;
@@ -1774,16 +1775,16 @@ where
             }
             // Type: `fn balance(purse: URef) -> Option<U512>`
             METHOD_BALANCE => {
-                let uref: URef = Self::get_argument(&args, 1)?;
+                let uref: URef = Self::get_named_argument(&args, "purse")?;
                 let maybe_balance: Option<U512> =
                     mint_context.balance(uref).map_err(Self::reverter)?;
                 CLValue::from_t(maybe_balance).map_err(Self::reverter)?
             }
             // Type: `fn transfer(source: URef, target: URef, amount: U512) -> Result<(), Error>`
             METHOD_TRANSFER => {
-                let source: URef = Self::get_argument(&args, 1)?;
-                let target: URef = Self::get_argument(&args, 2)?;
-                let amount: U512 = Self::get_argument(&args, 3)?;
+                let source: URef = Self::get_named_argument(&args, "source")?;
+                let target: URef = Self::get_named_argument(&args, "target")?;
+                let amount: U512 = Self::get_named_argument(&args, "amount")?;
                 let result: Result<(), mint::Error> = mint_context.transfer(source, target, amount);
                 CLValue::from_t(result).map_err(Self::reverter)?
             }
@@ -1798,6 +1799,7 @@ where
     pub fn call_host_proof_of_stake(
         &mut self,
         protocol_version: ProtocolVersion,
+        entry_point_name: &str,
         mut named_keys: BTreeMap<String, Key>,
         args: &RuntimeArgs,
         extra_urefs: &[Key],
@@ -1858,9 +1860,10 @@ where
             self.module.clone(),
             runtime_context,
         );
-        let method_name: String = Self::get_argument(&args, 0)?;
 
-        let ret: CLValue = match method_name.as_str() {
+        // let method_name: String = Self::get_argument(&args, 0)?;
+
+        let ret: CLValue = match entry_point_name {
             METHOD_BOND => {
                 if !self.config.enable_bonding() {
                     let err = Error::Revert(ApiError::Unhandled);
@@ -1868,8 +1871,8 @@ where
                 }
 
                 let validator: PublicKey = runtime.context.get_caller();
-                let amount: U512 = Self::get_argument(&args, 1)?;
-                let source_uref: URef = Self::get_argument(&args, 2)?;
+                let amount: U512 = Self::get_named_argument(&args, "amount")?;
+                let source_uref: URef = Self::get_named_argument(&args, "source")?;
                 runtime
                     .bond(validator, amount, source_uref)
                     .map_err(Self::reverter)?;
@@ -1882,7 +1885,7 @@ where
                 }
 
                 let validator: PublicKey = runtime.context.get_caller();
-                let maybe_amount: Option<U512> = Self::get_argument(&args, 1)?;
+                let maybe_amount: Option<U512> = Self::get_named_argument(&args, "amount")?;
                 runtime
                     .unbond(validator, maybe_amount)
                     .map_err(Self::reverter)?;
@@ -1894,7 +1897,7 @@ where
                 CLValue::from_t(rights_controlled_purse).map_err(Self::reverter)?
             }
             METHOD_SET_REFUND_PURSE => {
-                let purse: URef = Self::get_argument(&args, 1)?;
+                let purse: URef = Self::get_named_argument(&args, "purse")?;
                 runtime.set_refund_purse(purse).map_err(Self::reverter)?;
                 CLValue::from_t(()).map_err(Self::reverter)?
             }
@@ -1903,8 +1906,8 @@ where
                 CLValue::from_t(maybe_purse).map_err(Self::reverter)?
             }
             METHOD_FINALIZE_PAYMENT => {
-                let amount_spent: U512 = Self::get_argument(&args, 1)?;
-                let account: PublicKey = Self::get_argument(&args, 2)?;
+                let amount_spent: U512 = Self::get_named_argument(&args, "amount")?;
+                let account: PublicKey = Self::get_named_argument(&args, "account")?;
                 runtime
                     .finalize_payment(amount_spent, account)
                     .map_err(Self::reverter)?;
@@ -1928,7 +1931,12 @@ where
     }
 
     /// Calls contract living under a `key`, with supplied `args`.
-    pub fn call_contract(&mut self, key: Key, args: RuntimeArgs) -> Result<CLValue, Error> {
+    pub fn call_contract(
+        &mut self,
+        key: Key,
+        entry_point_name: &str,
+        args: RuntimeArgs,
+    ) -> Result<CLValue, Error> {
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -1939,11 +1947,17 @@ where
             }
             None => return Err(Error::KeyNotFound(key)),
         };
+
+        let entry_point = contract
+            .get_entry_point(entry_point_name)
+            .cloned()
+            .ok_or(Error::NoSuchMethod)?;
+
         self.execute_contract(
             key,
             contract,
             args,
-            EntryPoint::default_for_contract(),
+            entry_point,
             self.context.protocol_version(),
         )
     }
@@ -2082,7 +2096,7 @@ where
                 if self.is_mint(key) {
                     return self.call_host_mint(
                         self.context.protocol_version(),
-                        &entry_point,
+                        entry_point.name(),
                         contract.take_named_keys(),
                         &args,
                         &extra_keys,
@@ -2090,6 +2104,7 @@ where
                 } else if self.is_proof_of_stake(key) {
                     return self.call_host_proof_of_stake(
                         self.context.protocol_version(),
+                        entry_point.name(),
                         contract.take_named_keys(),
                         &args,
                         &extra_keys,
@@ -2230,6 +2245,7 @@ where
     fn call_contract_host_buffer(
         &mut self,
         key: Key,
+        entry_point_name: &str,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
         scoped_timer: &mut ScopedTimer,
@@ -2238,10 +2254,9 @@ where
         if let Err(err) = self.check_host_buffer() {
             return Ok(Err(err));
         }
-        let args: Vec<CLValue> = bytesrepr::deserialize(args_bytes)?;
-        let args = RuntimeArgs::from(args);
+        let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
         scoped_timer.pause();
-        let result = self.call_contract(key, args)?;
+        let result = self.call_contract(key, entry_point_name, args)?;
         scoped_timer.unpause();
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
@@ -2830,12 +2845,11 @@ where
     /// Calls the "create" method on the mint contract at the given mint
     /// contract key
     fn mint_create(&mut self, mint_contract_key: Key) -> Result<URef, Error> {
-        let args_values = {
-            let args = ("create",);
-            ArgsParser::parse(args)?
-        };
-
-        let result = self.call_contract(mint_contract_key, args_values.into())?;
+        let result = self.call_contract(
+            mint_contract_key,
+            todo!("default for contract"),
+            RuntimeArgs::new(),
+        )?;
         let purse = result.into_t()?;
 
         Ok(purse)
@@ -2855,13 +2869,17 @@ where
         target: URef,
         amount: U512,
     ) -> Result<(), Error> {
-        let args_values = {
-            let args = ("transfer", source, target, amount);
-            let args = ArgsParser::parse(args)?;
-            args.into()
+        const ARG_SOURCE: &str = "source";
+        const ARG_TARGET: &str = "target";
+        const ARG_AMOUNT: &str = "amount";
+
+        let args_values: RuntimeArgs = runtime_args! {
+            ARG_SOURCE => source,
+            ARG_TARGET => target,
+            ARG_AMOUNT => amount,
         };
 
-        let result = self.call_contract(mint_contract_key, args_values)?;
+        let result = self.call_contract(mint_contract_key, "transfer", args_values.clone())?;
         let result: Result<(), mint::Error> = result.into_t()?;
         Ok(result.map_err(system_contract_errors::Error::from)?)
     }
@@ -3140,9 +3158,7 @@ where
             Err(error) => return Ok(Err(error)),
         };
 
-        // Serialize data that will be written the memory under `dest_ptr`
-        let contract_hash_bytes = contract_hash.into_bytes().map_err(Error::BytesRepr)?;
-        match self.memory.set(dest_ptr, &contract_hash_bytes) {
+        match self.memory.set(dest_ptr, &contract_hash) {
             Ok(_) => Ok(Ok(())),
             Err(error) => Err(Error::Interpreter(error.into()).into()),
         }
