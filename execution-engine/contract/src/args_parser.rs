@@ -3,7 +3,6 @@
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
-use alloc::vec::Vec;
 
 use casperlabs_types::{bytesrepr::ToBytes, CLTyped, CLValue, CLValueError, RuntimeArgs};
 
@@ -14,28 +13,29 @@ use casperlabs_types::{bytesrepr::ToBytes, CLTyped, CLValue, CLValueError, Runti
 /// and [`CLTyped`].
 pub trait ArgsParser {
     /// Parses the arguments to a `Vec` of [`CLValue`]s.
-    fn parse(self) -> Result<Vec<CLValue>, CLValueError>;
+    fn parse(self) -> Result<RuntimeArgs, CLValueError>;
 }
 
 impl ArgsParser for () {
-    fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
-        Ok(Vec::new())
+    fn parse(self) -> Result<RuntimeArgs, CLValueError> {
+        Ok(RuntimeArgs::new())
     }
 }
 
-///
-pub fn fix_this(args: impl ArgsParser) -> RuntimeArgs {
-    let args = args.parse().expect("should pass valid input");
-    RuntimeArgs::Positional(args)
+impl ArgsParser for RuntimeArgs {
+    fn parse(self) -> Result<RuntimeArgs, CLValueError> {
+        Ok(self)
+    }
 }
 
 macro_rules! impl_argsparser_tuple {
     ( $($name:ident)+) => (
         impl<$($name: CLTyped + ToBytes),*> ArgsParser for ($($name,)*) {
             #[allow(non_snake_case)]
-            fn parse(self) -> Result<Vec<CLValue>, CLValueError> {
+            fn parse(self) -> Result<RuntimeArgs, CLValueError> {
                 let ($($name,)+) = self;
-                Ok(vec![$(CLValue::from_t($name)?,)+])
+                let args = vec![$(CLValue::from_t($name)?,)+];
+                Ok(args.into())
             }
         }
     );

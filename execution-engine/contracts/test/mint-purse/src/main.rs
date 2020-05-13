@@ -14,7 +14,7 @@ enum Error {
 }
 
 fn mint_purse(amount: U512) -> Result<URef, mint::Error> {
-    runtime::call_contract(system::get_mint(), ("mint", amount))
+    runtime::call_contract(system::get_mint(), "mint", (amount,))
 }
 
 #[no_mangle]
@@ -24,7 +24,7 @@ pub extern "C" fn call() {
 
     let mint = system::get_mint();
 
-    let balance: Option<U512> = runtime::call_contract(mint, ("balance", new_purse));
+    let balance: Option<U512> = runtime::call_contract(mint, "balance", (new_purse,));
 
     match balance {
         None => runtime::revert(ApiError::User(Error::BalanceNotFound as u16)),

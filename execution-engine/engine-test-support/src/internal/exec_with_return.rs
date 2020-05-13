@@ -1,6 +1,5 @@
 use std::{cell::RefCell, collections::BTreeSet, convert::TryInto, rc::Rc};
 
-use contract::args_parser::ArgsParser;
 use engine_core::{
     engine_state::{
         executable_deploy_item::ExecutableDeployItem, execution_effect::ExecutionEffect,
@@ -15,8 +14,8 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPointType, Key,
-    Phase, ProtocolVersion, URef, U512,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, EntryPointType, Key, Phase,
+    ProtocolVersion, RuntimeArgs, URef, U512,
 };
 
 use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
@@ -33,7 +32,8 @@ pub fn exec<S, T>(
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],
-    args: impl ArgsParser,
+    entry_point_name: &str,
+    args: RuntimeArgs,
     extra_urefs: Vec<URef>,
 ) -> Option<(T, Vec<URef>, ExecutionEffect)>
 where
@@ -68,7 +68,6 @@ where
     let gas_limit = Gas::new(U512::from(std::u64::MAX));
     let protocol_version = ProtocolVersion::V1_0_0;
     let correlation_id = CorrelationId::new();
-    let arguments: Vec<CLValue> = args.parse().expect("should be able to serialize args");
     let base_key = Key::Account(address);
 
     let account = builder.get_account(address).expect("should find account");
@@ -94,7 +93,7 @@ where
         EntryPointType::Session, // Is it always?
         &mut named_keys,
         access_rights,
-        arguments.into(),
+        args,
         BTreeSet::new(),
         &account,
         base_key,
@@ -108,8 +107,6 @@ where
         correlation_id,
         phase,
         protocol_data,
-        /* ContractPackage::default(),
-         * EntryPoint::default(), */
     );
 
     let wasm_bytes = utils::read_wasm_file_bytes(wasm_file);
@@ -145,7 +142,7 @@ where
         context,
     );
 
-    match instance.invoke_export("call", &[], &mut runtime) {
+    match instance.invoke_export(entry_point_name, &[], &mut runtime) {
         Ok(_) => None,
         Err(e) => {
             if let Some(host_error) = e.as_host_error() {

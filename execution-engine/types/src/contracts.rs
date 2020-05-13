@@ -274,6 +274,11 @@ impl ContractPackage {
     }
 
     /// Returns mutable reference to active versions.
+    pub fn versions(&self) -> &ContractVersions {
+        &self.versions
+    }
+
+    /// Returns mutable reference to active versions.
     pub fn versions_mut(&mut self) -> &mut ContractVersions {
         &mut self.versions
     }
@@ -697,15 +702,15 @@ impl
 
 impl EntryPoint {
     /// `EntryPoint` constructor.
-    pub fn new(
-        name: String,
+    pub fn new<T: Into<String>>(
+        name: T,
         args: Vec<Parameter>,
         ret: CLType,
         access: EntryPointAccess,
         entry_point_type: EntryPointType,
     ) -> Self {
         EntryPoint {
-            name,
+            name: name.into(),
             args,
             ret,
             access,

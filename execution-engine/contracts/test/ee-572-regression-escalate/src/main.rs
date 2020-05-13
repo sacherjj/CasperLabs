@@ -5,7 +5,7 @@ use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{AccessRights, ApiError, Key, URef};
+use types::{contracts::DEFAULT_ENTRY_POINT_NAME, AccessRights, ApiError, Key, URef};
 
 const CONTRACT_POINTER: u32 = 0;
 const REPLACEMENT_DATA: &str = "bawitdaba";
@@ -16,7 +16,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    let reference: URef = runtime::call_contract(contract_key, ());
+    let reference: URef = runtime::call_contract(contract_key, DEFAULT_ENTRY_POINT_NAME, ());
     let forged_reference: URef = URef::new(reference.addr(), AccessRights::READ_ADD_WRITE);
     storage::write(forged_reference, REPLACEMENT_DATA)
 }

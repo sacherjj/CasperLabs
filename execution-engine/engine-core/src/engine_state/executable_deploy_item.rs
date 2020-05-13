@@ -38,7 +38,7 @@ impl ExecutableDeployItem {
             ExecutableDeployItem::ModuleBytes { args, .. }
             | ExecutableDeployItem::StoredContractByHash { args, .. }
             | ExecutableDeployItem::StoredContractByName { args, .. } => {
-                let vec: Vec<CLValue> = bytesrepr::deserialize(args)?;
+                let vec: RuntimeArgs = bytesrepr::deserialize(args)?;
                 Ok(vec.into())
             }
             ExecutableDeployItem::StoredVersionedContractByHash { args, .. }

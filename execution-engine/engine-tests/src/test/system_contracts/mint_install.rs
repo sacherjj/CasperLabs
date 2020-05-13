@@ -6,7 +6,9 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{Key, URef};
+use types::{
+    contracts::CONTRACT_INITIAL_VERSION, ContractVersionKey, Key, ProtocolVersion, RuntimeArgs,
+};
 
 const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
 
@@ -20,28 +22,56 @@ fn should_run_mint_install_contract() {
 
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
-    let (ret_value, ret_urefs, effect): (URef, _, _) = exec_with_return::exec(
-        engine_config,
-        &mut builder,
-        DEFAULT_ACCOUNT_ADDR,
-        "mint_install.wasm",
-        DEFAULT_BLOCK_TIME,
-        DEPLOY_HASH_1,
-        (),
-        vec![],
-    )
-    .expect("should run successfully");
+    let ((mint_metadata_key, mint_key), ret_urefs, effect): ((Key, Key), _, _) =
+        exec_with_return::exec(
+            engine_config,
+            &mut builder,
+            DEFAULT_ACCOUNT_ADDR,
+            "mint_install.wasm",
+            DEFAULT_BLOCK_TIME,
+            DEPLOY_HASH_1,
+            "install",
+            RuntimeArgs::new(),
+            vec![],
+        )
+        .expect("should run successfully");
 
-    // should return a uref
-    assert_eq!(ret_value, ret_urefs[0]);
+    // does not return extra urefs
+    assert_eq!(ret_urefs.len(), 0);
+    assert_ne!(mint_metadata_key, mint_key);
+
+    assert!(mint_metadata_key.into_hash().is_some());
+    assert!(mint_key.into_hash().is_some());
 
     // should have written a contract under that uref
-    match effect
-        .transforms
-        .get(&Key::URef(ret_value.remove_access_rights()))
-    {
-        Some(Transform::Write(StoredValue::ContractWasm(_))) => (),
+    let contract_package = match effect.transforms.get(&mint_metadata_key) {
+        Some(Transform::Write(StoredValue::ContractPackage(contract_package))) => contract_package,
+
+        _ => panic!("Expected contract package to be written under the key"),
+    };
+
+    // Checks if the returned package key contains returned mint key.
+    assert_eq!(contract_package.versions().len(), 1);
+    let mint_version = ContractVersionKey::new(
+        ProtocolVersion::V1_0_0.value().major,
+        CONTRACT_INITIAL_VERSION,
+    );
+    assert_eq!(
+        contract_package
+            .versions()
+            .get(&mint_version)
+            .cloned()
+            .unwrap(),
+        mint_key.into_hash().unwrap()
+    );
+
+    let contract = match effect.transforms.get(&mint_key) {
+        Some(Transform::Write(StoredValue::Contract(contract))) => contract,
 
         _ => panic!("Expected contract to be written under the key"),
-    }
+    };
+    assert_eq!(
+        contract.contract_package_hash(),
+        mint_metadata_key.into_hash().unwrap()
+    );
 }

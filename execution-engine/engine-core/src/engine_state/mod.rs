@@ -40,6 +40,7 @@ use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
     account::PublicKey,
     bytesrepr::{self, ToBytes},
+    runtime_args,
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
     AccessRights, BlockTime, CLType, CLValue, Contract, ContractHash, ContractVersionKey,
@@ -1246,7 +1247,7 @@ where
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
 
-            let (payment_module, payment_base_key, mut payment_named_keys, _payment_entry_point) =
+            let (payment_module, payment_base_key, mut payment_named_keys, payment_entry_point) =
                 match payment_module {
                     GetModuleResult::Session {
                         module,
@@ -1272,7 +1273,6 @@ where
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
             if self.config.use_system_contracts() || !module_bytes_is_empty {
-                let payment_entry_point = EntryPoint::default(); // TODO: implement
                 executor.exec(
                     payment_module,
                     payment_entry_point,
@@ -1430,7 +1430,7 @@ where
 
         // session_code_spec_2: execute session code
 
-        let (session_module, session_base_key, session_named_keys, _session_contract) =
+        let (session_module, session_base_key, session_named_keys, session_entry_point) =
             match session_module {
                 GetModuleResult::Session {
                     module,
@@ -1462,9 +1462,6 @@ where
                 .unwrap_or_default()
                 - payment_result_cost;
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
-
-            // TODO: wire up for real
-            let session_entry_point = EntryPoint::default_for_contract();
 
             executor.exec(
                 session_module,
@@ -1506,10 +1503,12 @@ where
             let proof_of_stake_args = {
                 //((gas spent during payment code execution) + (gas spent during session code execution)) * conv_rate
                 let finalize_cost_motes: Motes = Motes::from_gas(execution_result_builder.total_cost(), CONV_RATE).expect("motes overflow");
-                let args = ("finalize_payment", finalize_cost_motes.value(), account_addr);
-                let args = ArgsParser::parse(args)
-                    .expect("args should convert to `Vec<CLValue>`");
-                args.into() // compatibility
+                const ARG_AMOUNT: &str = "amount";
+                const ARG_ACCOUNT_KEY: &str = "account";
+                runtime_args! {
+                    ARG_AMOUNT => finalize_cost_motes.value(),
+                    ARG_ACCOUNT_KEY => account_addr,
+                }
             };
 
             // The PoS keys may have changed because of effects during payment and/or

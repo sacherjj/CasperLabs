@@ -24,7 +24,7 @@ pub extern "C" fn call() {
     let payment_fund: U512 = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let payment_purse: URef = runtime::call_contract(pos_pointer, ("get_payment_purse",));
+    let payment_purse: URef = runtime::call_contract(pos_pointer, "get_payment_purse", ());
 
     // can deposit
     system::transfer_from_purse_to_purse(source_purse, payment_purse, payment_amount)

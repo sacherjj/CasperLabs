@@ -16,15 +16,15 @@ enum Error {
 }
 
 fn set_refund_purse(pos: Key, p: URef) {
-    runtime::call_contract(pos, ("set_refund_purse", p))
+    runtime::call_contract(pos, "set_refund_purse", (p,))
 }
 
 fn get_refund_purse(pos: Key) -> Option<URef> {
-    runtime::call_contract(pos, ("get_refund_purse",))
+    runtime::call_contract(pos, "get_refund_purse", ())
 }
 
 fn get_payment_purse(pos: Key) -> URef {
-    runtime::call_contract(pos, ("get_payment_purse",))
+    runtime::call_contract(pos, "get_payment_purse", ())
 }
 
 fn submit_payment(pos: Key, amount: U512) {

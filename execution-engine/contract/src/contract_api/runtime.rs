@@ -45,18 +45,24 @@ pub fn revert<T: Into<ApiError>>(error: T) -> ! {
 /// stored contract calls [`revert`], then execution stops and `call_contract` doesn't return.
 /// Otherwise `call_contract` returns `()`.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(contract_key: Key, args: A) -> T {
+pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
+    contract_key: Key,
+    entry_point_name: &str,
+    args: A,
+) -> T {
     let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
-    let (args_ptr, args_size, _bytes2) = ArgsParser::parse(args)
-        .map(contract_api::to_ptr)
-        .unwrap_or_revert();
-
+    let (entry_point_name_ptr, entry_point_name_size, _bytes3) =
+        contract_api::to_ptr(entry_point_name);
+    let runtime_args: RuntimeArgs = args.parse().unwrap_or_revert();
+    let (args_ptr, args_size, _bytes2) = contract_api::to_ptr(runtime_args);
     let bytes_written = {
         let mut bytes_written = MaybeUninit::uninit();
         let ret = unsafe {
             ext_ffi::call_contract(
                 key_ptr,
                 key_size,
+                entry_point_name_ptr,
+                entry_point_name_size,
                 args_ptr,
                 args_size,
                 bytes_written.as_mut_ptr(),

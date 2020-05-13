@@ -2,7 +2,7 @@
 #![no_main]
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{AccessRights, ApiError, Key, URef};
+use types::{contracts::DEFAULT_ENTRY_POINT_NAME, AccessRights, ApiError, Key, URef};
 
 #[repr(u32)]
 enum Args {
@@ -24,5 +24,5 @@ pub extern "C" fn call() {
         Key::URef(URef::new(local_state_uref.addr(), AccessRights::READ));
 
     // call do_nothing_stored
-    runtime::call_contract(local_state_contract_pointer, ())
+    runtime::call_contract(local_state_contract_pointer, DEFAULT_ENTRY_POINT_NAME, ())
 }

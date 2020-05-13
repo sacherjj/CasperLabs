@@ -23,5 +23,5 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let unbond_amount: Option<U512> = arg_0.map(Into::into);
 
-    runtime::call_contract(pos_pointer, (UNBOND_METHOD_NAME, unbond_amount))
+    runtime::call_contract(pos_pointer, UNBOND_METHOD_NAME, (unbond_amount,))
 }
