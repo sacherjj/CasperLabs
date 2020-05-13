@@ -2844,11 +2844,7 @@ where
     /// Calls the "create" method on the mint contract at the given mint
     /// contract key
     fn mint_create(&mut self, mint_contract_key: Key) -> Result<URef, Error> {
-        let result = self.call_contract(
-            mint_contract_key,
-            todo!("default for contract"), // see get_argument(...)
-            RuntimeArgs::new(),
-        )?;
+        let result = self.call_contract(mint_contract_key, "create", RuntimeArgs::new())?;
         let purse = result.into_t()?;
 
         Ok(purse)

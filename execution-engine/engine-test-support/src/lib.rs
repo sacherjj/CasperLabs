@@ -7,7 +7,7 @@
 //! # use contract as casperlabs_contract;
 //! # use types as casperlabs_types;
 //! use casperlabs_contract::{contract_api::{runtime, storage}, unwrap_or_revert::UnwrapOrRevert};
-//! use casperlabs_types::{ContractPackageHash, ApiError};
+//! use casperlabs_types::{ApiError, Key};
 //! const KEY: &str = "special_value";
 //!
 //! #[no_mangle]

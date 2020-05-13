@@ -298,29 +298,11 @@ impl ContractPackage {
         &mut self.disabled_versions
     }
 
-    // /// Checks if a given group is in use in at least one active contracts.
-    // fn is_user_group_in_use(&self, group: &Group) -> bool {
-    //     for versions in self.versions.values() {
-    //         for entrypoint in versions.entry_points().values() {
-    //             if let EntryPointAccess::Groups(groups) = entrypoint.access() {
-    //                 if groups.contains(group) {
-    //                     return true;
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     false
-    // }
-
     /// Removes a user group.
     ///
     /// Returns true if group could be removed, and false otherwise if the user group is still
     /// active.
     pub fn remove_group(&mut self, group: &Group) -> bool {
-        // if self.is_user_group_in_use(group) {
-        //     return false;
-        // }
-
         self.groups.remove(group).is_some()
     }
 
@@ -994,42 +976,14 @@ mod tests {
         assert_eq!(rem.len(), 0);
     }
 
-    // #[test]
-    // fn should_check_user_group_in_use() {
-    //     let mut contract_package = make_contract_package();
-    //     assert!(contract_package.is_user_group_in_use(&Group::new("Group 1")));
-    //     assert!(contract_package.is_user_group_in_use(&Group::new("Group 2")));
-    //     assert!(!contract_package.is_user_group_in_use(&Group::new("Non existing group")));
-    //
-    //     let contract_version_key = ContractVersionKey::new(1, CONTRACT_INITIAL_VERSION);
-    //
-    //     contract_package
-    //         .disable_contract_version(&contract_version_key)
-    //         .expect("should remove version");
-    //     assert!(!contract_package.is_user_group_in_use(&Group::new("Group 1")));
-    //     assert!(!contract_package.is_user_group_in_use(&Group::new("Group 2")));
-    // }
-
     #[test]
     fn should_remove_group() {
         let mut contract_metadata = make_contract_package();
 
-        assert!(!contract_metadata.remove_group(&Group::new("Non existing group")));
-        assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group in use
-
-        contract_metadata
-            .disable_contract_version(&ContractVersionKey::new(1, CONTRACT_INITIAL_VERSION))
-            .expect("should remove version");
-
-        assert!(contract_metadata.remove_group(&Group::new("Group 1"))); // Group not used used can be removed
-        assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group does not exist
+        assert!(!contract_metadata.remove_group(&Group::new("Non-existent group")));
+        assert!(contract_metadata.remove_group(&Group::new("Group 1")));
+        assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group no longer exists
     }
-
-    // #[test]
-    // fn should_check_group_not_in_use() {
-    //     let contract_metadata = ContractPackage::default();
-    //     assert!(!contract_metadata.is_user_group_in_use(&Group::new("Group 1")));
-    // }
 }
 
 // TODO: impl prop test gens
