@@ -179,8 +179,8 @@ package object effects {
 
     val update = for {
       (dataDirSize, sqliteSize) <- getSizes
-      _                         <- Metrics[F].setGauge("data-dir-size", dataDirSize)
-      _                         <- Metrics[F].setGauge("sqlite-size", sqliteSize)
+      _                         <- Metrics[F].setGauge("data-dir-size-bytes", dataDirSize)
+      _                         <- Metrics[F].setGauge("sqlite-size-bytes", sqliteSize)
       _                         <- Timer[F].sleep(updatePeriod)
     } yield ()
 
