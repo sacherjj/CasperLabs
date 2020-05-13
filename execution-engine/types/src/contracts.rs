@@ -274,6 +274,11 @@ impl ContractPackage {
     }
 
     /// Returns mutable reference to active versions.
+    pub fn versions(&self) -> &ContractVersions {
+        &self.versions
+    }
+
+    /// Returns mutable reference to active versions.
     pub fn versions_mut(&mut self) -> &mut ContractVersions {
         &mut self.versions
     }
