@@ -252,9 +252,6 @@ impl Executor {
         let mut named_keys = named_keys.clone();
         let access_rights = {
             let keys: Vec<Key> = named_keys.values().cloned().collect();
-            // keys.extend(protocol_data.system_contracts().into_iter().map(|uref| {
-            //     Key::from(runtime_context::attenuate_uref_for_account(account, uref))
-            // }));
             extract_access_rights_from_keys(keys)
         };
 

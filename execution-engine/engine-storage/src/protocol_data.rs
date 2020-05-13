@@ -1,11 +1,10 @@
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SERIALIZED_LENGTH};
 use types::{
     bytesrepr::{self, FromBytes, ToBytes},
-    ContractHash, HashAddr, UREF_SERIALIZED_LENGTH,
+    ContractHash, HashAddr, KEY_HASH_LENGTH,
 };
 
-const PROTOCOL_DATA_SERIALIZED_LENGTH: usize =
-    WASM_COSTS_SERIALIZED_LENGTH + 3 * UREF_SERIALIZED_LENGTH;
+const PROTOCOL_DATA_SERIALIZED_LENGTH: usize = WASM_COSTS_SERIALIZED_LENGTH + 3 * KEY_HASH_LENGTH;
 const DEFAULT_ADDRESS: [u8; 32] = [0; 32];
 
 /// Represents a protocol's data. Intended to be associated with a given protocol version.
@@ -129,10 +128,6 @@ impl FromBytes for ProtocolData {
         let (mint, rem) = HashAddr::from_bytes(rem)?;
         let (proof_of_stake, rem) = HashAddr::from_bytes(rem)?;
         let (standard_payment, rem) = HashAddr::from_bytes(rem)?;
-        //
-        // let mint = Key::Hash(mint);
-        // let proof_of_stake = Key::Hash(proof_of_stake);
-        // let standard_payment = Key::Hash(standard_payment);
 
         Ok((
             ProtocolData {
@@ -158,9 +153,9 @@ pub(crate) mod gens {
     prop_compose! {
         pub fn protocol_data_arb()(
             wasm_costs in wasm_costs_gens::wasm_costs_arb(),
-            mint in gens::uref_arb(),
-            proof_of_stake in gens::uref_arb(),
-            standard_payment in gens::uref_arb(),
+            mint in gens::u8_slice_32(),
+            proof_of_stake in gens::u8_slice_32(),
+            standard_payment in gens::u8_slice_32(),
         ) -> ProtocolData {
             ProtocolData {
                 wasm_costs,
@@ -177,7 +172,7 @@ mod tests {
     use proptest::proptest;
 
     use engine_wasm_prep::wasm_costs::WasmCosts;
-    use types::{bytesrepr, AccessRights, ContractPackageHash};
+    use types::{bytesrepr, ContractHash};
 
     use super::{gens, ProtocolData};
 
@@ -215,9 +210,9 @@ mod tests {
     fn should_serialize_and_deserialize() {
         let mock = {
             let costs = wasm_costs_mock();
-            let mint_reference = Key::Hash([0u8; 32]);
-            let proof_of_stake_reference = Key::Hash([1u8; 32]);
-            let standard_payment_reference = Key::Hash([2u8; 32]);
+            let mint_reference = [1u8; 32];
+            let proof_of_stake_reference = [2u8; 32];
+            let standard_payment_reference = [3u8; 32];
             ProtocolData::new(
                 costs,
                 mint_reference,
@@ -227,9 +222,9 @@ mod tests {
         };
         let free = {
             let costs = wasm_costs_free();
-            let mint_reference = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
-            let proof_of_stake_reference = URef::new([1u8; 32], AccessRights::READ_ADD_WRITE);
-            let standard_payment_reference = URef::new([2u8; 32], AccessRights::READ_ADD_WRITE);
+            let mint_reference = [0u8; 32];
+            let proof_of_stake_reference = [1u8; 32];
+            let standard_payment_reference = [2u8; 32];
             ProtocolData::new(
                 costs,
                 mint_reference,
@@ -243,9 +238,9 @@ mod tests {
 
     #[test]
     fn should_return_all_system_contracts() {
-        let mint_reference = URef::new([197u8; 32], AccessRights::READ_ADD_WRITE);
-        let proof_of_stake_reference = URef::new([198u8; 32], AccessRights::READ_ADD_WRITE);
-        let standard_payment_reference = URef::new([199u8; 32], AccessRights::READ_ADD_WRITE);
+        let mint_reference = [1u8; 32];
+        let proof_of_stake_reference = [2u8; 32];
+        let standard_payment_reference = [3u8; 32];
         let protocol_data = {
             let costs = wasm_costs_mock();
             ProtocolData::new(
@@ -270,11 +265,12 @@ mod tests {
 
     #[test]
     fn should_return_only_valid_system_contracts() {
-        assert_eq!(ProtocolData::default().system_contracts(), &[]);
+        let expected: Vec<ContractHash> = vec![];
+        assert_eq!(ProtocolData::default().system_contracts(), expected);
 
-        let mint_reference = URef::new([197u8; 32], AccessRights::READ_ADD_WRITE);
-        let proof_of_stake_reference = URef::new([0u8; 32], AccessRights::READ);
-        let standard_payment_reference = URef::new([199u8; 32], AccessRights::READ_ADD_WRITE);
+        let mint_reference = [0u8; 32]; // <-- invalid addr
+        let proof_of_stake_reference = [2u8; 32];
+        let standard_payment_reference = [3u8; 32];
         let protocol_data = {
             let costs = wasm_costs_mock();
             ProtocolData::new(
@@ -292,7 +288,7 @@ mod tests {
         };
 
         assert_eq!(actual.len(), 2);
-        assert_eq!(actual[0], mint_reference);
+        assert_eq!(actual[0], proof_of_stake_reference);
         assert_eq!(actual[1], standard_payment_reference);
     }
 

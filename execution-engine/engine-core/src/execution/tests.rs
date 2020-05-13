@@ -1,5 +1,5 @@
 use engine_shared::{gas::Gas, transform::Transform};
-use types::{ContractPackageHash, U512};
+use types::{Key, U512};
 
 use super::Error;
 use crate::engine_state::{
@@ -26,6 +26,7 @@ fn on_fail_charge_ok_test() {
         ExecutionResult::Failure { .. } => panic!("Should be success"),
     }
 }
+
 #[test]
 fn on_fail_charge_err_laziness_test() {
     let error_cost = Gas::new(U512::from(456));
@@ -38,6 +39,7 @@ fn on_fail_charge_err_laziness_test() {
         ExecutionResult::Failure { cost, .. } => assert_eq!(cost, error_cost),
     }
 }
+
 #[test]
 fn on_fail_charge_with_action() {
     let f = || {

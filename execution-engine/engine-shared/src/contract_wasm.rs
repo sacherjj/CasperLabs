@@ -43,7 +43,7 @@ pub mod gens {
 
     use super::ContractWasm;
 
-    pub fn contract_arb() -> impl Strategy<Value = ContractWasm> {
+    pub fn contract_wasm_arb() -> impl Strategy<Value = ContractWasm> {
         vec(any::<u8>(), 1..1000).prop_map(move |body| ContractWasm::new(body))
     }
 }

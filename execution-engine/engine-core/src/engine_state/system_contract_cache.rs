@@ -46,7 +46,7 @@ mod tests {
         engine_state::system_contract_cache::SystemContractCache,
         execution::{AddressGenerator, AddressGeneratorBuilder},
     };
-    use types::{AccessRights, ContractHash};
+    use types::ContractHash;
 
     lazy_static! {
         static ref ADDRESS_GENERATOR: Mutex<AddressGenerator> = Mutex::new(
@@ -79,7 +79,7 @@ mod tests {
             address_generator.create_address()
         };
 
-        assert!(!cache.has(&reference))
+        assert!(!cache.has(reference))
     }
 
     #[test]
@@ -93,7 +93,7 @@ mod tests {
 
         cache.insert(reference, module);
 
-        assert!(cache.has(&reference))
+        assert!(cache.has(reference))
     }
 
     #[test]
@@ -107,7 +107,7 @@ mod tests {
 
         cache.insert(reference, module);
 
-        assert!(cache.has(&reference.with_access_rights(AccessRights::ADD_WRITE)))
+        assert!(cache.has(reference))
     }
 
     #[test]
@@ -121,7 +121,7 @@ mod tests {
 
         cache.insert(reference, module);
 
-        assert!(cache.has(&reference))
+        assert!(cache.has(reference))
     }
 
     #[test]
@@ -132,7 +132,7 @@ mod tests {
         };
         let cache = SystemContractCache::default();
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert!(result.is_none())
     }
@@ -148,7 +148,7 @@ mod tests {
 
         cache.insert(reference, module.clone());
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert_eq!(result, Some(module))
     }
@@ -164,11 +164,11 @@ mod tests {
 
         cache.insert(reference, module.clone());
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert_eq!(result, Some(module.clone()));
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert_eq!(result, Some(module))
     }
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     pub fn should_get_module_normalized_insert() {
         let cache = SystemContractCache::default();
-        let reference = {
+        let reference: ContractHash = {
             let mut address_generator = ADDRESS_GENERATOR.lock().unwrap();
             address_generator.create_address()
         };
@@ -184,11 +184,11 @@ mod tests {
 
         cache.insert(reference, module.clone());
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert_eq!(result, Some(module.clone()));
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert_eq!(result, Some(module))
     }
@@ -217,7 +217,7 @@ mod tests {
 
         assert_eq!(result, Some(initial_module));
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert_eq!(result, Some(updated_module))
     }
@@ -246,7 +246,7 @@ mod tests {
 
         assert_eq!(result, Some(initial_module));
 
-        let result = cache.get(&reference);
+        let result = cache.get(reference);
 
         assert_eq!(result, Some(updated_module))
     }

@@ -144,9 +144,7 @@ mod tests {
     use std::convert::TryInto;
 
     use engine_shared::{additive_map::AdditiveMap, transform::Transform};
-    use types::{
-        bytesrepr::Error as BytesReprError, AccessRights, ApiError, ContractPackageHash, URef, U512,
-    };
+    use types::{bytesrepr::Error as BytesReprError, AccessRights, ApiError, Key, URef, U512};
 
     use super::*;
 

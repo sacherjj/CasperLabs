@@ -19,7 +19,7 @@ use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind
 use ::mint::Mint;
 use contract::args_parser::ArgsParser;
 use engine_shared::{
-    account::Account, contract::ContractWasm, gas::Gas, stored_value::StoredValue,
+    account::Account, contract_wasm::ContractWasm, gas::Gas, stored_value::StoredValue,
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use proof_of_stake::ProofOfStake;
@@ -2036,9 +2036,7 @@ where
                 // Session code called from session reuses current base key
                 self.context.base_key()
             }
-            EntryPointType::Contract => {
-                contract_hash.into()
-            }
+            EntryPointType::Contract => contract_hash.into(),
         };
 
         self.execute_contract(
@@ -3459,7 +3457,7 @@ mod tests {
         result,
     };
 
-    use types::{gens::*, CLType, CLValue, ContractPackageHash, URef};
+    use types::{gens::*, CLType, CLValue, Key, URef};
 
     use super::extract_urefs;
 

@@ -31,7 +31,7 @@ use engine_grpc_server::engine_server::{
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
-    contract::ContractWasm,
+    contract_wasm::ContractWasm,
     gas::Gas,
     logging::{self, Settings, Style},
     newtypes::{Blake2bHash, CorrelationId},

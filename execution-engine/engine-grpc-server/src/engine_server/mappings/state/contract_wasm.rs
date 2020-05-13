@@ -1,5 +1,5 @@
 use crate::engine_server::state;
-use engine_shared::contract::ContractWasm;
+use engine_shared::contract_wasm::ContractWasm;
 
 impl From<ContractWasm> for state::ContractWasm {
     fn from(contract: ContractWasm) -> Self {

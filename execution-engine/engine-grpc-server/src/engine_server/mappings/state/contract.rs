@@ -48,15 +48,14 @@ impl TryFrom<state::Contract> for Contract {
 mod tests {
     use proptest::proptest;
 
-    use engine_shared::contract::gens;
-
     use super::*;
     use crate::engine_server::mappings::test_utils;
+    use engine_shared::contract_wasm::{gens, ContractWasm};
 
     proptest! {
         #[test]
-        fn round_trip(contract in gens::contract_arb()) {
-            test_utils::protobuf_round_trip::<Contract, state::Contract>(contract);
+        fn round_trip(contract_wasm in gens::contract_wasm_arb()) {
+            test_utils::protobuf_round_trip::<ContractWasm, state::ContractWasm>(contract_wasm);
         }
     }
 }

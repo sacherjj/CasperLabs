@@ -314,7 +314,7 @@ mod tests {
     use super::*;
     use crate::{
         account::{Account, ActionThresholds, AssociatedKeys},
-        contract::ContractWasm,
+        contract_wasm::ContractWasm,
     };
 
     const ZERO_ARRAY: [u8; 32] = [0; 32];

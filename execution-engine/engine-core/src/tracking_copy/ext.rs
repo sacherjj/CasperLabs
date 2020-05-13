@@ -1,7 +1,7 @@
 use std::convert::TryInto;
 
 use engine_shared::{
-    account::Account, contract::ContractWasm, motes::Motes, newtypes::CorrelationId,
+    account::Account, contract_wasm::ContractWasm, motes::Motes, newtypes::CorrelationId,
     stored_value::StoredValue, wasm, TypeMismatch,
 };
 use engine_storage::global_state::StateReader;

@@ -51,7 +51,7 @@ pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
 pub use contracts::{
     Contract, ContractPackage, ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType,
-    Group, Parameter,
+    EntryPoints, Group, Parameter,
 };
 //pub use contract_ref::ContractRef;
 #[doc(inline)]

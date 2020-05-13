@@ -5,7 +5,7 @@ use proptest::{collection::vec, prelude::proptest};
 use tempfile::tempdir;
 
 use engine_shared::{newtypes::Blake2bHash, stored_value::StoredValue};
-use types::{bytesrepr::ToBytes, ContractPackageHash};
+use types::{bytesrepr::ToBytes, Key};
 
 use crate::{
     store::tests as store_tests,

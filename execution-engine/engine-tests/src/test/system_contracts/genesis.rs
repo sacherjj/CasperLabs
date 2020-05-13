@@ -92,16 +92,16 @@ fn should_run_genesis() {
     let pos_contract_hash = builder.get_pos_contract_hash();
 
     let result = builder.query(None, mint_contract_hash.into(), &[]);
-    if let Ok(StoredValue::Contract(contract)) = result {
-        // Contract exists at mint contract URef
+    if let Ok(StoredValue::Contract(_)) = result {
+        // Contract exists at mint contract hash
     } else {
-        panic!("contract not found at mint uref");
+        panic!("contract not found at mint hash");
     }
 
     if let Ok(StoredValue::Contract(_)) = builder.query(None, pos_contract_hash.into(), &[]) {
-        // Contract exists at pos contract URef
+        // Contract exists at pos contract hash
     } else {
-        panic!("contract not found at pos uref");
+        panic!("contract not found at pos hash");
     }
 }
 

@@ -939,7 +939,7 @@ mod tests {
         }
 
         // add entry_points
-        let entry_points = {
+        let _entry_points = {
             let mut ret = BTreeMap::new();
             let entrypoint = EntryPoint::new(
                 "method0".to_string(),
@@ -960,10 +960,10 @@ mod tests {
             ret
         };
 
-        let contract_package_hash = [41; 32];
+        let _contract_package_hash = [41; 32];
         let contract_hash = [42; 32];
-        let contract_wasm_hash = [43; 32];
-        let named_keys = NamedKeys::new();
+        let _contract_wasm_hash = [43; 32];
+        let _named_keys = NamedKeys::new();
         let protocol_version = ProtocolVersion::V1_0_0;
 
         // _contract = Contract::new(
@@ -1026,3 +1026,69 @@ mod tests {
     //     assert!(!contract_metadata.is_user_group_in_use(&Group::new("Group 1")));
     // }
 }
+
+// TODO: impl prop test gens
+// pub mod gens {
+//     use proptest::{collection::vec, prelude::*};
+//
+//     use super::{Contract, ContractPackage, EntryPoint, EntryPointType, EntryPoints};
+//     use crate::{
+//         gens::{cl_value_arb, named_keys_arb, protocol_version_arb, u8_slice_32},
+//         EntryPointAccess, NamedArg, RuntimeArgs,
+//     };
+//     use std::collections::btree_map::Entry;
+//
+//     pub fn contract_arb() -> impl Strategy<Value = Contract> {
+//         protocol_version_arb().prop_flat_map(move |protocol_version_arb| {
+//             named_keys_arb(20).prop_flat_map(move |urefs| {
+//                 Contract::new(
+//                     u8_slice_32(),
+//                     u8_slice_32(),
+//                     urefs.clone(),
+//                     entry_points_arb,
+//                     protocol_version_arb,
+//                 )
+//             })
+//         })
+//     }
+
+// pub fn contract_package_arb() -> impl Strategy<Value = ContractPackage> {
+//     //TODO: impl
+// }
+
+// pub fn named_args_arb() -> impl Strategy<Value = NamedArgs> {
+//     NamedArg::new(string_arb(), cl_value_arb())
+// }
+//
+// pub fn runtime_args_arb() -> impl Strategy<Value = RuntimeArgs> {
+//     prop_oneof![
+//         Just(RuntimeArgs::Named(named_args_arb())),
+//         Just(RuntimeArgs::Positional(
+//             vec(cl_value_arb(), 0..3).prop_map(|v| v)()
+//         )),
+//     ]
+// }
+//
+// pub fn entry_point_access_arb() -> impl Strategy<Value = EntryPointAccess> {
+//     prop_oneof![
+//         Just(EntryPointAccess::Public),
+//         Just(EntryPointAccess::Groups(vec![])),
+//     ]
+// }
+//
+// pub fn entry_point_type_arb() -> impl Strategy<Value = EntryPointType> {
+//     prop_oneof![
+//         Just(EntryPointType::Session),
+//         Just(EntryPointType::Contract),
+//     ]
+// }
+
+// pub fn entry_point_arb() -> impl Strategy<Value = EntryPoint> {
+//     //EntryPoint::new(name,args,CLType,entry_point_access_arb, entry_point_type_arb)
+//     //TODO: impl//
+// }
+
+// pub fn entry_points_arb() -> impl Strategy<Value = EntryPoints> {
+//     //TODO: impl
+// }
+// }

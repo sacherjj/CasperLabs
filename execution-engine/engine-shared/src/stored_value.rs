@@ -6,7 +6,7 @@ use types::{
     CLValue, Contract,
 };
 
-use crate::{account::Account, contract::ContractWasm, TypeMismatch};
+use crate::{account::Account, contract_wasm::ContractWasm, TypeMismatch};
 
 #[repr(u8)]
 enum Tag {
@@ -193,13 +193,16 @@ pub mod gens {
     use types::gens::cl_value_arb;
 
     use super::StoredValue;
-    use crate::{account::gens::account_arb, contract::gens::contract_arb};
+    use crate::{account::gens::account_arb, contract_wasm::gens::contract_wasm_arb};
 
     pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         prop_oneof![
             cl_value_arb().prop_map(StoredValue::CLValue),
             account_arb().prop_map(StoredValue::Account),
-            contract_arb().prop_map(StoredValue::ContractWasm),
+            contract_wasm_arb().prop_map(StoredValue::ContractWasm),
+            /* TODO: implement additional arbs
+             * contract_arb().prop_map(StoredValue::Contract),
+             * contract_package_arb().prop_map(StoredValue::ContractPackage), */
         ]
     }
 }

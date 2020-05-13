@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, mem};
 
-use engine_shared::{account::Account, contract::ContractWasm, stored_value::StoredValue};
+use engine_shared::{account::Account, contract_wasm::ContractWasm, stored_value::StoredValue};
 use types::{bytesrepr::ToBytes, Key};
 
 /// Returns byte size of the element - both heap size and stack size.
@@ -104,9 +104,8 @@ impl HeapSizeOf for String {
 mod tests {
     use std::{collections::BTreeMap, mem};
 
-    use types::ContractPackageHash;
-
     use super::ByteSize;
+    use types::Key;
 
     fn assert_byte_size<T: ByteSize>(el: T, expected: usize) {
         assert_eq!(el.byte_size(), expected)
