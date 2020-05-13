@@ -17,7 +17,6 @@ use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
 use ::mint::Mint;
-use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account, contract_wasm::ContractWasm, gas::Gas, stored_value::StoredValue,
 };
@@ -33,9 +32,8 @@ use types::{
     runtime_args, system_contract_errors,
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, ContractHash, ContractPackageHash,
-    ContractVersionKey, EntryPointType, Key, Parameter, ProtocolVersion, RuntimeArgs,
-    SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
-    UREF_SERIALIZED_LENGTH,
+    ContractVersionKey, EntryPointType, Key, ProtocolVersion, RuntimeArgs, SystemContractType,
+    TransferResult, TransferredTo, URef, U128, U256, U512, UREF_SERIALIZED_LENGTH,
 };
 
 use crate::{
@@ -1680,6 +1678,7 @@ where
         key.into_seed() == self.protocol_data().proof_of_stake()
     }
 
+    #[allow(dead_code)] // remove once todo! corrected
     fn get_argument<T: FromBytes + CLTyped>(args: &RuntimeArgs, index: usize) -> Result<T, Error> {
         let arg: CLValue = args
             .get_positional(index)
@@ -2847,7 +2846,7 @@ where
     fn mint_create(&mut self, mint_contract_key: Key) -> Result<URef, Error> {
         let result = self.call_contract(
             mint_contract_key,
-            todo!("default for contract"),
+            todo!("default for contract"), // see get_argument(...)
             RuntimeArgs::new(),
         )?;
         let purse = result.into_t()?;

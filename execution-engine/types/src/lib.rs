@@ -34,7 +34,7 @@ pub mod gens;
 mod key;
 mod phase;
 mod protocol_version;
-mod runtime_args;
+pub mod runtime_args;
 mod semver;
 pub mod system_contract_errors;
 pub mod system_contract_type;

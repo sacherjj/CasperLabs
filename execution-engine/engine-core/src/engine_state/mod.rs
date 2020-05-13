@@ -22,7 +22,6 @@ use std::{
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
-use contract::args_parser::ArgsParser;
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,

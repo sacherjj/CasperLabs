@@ -1,4 +1,4 @@
-use types::{bytesrepr, contracts::ContractVersion, CLValue, HashAddr, RuntimeArgs};
+use types::{bytesrepr, contracts::ContractVersion, HashAddr, RuntimeArgs};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ExecutableDeployItem {

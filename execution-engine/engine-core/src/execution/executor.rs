@@ -12,8 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLType, CLTyped, CLValue, EntryPoint,
-    EntryPointAccess, EntryPointType, Key, Parameter, Phase, ProtocolVersion, RuntimeArgs,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPoint,
+    EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{

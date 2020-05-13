@@ -1,7 +1,7 @@
 use std::{cell::Cell, collections::BTreeMap, iter, rc::Rc};
 
 use assert_matches::assert_matches;
-use proptest::{collection::vec, prelude::*};
+use proptest::prelude::*;
 
 use engine_shared::{
     account::{Account, AssociatedKeys},
