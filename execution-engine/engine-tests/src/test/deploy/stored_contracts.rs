@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use contract::args_parser::fix_this;
 use engine_core::engine_state::{upgrade::ActivationPoint, CONV_RATE};
 use engine_grpc_server::engine_server::ipc::DeployCode;
 use engine_shared::{
@@ -14,13 +13,13 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, Key, ProtocolVersion, RuntimeArgs, SemVer, KEY_HASH_LENGTH, U512};
+use types::{account::PublicKey, Key, ProtocolVersion, RuntimeArgs, SemVer, KEY_HASH_LENGTH, U512, runtime_args, contracts::{CONTRACT_INITIAL_VERSION, ContractVersion}};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const DO_NOTHING_NAME: &str = "do_nothing";
 const DO_NOTHING_CONTRACT_HASH_NAME: &str = "do_nothing_hash";
-const INITIAL_VERSION: SemVer = SemVer::new(1, 0, 0);
+const INITIAL_VERSION: ContractVersion = CONTRACT_INITIAL_VERSION;
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const MODIFIED_MINT_UPGRADER_CONTRACT_NAME: &str = "modified_mint_upgrader.wasm";
 const MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME: &str = "modified_system_upgrader.wasm";
@@ -180,9 +179,11 @@ fn should_exec_stored_code_by_hash() {
                 )
                 .with_stored_versioned_payment_contract_by_hash(
                     hash,
-                    SemVer::V1_0_0,
+                    CONTRACT_INITIAL_VERSION,
                     PAY,
-                    fix_this((U512::from(payment_purse_amount),)),
+                    runtime_args! {
+                        "amount" => U512::from(payment_purse_amount),
+                    },
                 )
                 .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash([2; 32])
@@ -275,9 +276,11 @@ fn should_exec_stored_code_by_named_hash() {
                 )
                 .with_stored_versioned_payment_contract_by_name(
                     STORED_PAYMENT_CONTRACT_HASH_NAME,
-                    SemVer::V1_0_0,
+                    CONTRACT_INITIAL_VERSION,
                     PAY,
-                    fix_this((U512::from(payment_purse_amount),)),
+                    runtime_args!{
+                        "amount" => U512::from(payment_purse_amount),
+                    },
                 )
                 .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash([2; 32])
@@ -364,9 +367,11 @@ fn should_exec_payment_and_session_stored_code() {
             )
             .with_stored_versioned_payment_contract_by_name(
                 STORED_PAYMENT_CONTRACT_HASH_NAME,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 PAY,
-                fix_this((U512::from(payment_purse_amount),)),
+                runtime_args!{
+                    "amount" => U512::from(payment_purse_amount),
+                },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
@@ -398,15 +403,20 @@ fn should_exec_payment_and_session_stored_code() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 TRANSFER,
-                fix_this((ACCOUNT_1_ADDR, U512::from(transferred_amount))),
+                runtime_args! {
+                    "account" => ACCOUNT_1_ADDR,
+                    "amount" => U512::from(transferred_amount),
+                }
             )
             .with_stored_versioned_payment_contract_by_name(
                 STORED_PAYMENT_CONTRACT_NAME,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 PAY,
-                fix_this((U512::from(payment_purse_amount),)),
+                runtime_args!{
+                    "amount" => U512::from(payment_purse_amount),
+                },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([3; 32])
@@ -811,9 +821,11 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
             .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
             .with_stored_versioned_contract_by_name(
                 STORED_PAYMENT_CONTRACT_NAME,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 PAY,
-                fix_this((U512::from(payment_purse_amount),)),
+                runtime_args!{
+                    "amount" => U512::from(payment_purse_amount),
+                },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
