@@ -3,10 +3,14 @@
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
+#[cfg(feature = "no-unstable-features")]
+use alloc::alloc::{alloc, Layout};
 #[cfg(not(feature = "no-unstable-features"))]
 use alloc::collections::TryReserveError;
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::mem::{size_of, MaybeUninit};
+use core::mem::{self, MaybeUninit};
+#[cfg(feature = "no-unstable-features")]
+use core::ptr::NonNull;
 
 use failure::Fail;
 
@@ -15,19 +19,19 @@ pub const UNIT_SERIALIZED_LENGTH: usize = 0;
 /// The number of bytes in a serialized `bool`.
 pub const BOOL_SERIALIZED_LENGTH: usize = 1;
 /// The number of bytes in a serialized `i32`.
-pub const I32_SERIALIZED_LENGTH: usize = size_of::<i32>();
+pub const I32_SERIALIZED_LENGTH: usize = mem::size_of::<i32>();
 /// The number of bytes in a serialized `i64`.
-pub const I64_SERIALIZED_LENGTH: usize = size_of::<i64>();
+pub const I64_SERIALIZED_LENGTH: usize = mem::size_of::<i64>();
 /// The number of bytes in a serialized `u8`.
-pub const U8_SERIALIZED_LENGTH: usize = size_of::<u8>();
+pub const U8_SERIALIZED_LENGTH: usize = mem::size_of::<u8>();
 /// The number of bytes in a serialized `u16`.
-pub const U16_SERIALIZED_LENGTH: usize = size_of::<u16>();
+pub const U16_SERIALIZED_LENGTH: usize = mem::size_of::<u16>();
 /// The number of bytes in a serialized `u32`.
-pub const U32_SERIALIZED_LENGTH: usize = size_of::<u32>();
+pub const U32_SERIALIZED_LENGTH: usize = mem::size_of::<u32>();
 /// The number of bytes in a serialized `u64`.
-pub const U64_SERIALIZED_LENGTH: usize = size_of::<u64>();
+pub const U64_SERIALIZED_LENGTH: usize = mem::size_of::<u64>();
 /// The number of bytes in a serialized [`U128`](crate::U128).
-pub const U128_SERIALIZED_LENGTH: usize = size_of::<u128>();
+pub const U128_SERIALIZED_LENGTH: usize = mem::size_of::<u128>();
 /// The number of bytes in a serialized [`U256`](crate::U256).
 pub const U256_SERIALIZED_LENGTH: usize = U128_SERIALIZED_LENGTH * 2;
 /// The number of bytes in a serialized [`U512`](crate::U512).
@@ -356,16 +360,38 @@ impl<T: ToBytes> ToBytes for Vec<T> {
     }
 }
 
-fn vec_from_bytes<T: FromBytes>(bytes: &[u8]) -> Result<(Vec<T>, &[u8]), Error> {
-    let (size, mut stream) = u32::from_bytes(bytes)?;
+#[cfg(feature = "no-unstable-features")]
+fn try_vec_with_capacity<T>(capacity: usize) -> Result<Vec<T>, Error> {
+    // see https://doc.rust-lang.org/src/alloc/raw_vec.rs.html#75-98
+    let elem_size = mem::size_of::<T>();
+    let alloc_size = capacity
+        .checked_mul(elem_size)
+        .ok_or_else(|| Error::OutOfMemory)?;
 
+    let ptr = if alloc_size == 0 {
+        NonNull::<T>::dangling()
+    } else {
+        let align = mem::align_of::<T>();
+        let layout = Layout::from_size_align(alloc_size, align).unwrap();
+        let raw_ptr = unsafe { alloc(layout) };
+        let non_null_ptr = NonNull::<u8>::new(raw_ptr).ok_or_else(|| Error::OutOfMemory)?;
+        non_null_ptr.cast()
+    };
+    unsafe { Ok(Vec::from_raw_parts(ptr.as_ptr(), 0, capacity)) }
+}
+
+#[cfg(not(feature = "no-unstable-features"))]
+fn try_vec_with_capacity<T>(capacity: usize) -> Result<Vec<T>, Error> {
     let mut result: Vec<T> = Vec::new();
-    #[cfg(feature = "no-unstable-features")]
-    result.reserve_exact(size as usize);
-    #[cfg(not(feature = "no-unstable-features"))]
-    result.try_reserve_exact(size as usize)?;
+    result.try_reserve_exact(capacity)?;
+    Ok(result)
+}
 
-    for _ in 0..size {
+fn vec_from_bytes<T: FromBytes>(bytes: &[u8]) -> Result<(Vec<T>, &[u8]), Error> {
+    let (count, mut stream) = u32::from_bytes(bytes)?;
+
+    let mut result = try_vec_with_capacity(count as usize)?;
+    for _ in 0..count {
         let (value, remainder) = T::from_bytes(stream)?;
         result.push(value);
         stream = remainder;
