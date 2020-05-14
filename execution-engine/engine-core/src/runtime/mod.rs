@@ -1502,6 +1502,11 @@ where
         output_ptr: u32,
         output_size: usize,
     ) -> Result<Result<(), ApiError>, Trap> {
+        log::trace!(
+            "Get positional arg {} from {:?}",
+            index,
+            self.context.args()
+        );
         let arg = match self.context.args().get_positional(index) {
             Some(arg) => arg,
             None => return Ok(Err(ApiError::MissingArgument)),
@@ -2364,7 +2369,7 @@ where
         Ok((value, access_key))
     }
 
-    fn create_contract_metadata_at_hash(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
+    fn create_contract_package_at_hash(&mut self) -> Result<([u8; 32], [u8; 32]), Error> {
         let addr = self.context.new_hash_address()?;
         let key = Key::Hash(addr);
         let (stored_value, access_key) = self.create_contract_value()?;
@@ -2375,17 +2380,18 @@ where
 
     fn create_contract_user_group(
         &mut self,
-        metadata_key: Key,
+        contract_package_hash: ContractPackageHash,
         access_key: URef,
         label: String,
         num_new_urefs: u32,
         mut existing_urefs: BTreeSet<URef>,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        self.context.validate_key(&metadata_key)?;
+        let contract_package_key = contract_package_hash.into();
+        self.context.validate_key(&contract_package_key)?;
         self.context.validate_uref(&access_key)?;
 
-        let mut metadata: ContractPackage = self.context.read_gs_typed(&metadata_key)?;
+        let mut metadata: ContractPackage = self.context.read_gs_typed(&contract_package_key)?;
 
         if metadata.access_key() != access_key {
             return Ok(Err(contracts::Error::InvalidAccessKey.into()));
@@ -2446,7 +2452,7 @@ where
         self.context
             .state()
             .borrow_mut()
-            .write(metadata_key, StoredValue::ContractPackage(metadata));
+            .write(contract_package_key, StoredValue::ContractPackage(metadata));
 
         Ok(Ok(()))
     }
@@ -2513,7 +2519,7 @@ where
 
         // return contract key to caller
         {
-            let key_bytes = match contract_key.to_bytes() {
+            let key_bytes = match contract_hash.to_bytes() {
                 Ok(bytes) => bytes,
                 Err(error) => return Ok(Err(error.into())),
             };
@@ -3112,11 +3118,11 @@ where
         _key_size: u32,
         _scoped_timer: &mut ScopedTimer,
     ) -> Result<Result<(), ApiError>, Trap> {
-        unreachable!(); /* TODO: this method should be removed */
+        todo!("upgrade_contract_at_uref"); /* TODO: this method should be removed */
         // let key = self.key_from_mem(key_ptr, key_size)?;
         // let named_keys = match self.context.read_gs(&key)? {
         //     None => Err(Error::KeyNotFound(key)),
-        //     Some(StoredValue::ContractWasm(contract_wasm)) => {
+        //     Some(StoredValue::Contract(contract)) => {
         //         let old_contract_size =
         //             contract.named_keys().serialized_length() + contract.bytes().len();
         //         scoped_timer.add_property("old_contract_size", old_contract_size.to_string());

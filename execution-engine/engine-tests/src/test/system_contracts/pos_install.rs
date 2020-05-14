@@ -10,7 +10,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, Key, RuntimeArgs, URef, U512};
+use types::{
+    account::PublicKey, runtime_args, ContractHash, ContractPackageHash, Key, RuntimeArgs, URef,
+    U512,
+};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const TRANSFER_AMOUNT: u64 = 250_000_000 + 1000;
@@ -77,8 +80,11 @@ fn should_run_pos_install_contract() {
         },
         vec![],
     );
-    let ((pos_metadata_key, pos_key), ret_urefs, effect): ((Key, Key), _, _) =
-        res.expect("should run successfully");
+    let ((_pos_package_hash, pos_hash), _ret_urefs, effect): (
+        (ContractPackageHash, ContractHash),
+        _,
+        _,
+    ) = res.expect("should run successfully");
 
     let prestate = builder.get_post_state_hash();
     builder.commit_effects(prestate, effect.transforms);
@@ -88,7 +94,7 @@ fn should_run_pos_install_contract() {
 
     // should have written a contract under that uref
     let contract = builder
-        .get_contract(pos_key.into_hash().unwrap())
+        .get_contract(pos_hash)
         .expect("should have a contract");
     let named_keys = contract.named_keys();
 

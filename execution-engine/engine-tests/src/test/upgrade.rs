@@ -7,7 +7,10 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{runtime_args, CLValue, RuntimeArgs, SemVer, contracts::{ContractVersion, CONTRACT_INITIAL_VERSION}};
+use types::{
+    contracts::{ContractVersion, CONTRACT_INITIAL_VERSION},
+    runtime_args, CLValue, RuntimeArgs, SemVer,
+};
 
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";

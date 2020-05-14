@@ -180,7 +180,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
                 FunctionIndex::ReadHostBufferIndex.into(),
             ),
-            "create_contract_metadata_at_hash" => FuncInstance::alloc_host(
+            "create_contract_package_at_hash" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::CreateContractMetadataAtHash.into(),
             ),

@@ -43,14 +43,14 @@ pub extern "C" fn install() {
         entry_points
     };
 
-    let (contract_metadata_key, access_uref) = storage::create_contract_metadata_at_hash();
-    runtime::put_key(HASH_KEY_NAME, contract_metadata_key);
+    let (contract_package_hash, access_uref) = storage::create_contract_package_at_hash();
+    runtime::put_key(HASH_KEY_NAME, contract_package_hash.into());
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
     let named_keys = BTreeMap::new();
 
     let contract_key =
-        storage::add_contract_version(contract_metadata_key, access_uref, entry_points, named_keys);
+        storage::add_contract_version(contract_package_hash, access_uref, entry_points, named_keys);
 
     let return_value = CLValue::from_t(contract_key).unwrap_or_revert();
     runtime::ret(return_value);

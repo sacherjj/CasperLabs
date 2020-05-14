@@ -7,7 +7,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{runtime_args, Key, RuntimeArgs, SemVer, contracts::CONTRACT_INITIAL_VERSION};
+use types::{contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key, RuntimeArgs};
 
 const CONTRACT_HEADERS: &str = "contract_context.wasm";
 const METADATA_HASH_KEY: &str = "metadata_hash_key";

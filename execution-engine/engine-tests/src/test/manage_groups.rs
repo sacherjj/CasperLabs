@@ -1,4 +1,5 @@
 use assert_matches::assert_matches;
+use contracts::CONTRACT_INITIAL_VERSION;
 use engine_core::{engine_state::Error, execution};
 use engine_test_support::{
     internal::{
@@ -9,8 +10,7 @@ use engine_test_support::{
 };
 use lazy_static::lazy_static;
 use std::{collections::BTreeSet, iter::FromIterator};
-use types::{contracts, contracts::MAX_GROUP_UREFS, runtime_args, Group, Key, RuntimeArgs, SemVer};
-use contracts::CONTRACT_INITIAL_VERSION;
+use types::{contracts, contracts::MAX_GROUP_UREFS, runtime_args, Group, Key, RuntimeArgs};
 
 const CONTRACT_GROUPS: &str = "manage_groups.wasm";
 const METADATA_HASH_KEY: &str = "metadata_hash_key";

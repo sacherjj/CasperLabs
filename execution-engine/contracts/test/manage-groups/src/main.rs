@@ -19,7 +19,7 @@ use contract::{
 };
 use types::{
     contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
-    CLType, Key, Parameter, URef,
+    CLType, ContractPackageHash, Key, Parameter, URef,
 };
 
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
@@ -35,9 +35,9 @@ const TOTAL_EXISTING_UREFS_ARG: &str = "total_existing_urefs";
 
 #[no_mangle]
 pub extern "C" fn create_group() {
-    let metadata_hash_key = runtime::get_key(METADATA_HASH_KEY)
+    let metadata_hash_key: ContractPackageHash = runtime::get_key(METADATA_HASH_KEY)
         .unwrap_or_revert()
-        .try_into()
+        .into_hash()
         .unwrap();
     let metadata_access_key = runtime::get_key(METADATA_ACCESS_KEY)
         .unwrap_or_revert()
@@ -172,24 +172,19 @@ fn create_entry_points_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(metadata_hash: Key, access_uref: URef) {
+fn install_version_1(package_hash: ContractPackageHash, access_uref: URef) {
     let contract_named_keys = BTreeMap::new();
 
     let entry_points = create_entry_points_1();
-    storage::add_contract_version(
-        metadata_hash,
-        access_uref,
-        entry_points,
-        contract_named_keys,
-    );
+    storage::add_contract_version(package_hash, access_uref, entry_points, contract_named_keys);
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let (metadata_hash, access_uref) = storage::create_contract_metadata_at_hash();
+    let (package_hash, access_uref) = storage::create_contract_package_at_hash();
 
-    runtime::put_key(METADATA_HASH_KEY, metadata_hash);
+    runtime::put_key(METADATA_HASH_KEY, package_hash.into());
     runtime::put_key(METADATA_ACCESS_KEY, access_uref.into());
 
-    install_version_1(metadata_hash, access_uref);
+    install_version_1(package_hash, access_uref);
 }

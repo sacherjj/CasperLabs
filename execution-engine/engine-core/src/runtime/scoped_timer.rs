@@ -125,7 +125,7 @@ impl Drop for ScopedTimer {
             FunctionIndex::GetArgSizeFuncIndex => "host_function_get_arg_size",
             FunctionIndex::ReadHostBufferIndex => "host_function_read_host_buffer",
             FunctionIndex::CreateContractMetadataAtHash => {
-                "host_function_create_contract_metadata_at_hash"
+                "host_function_create_contract_package_at_hash"
             }
             FunctionIndex::AddContractVersion => "host_function_add_contract_version",
             FunctionIndex::RemoveContractVersion => "host_remove_contract_version",

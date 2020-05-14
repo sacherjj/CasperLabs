@@ -9,7 +9,9 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, Key, RuntimeArgs, SemVer, U512, contracts::CONTRACT_INITIAL_VERSION};
+use types::{
+    account::PublicKey, contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key, RuntimeArgs, U512,
+};
 
 const CONTRACT_GROUPS: &str = "groups.wasm";
 const METADATA_HASH_KEY: &str = "metadata_hash_key";

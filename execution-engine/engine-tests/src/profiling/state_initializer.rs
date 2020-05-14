@@ -11,15 +11,16 @@ use engine_core::engine_state::{
 };
 use engine_test_support::{
     internal::{
-        utils, DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNTS,
-        DEFAULT_GENESIS_CONFIG_HASH, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
-        MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT, STANDARD_PAYMENT_CONTRACT,
+        utils, DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, ARG_AMOUNT,
+        DEFAULT_ACCOUNTS, DEFAULT_GENESIS_CONFIG_HASH, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION,
+        DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT, STANDARD_PAYMENT_CONTRACT,
         STANDARD_PAYMENT_INSTALL_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
 
 use casperlabs_engine_tests::profiling;
+use types::{runtime_args, RuntimeArgs};
 
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";
@@ -56,7 +57,10 @@ fn main() {
                     account_2_public_key,
                 ),
             )
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_payment_code(
+                STANDARD_PAYMENT_CONTRACT,
+                runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
+            )
             .with_authorization_keys(&[genesis_public_key])
             .build();
 

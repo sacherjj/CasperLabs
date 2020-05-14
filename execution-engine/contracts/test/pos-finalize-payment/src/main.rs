@@ -5,14 +5,24 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::PublicKey, runtime_args, ApiError, Key, RuntimeArgs, URef, U512};
+
+pub const ARG_AMOUNT: &str = "amount";
+pub const ARG_PURSE: &str = "purse";
+pub const ARG_ACCOUNT_KEY: &str = "account";
 
 fn set_refund_purse(contract_key: Key, p: &URef) {
-    runtime::call_contract(contract_key, "set_refund_purse", (*p,))
+    runtime::call_contract(
+        contract_key,
+        "set_refund_purse",
+        runtime_args! {
+            ARG_PURSE => *p,
+        },
+    )
 }
 
 fn get_payment_purse(contract_key: Key) -> URef {
-    runtime::call_contract(contract_key, "get_payment_purse", ())
+    runtime::call_contract(contract_key, "get_payment_purse", runtime_args! {})
 }
 
 fn submit_payment(contract_key: Key, amount: U512) {
@@ -22,7 +32,14 @@ fn submit_payment(contract_key: Key, amount: U512) {
 }
 
 fn finalize_payment(contract_key: Key, amount_spent: U512, account: PublicKey) {
-    runtime::call_contract(contract_key, "finalize_payment", (amount_spent, account))
+    runtime::call_contract(
+        contract_key,
+        "finalize_payment",
+        runtime_args! {
+            ARG_AMOUNT => amount_spent,
+            ARG_ACCOUNT_KEY => account,
+        },
+    )
 }
 
 #[no_mangle]

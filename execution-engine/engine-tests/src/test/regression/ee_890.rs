@@ -1,10 +1,11 @@
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
-        DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, ARG_AMOUNT,
+        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
+use types::{runtime_args, RuntimeArgs};
 
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 
@@ -28,7 +29,10 @@ fn should_run_ee_890_gracefully_reject_start_node_in_session() {
     let deploy_1 = DeployItemBuilder::new()
         .with_address(DEFAULT_ACCOUNT_ADDR)
         .with_session_bytes(wasm_binary, ())
-        .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+        .with_payment_code(
+            STANDARD_PAYMENT_CONTRACT,
+            runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
+        )
         .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
         .with_deploy_hash([123; 32])
         .build();

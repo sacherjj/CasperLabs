@@ -13,7 +13,11 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, Key, ProtocolVersion, RuntimeArgs, SemVer, KEY_HASH_LENGTH, U512, runtime_args, contracts::{CONTRACT_INITIAL_VERSION, ContractVersion}};
+use types::{
+    account::PublicKey,
+    contracts::{ContractVersion, CONTRACT_INITIAL_VERSION},
+    runtime_args, Key, ProtocolVersion, RuntimeArgs, KEY_HASH_LENGTH, U512,
+};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
@@ -278,7 +282,7 @@ fn should_exec_stored_code_by_named_hash() {
                     STORED_PAYMENT_CONTRACT_HASH_NAME,
                     CONTRACT_INITIAL_VERSION,
                     PAY,
-                    runtime_args!{
+                    runtime_args! {
                         "amount" => U512::from(payment_purse_amount),
                     },
                 )
@@ -369,7 +373,7 @@ fn should_exec_payment_and_session_stored_code() {
                 STORED_PAYMENT_CONTRACT_HASH_NAME,
                 CONTRACT_INITIAL_VERSION,
                 PAY,
-                runtime_args!{
+                runtime_args! {
                     "amount" => U512::from(payment_purse_amount),
                 },
             )
@@ -408,13 +412,13 @@ fn should_exec_payment_and_session_stored_code() {
                 runtime_args! {
                     "account" => ACCOUNT_1_ADDR,
                     "amount" => U512::from(transferred_amount),
-                }
+                },
             )
             .with_stored_versioned_payment_contract_by_name(
                 STORED_PAYMENT_CONTRACT_NAME,
                 CONTRACT_INITIAL_VERSION,
                 PAY,
-                runtime_args!{
+                runtime_args! {
                     "amount" => U512::from(payment_purse_amount),
                 },
             )
@@ -823,7 +827,7 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
                 STORED_PAYMENT_CONTRACT_NAME,
                 CONTRACT_INITIAL_VERSION,
                 PAY,
-                runtime_args!{
+                runtime_args! {
                     "amount" => U512::from(payment_purse_amount),
                 },
             )

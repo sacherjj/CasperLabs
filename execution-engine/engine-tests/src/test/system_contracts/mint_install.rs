@@ -7,7 +7,8 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
-    contracts::CONTRACT_INITIAL_VERSION, ContractVersionKey, Key, ProtocolVersion, RuntimeArgs,
+    contracts::CONTRACT_INITIAL_VERSION, ContractHash, ContractPackageHash, ContractVersionKey,
+    ProtocolVersion, RuntimeArgs,
 };
 
 const DEPLOY_HASH_1: [u8; 32] = [1u8; 32];
@@ -22,29 +23,29 @@ fn should_run_mint_install_contract() {
 
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
-    let ((mint_metadata_key, mint_key), ret_urefs, effect): ((Key, Key), _, _) =
-        exec_with_return::exec(
-            engine_config,
-            &mut builder,
-            DEFAULT_ACCOUNT_ADDR,
-            "mint_install.wasm",
-            DEFAULT_BLOCK_TIME,
-            DEPLOY_HASH_1,
-            "install",
-            RuntimeArgs::new(),
-            vec![],
-        )
-        .expect("should run successfully");
+    let ((contract_package_hash, mint_hash), ret_urefs, effect): (
+        (ContractPackageHash, ContractHash),
+        _,
+        _,
+    ) = exec_with_return::exec(
+        engine_config,
+        &mut builder,
+        DEFAULT_ACCOUNT_ADDR,
+        "mint_install.wasm",
+        DEFAULT_BLOCK_TIME,
+        DEPLOY_HASH_1,
+        "install",
+        RuntimeArgs::new(),
+        vec![],
+    )
+    .expect("should run successfully");
 
     // does not return extra urefs
     assert_eq!(ret_urefs.len(), 0);
-    assert_ne!(mint_metadata_key, mint_key);
-
-    assert!(mint_metadata_key.into_hash().is_some());
-    assert!(mint_key.into_hash().is_some());
+    assert_ne!(contract_package_hash, mint_hash);
 
     // should have written a contract under that uref
-    let contract_package = match effect.transforms.get(&mint_metadata_key) {
+    let contract_package = match effect.transforms.get(&contract_package_hash.into()) {
         Some(Transform::Write(StoredValue::ContractPackage(contract_package))) => contract_package,
 
         _ => panic!("Expected contract package to be written under the key"),
@@ -62,16 +63,13 @@ fn should_run_mint_install_contract() {
             .get(&mint_version)
             .cloned()
             .unwrap(),
-        mint_key.into_hash().unwrap()
+        mint_hash,
     );
 
-    let contract = match effect.transforms.get(&mint_key) {
+    let contract = match effect.transforms.get(&mint_hash.into()) {
         Some(Transform::Write(StoredValue::Contract(contract))) => contract,
 
         _ => panic!("Expected contract to be written under the key"),
     };
-    assert_eq!(
-        contract.contract_package_hash(),
-        mint_metadata_key.into_hash().unwrap()
-    );
+    assert_eq!(contract.contract_package_hash(), contract_package_hash,);
 }
