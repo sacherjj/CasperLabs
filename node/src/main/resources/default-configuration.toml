@@ -86,7 +86,7 @@ sync-max-bonding-rate = 1.0
 sync-max-depth-ancestors-request = 5
 
 # Maximum number of parallel synchronizations to run at any time.
-sync-max-parallel = 5
+sync-max-parallel = 7
 
 # Disable DAG shape validations during synchronization.
 sync-disable-validations = true
@@ -116,7 +116,7 @@ init-sync-max-block-count = 1000000
 periodic-sync-round-period = "60second"
 
 # Maximum number of parallel block downloads initiated by the download manager.
-download-max-parallel-blocks = 2
+download-max-parallel-blocks = 8
 
 # Maximum number of parallel deploy downloads initiated by the download manager.
 download-max-parallel-deploys = 2
@@ -140,7 +140,7 @@ relay-max-parallel-blocks = 5
 relay-block-chunk-consumer-timeout = "10second"
 
 # Maximum number of blocks to try to validate at any time.
-validate-max-parallel-blocks = 2
+validate-max-parallel-blocks = 8
 
 # Use this flag to clear the blockStorage and dagStorage
 clean-block-storage = false
@@ -176,7 +176,7 @@ db-read-connections = 10
 parallelism-cpu-multiplier = 1.0
 
 # Minimum parallelism.
-min-parallelism = 4
+min-parallelism = 8
 
 # With deploy gossiping enabled, nodes will share deploys among each other as soon as they received them,
 # and try to optimize block downloads by fetching missing deploys separately.

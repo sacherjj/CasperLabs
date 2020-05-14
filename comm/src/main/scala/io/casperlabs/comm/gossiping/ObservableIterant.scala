@@ -28,7 +28,12 @@ object ObservableIterant {
         }
 
       def toIterant[A](obs: Observable[A]) =
-        Iterant.fromReactivePublisher[F, A](obs.toReactivePublisher)
+        // Iterant.fromReactivePublisher[F, A](obs.toReactivePublisher)
+        IterantFromReactivePublisher(
+          obs.toReactivePublisher,
+          requestCount = 128,
+          eagerBuffer = true
+        )
     }
 
   object syntax {
