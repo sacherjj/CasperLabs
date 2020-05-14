@@ -92,7 +92,7 @@ pub struct WasmTestBuilder<S> {
 
 impl<S> WasmTestBuilder<S> {
     fn initialize_logging() {
-        let log_settings = Settings::new(LevelFilter::Warn).with_style(Style::HumanReadable);
+        let log_settings = Settings::new(LevelFilter::Debug).with_style(Style::HumanReadable);
         let _ = logging::initialize(log_settings);
     }
 }
@@ -593,7 +593,7 @@ where
         WasmTestResult(self.clone())
     }
 
-    pub fn get_pos_contract(&self) -> ContractWasm {
+    pub fn get_pos_contract(&self) -> Contract {
         let pos_contract: Key = self
             .pos_contract_hash
             .expect("should have pos contract uref")

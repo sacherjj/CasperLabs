@@ -18,7 +18,7 @@ use types::{
     contracts::{
         EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, CONTRACT_INITIAL_VERSION,
     },
-    runtime_args, CLType, Key, Parameter, RuntimeArgs, URef,
+    runtime_args, CLType, ContractPackageHash, Key, Parameter, RuntimeArgs, URef,
 };
 
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
@@ -83,7 +83,7 @@ pub extern "C" fn call_restricted_entry_points() {
     uncallable_contract();
 }
 
-fn create_group(metadata_hash: Key, access_uref: URef) -> URef {
+fn create_group(package_hash: ContractPackageHash, access_uref: URef) -> URef {
     let new_uref_1 = storage::new_uref(());
     runtime::put_key("saved_uref", new_uref_1.into());
 
@@ -91,7 +91,7 @@ fn create_group(metadata_hash: Key, access_uref: URef) -> URef {
     existing_urefs.insert(new_uref_1);
 
     let new_urefs = storage::create_contract_user_group(
-        metadata_hash,
+        package_hash,
         access_uref,
         "Group 1",
         1,
@@ -211,7 +211,11 @@ fn create_entry_points_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(metadata_hash: Key, access_uref: URef, restricted_uref: URef) {
+fn install_version_1(
+    contract_package_hash: ContractPackageHash,
+    access_uref: URef,
+    restricted_uref: URef,
+) {
     let contract_named_keys = {
         let contract_variable = storage::new_uref(0);
 
@@ -223,7 +227,7 @@ fn install_version_1(metadata_hash: Key, access_uref: URef, restricted_uref: URe
 
     let entry_points = create_entry_points_1();
     storage::add_contract_version(
-        metadata_hash,
+        contract_package_hash,
         access_uref,
         entry_points,
         contract_named_keys,
@@ -233,12 +237,12 @@ fn install_version_1(metadata_hash: Key, access_uref: URef, restricted_uref: URe
 #[no_mangle]
 pub extern "C" fn call() {
     // Session contract
-    let (contract_hash, access_uref) = storage::create_contract_metadata_at_hash();
+    let (contract_package_hash, access_uref) = storage::create_contract_package_at_hash();
 
-    runtime::put_key(METADATA_HASH_KEY, contract_hash);
+    runtime::put_key(METADATA_HASH_KEY, contract_package_hash.into());
     runtime::put_key(METADATA_ACCESS_KEY, access_uref.into());
 
-    let restricted_uref = create_group(contract_hash, access_uref);
+    let restricted_uref = create_group(contract_package_hash, access_uref);
 
-    install_version_1(contract_hash, access_uref, restricted_uref);
+    install_version_1(contract_package_hash.into(), access_uref, restricted_uref);
 }

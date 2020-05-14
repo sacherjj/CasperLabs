@@ -828,7 +828,7 @@ where
         _bytes: Vec<u8>,
         _named_keys: BTreeMap<String, Key>,
     ) -> Result<(), Error> {
-        unreachable!(); /* TODO: this method should be removed */
+        todo!("upgrade_contract_at_uref"); /* TODO: this method should be removed */
         //     let protocol_version = self.protocol_version();
         //     let contract = ContractWasm::new(bytes);
         //     let contract = StoredValue::ContractWasm(contract_wasm);

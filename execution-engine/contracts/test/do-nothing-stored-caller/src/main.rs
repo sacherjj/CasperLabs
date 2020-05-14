@@ -28,12 +28,12 @@ enum CustomError {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_metadata_key: Key = runtime::get_arg(Args::DoNothingContractMetadataKey as u32)
+    let contract_package_hash: Key = runtime::get_arg(Args::DoNothingContractMetadataKey as u32)
         .unwrap_or_revert_with(ApiError::User(
             CustomError::MissingDoNothingContractMetadataKeyArg as u16,
         ))
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let contract_metadata_hash = contract_metadata_key
+    let contract_metadata_hash = contract_package_hash
         .into_hash()
         .unwrap_or_revert_with(ApiError::User(CustomError::ConvertingKeyIntoHash as u16));
 

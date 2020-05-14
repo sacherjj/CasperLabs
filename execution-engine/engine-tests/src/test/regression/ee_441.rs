@@ -1,11 +1,11 @@
 use engine_test_support::{
     internal::{
-        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_PAYMENT,
-        DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
+        DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, ARG_AMOUNT,
+        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{Key, URef};
+use types::{runtime_args, Key, RuntimeArgs, URef};
 
 fn get_uref(key: Key) -> URef {
     match key {
@@ -20,7 +20,10 @@ fn do_pass(pass: &str) -> (URef, URef) {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_payment_code(
+                STANDARD_PAYMENT_CONTRACT,
+                runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
+            )
             .with_session_code("ee_441_rng_state.wasm", (pass.to_string(),))
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])

@@ -9,7 +9,7 @@ use engine_shared::{newtypes::Blake2bHash, stored_value::StoredValue};
 use types::{
     account::PublicKey,
     bytesrepr::{FromBytes, ToBytes},
-    CLValue, ContractPackageHash,
+    CLValue, Key,
 };
 
 #[bench]

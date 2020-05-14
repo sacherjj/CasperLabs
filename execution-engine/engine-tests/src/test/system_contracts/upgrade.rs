@@ -511,7 +511,11 @@ fn should_not_downgrade() {
         .get_upgrade_response(0)
         .expect("should have response");
 
-    assert!(upgrade_response.has_success(), "expected success");
+    assert!(
+        upgrade_response.has_success(),
+        "expected success but received {:?}",
+        upgrade_response
+    );
 
     let upgraded_wasm_costs = builder
         .get_engine_state()

@@ -42,9 +42,9 @@ use types::{
     runtime_args,
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
-    AccessRights, BlockTime, CLType, CLValue, Contract, ContractHash, ContractVersionKey,
-    EntryPoint, EntryPointAccess, EntryPointType, Key, NamedArg, Phase, ProtocolVersion,
-    RuntimeArgs, URef, KEY_HASH_LENGTH, U512,
+    AccessRights, BlockTime, CLType, CLValue, Contract, ContractHash, ContractPackageHash,
+    ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType, Key, NamedArg, Phase,
+    ProtocolVersion, RuntimeArgs, URef, KEY_HASH_LENGTH, U512,
 };
 
 pub use self::{
@@ -206,7 +206,7 @@ where
         };
 
         // Spec #5: Execute the wasm code from the mint installer bytes
-        let (mint_metadata_key, mint_key): (Key, Key) = {
+        let (mint_package_hash, mint_hash): (ContractPackageHash, ContractHash) = {
             let mint_installer_bytes = ee_config.mint_installer_bytes();
             let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
             let args = RuntimeArgs::new();
@@ -247,12 +247,13 @@ where
                 system_contract_cache,
             )?
         };
-
-        let mint_contract_hash = mint_key.into_seed();
-
+        log::trace!("Mint hash: {:?}", mint_hash);
         // Spec #7: Execute pos installer wasm code, passing the initially bonded validators as an
         // argument
-        let (_proof_of_stake_metadata_hash, proof_of_stake_key): (Key, Key) = {
+        let (_proof_of_stake_package_hash, proof_of_stake_hash): (
+            ContractPackageHash,
+            ContractHash,
+        ) = {
             // Spec #6: Compute initially bonded validators as the contents of accounts_path
             // filtered to non-zero staked amounts.
             let bonded_validators: BTreeMap<PublicKey, U512> = ee_config
@@ -268,22 +269,21 @@ where
 
             // Constructs a partial protocol data with already known uref to pass the validation
             // step
-            let mint_metadata_hash = mint_metadata_key.into_seed();
-            let partial_protocol_data = ProtocolData::partial_with_mint(mint_contract_hash);
+            let partial_protocol_data = ProtocolData::partial_with_mint(mint_hash);
 
             let proof_of_stake_installer_bytes = ee_config.proof_of_stake_installer_bytes();
             let proof_of_stake_installer_module =
                 preprocessor.preprocess(proof_of_stake_installer_bytes)?;
             let args = {
-                let arg_mint_metadata_hash = NamedArg::new(
+                let arg_mint_package_hash = NamedArg::new(
                     "mint_contract_metadata_hash".to_string(),
-                    CLValue::from_t(mint_metadata_hash).expect("should convert to `CLValue`"),
+                    CLValue::from_t(mint_package_hash).expect("should convert to `CLValue`"),
                 );
                 let arg_genesis_validators = NamedArg::new(
                     "genesis_validators".to_string(),
                     CLValue::from_t(bonded_validators).expect("should convert to `CLValue`"),
                 );
-                RuntimeArgs::Named(vec![arg_mint_metadata_hash, arg_genesis_validators])
+                RuntimeArgs::Named(vec![arg_mint_package_hash, arg_genesis_validators])
             };
             let mut named_keys = BTreeMap::new();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
@@ -317,7 +317,7 @@ where
             )?
         };
 
-        let proof_of_stake_hash = proof_of_stake_key.into_seed();
+        log::trace!("PoS hash: {:?}", proof_of_stake_hash);
 
         // Execute standard payment installer wasm code
         //
@@ -325,11 +325,11 @@ where
         // specification.
         let protocol_data = ProtocolData::partial_without_standard_payment(
             wasm_costs,
-            mint_contract_hash,
+            mint_hash,
             proof_of_stake_hash,
         );
 
-        let standard_payment_key: Key = {
+        let standard_payment_hash: ContractHash = {
             let standard_payment_installer_bytes =
                 if ee_config.standard_payment_installer_bytes().is_empty() {
                     // TODO - remove this once Node has been updated to pass the required bytes
@@ -381,12 +381,10 @@ where
             )?
         };
 
-        let standard_payment_hash = standard_payment_key.into_seed();
-
         // Spec #2: Associate given CostTable with given ProtocolVersion.
         let protocol_data = ProtocolData::new(
             wasm_costs,
-            mint_contract_hash,
+            mint_hash,
             proof_of_stake_hash,
             standard_payment_hash,
         );
@@ -433,7 +431,7 @@ where
             let module = {
                 let contract = tracking_copy
                     .borrow_mut()
-                    .get_contract(correlation_id, mint_key.into_seed())?;
+                    .get_contract(correlation_id, mint_hash)?;
 
                 let contract_wasm = tracking_copy
                     .borrow_mut()
@@ -455,7 +453,7 @@ where
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
                 let mut named_keys_exec = BTreeMap::new();
-                let base_key = mint_key;
+                let base_key = mint_hash;
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();
                 // NOTE: As Ed25519 keys are currently supported by chainspec, PublicKey::value
@@ -479,7 +477,7 @@ where
                         EntryPointType::Contract,
                         args.clone(),
                         &mut named_keys_exec,
-                        base_key,
+                        base_key.into(),
                         &virtual_system_account,
                         authorization_keys,
                         blocktime,
@@ -496,12 +494,7 @@ where
                     )?;
 
                     runtime
-                        .call_versioned_contract(
-                            mint_metadata_key.into_seed(),
-                            1,
-                            "mint".to_string(),
-                            args,
-                        )?
+                        .call_versioned_contract(mint_package_hash, 1, "mint".to_string(), args)?
                         .into_t::<Result<URef, mint::Error>>()
                         .expect("should convert")
                 };
@@ -1348,6 +1341,7 @@ where
                 }
             }
         };
+        log::debug!("Payment result {:?}", payment_result);
 
         let payment_result_cost = payment_result.cost();
         // payment_code_spec_3: fork based upon payment purse balance and cost of
@@ -1481,6 +1475,7 @@ where
                 system_contract_cache,
             )
         };
+        log::debug!("Session result {:?}", session_result);
 
         let post_session_rc = if session_result.is_failure() {
             // If session code fails we do not include its effects,
@@ -1544,6 +1539,8 @@ where
                 system_contract_cache,
             )
         };
+
+        log::debug!("Finalize result {:?}", finalize_result);
 
         execution_result_builder.set_finalize_execution_result(finalize_result);
 

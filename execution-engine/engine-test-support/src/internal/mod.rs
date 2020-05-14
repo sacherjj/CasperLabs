@@ -38,6 +38,8 @@ pub const MOCKED_ACCOUNT_ADDRESS: PublicKey = PublicKey::ed25519_from([48u8; 32]
 
 pub const DEFAULT_ACCOUNT_KEY: PublicKey = DEFAULT_ACCOUNT_ADDR;
 
+pub const ARG_AMOUNT: &str = "amount";
+
 lazy_static! {
     pub static ref DEFAULT_GENESIS_CONFIG_HASH: Blake2bHash = [42; 32].into();
     pub static ref DEFAULT_ACCOUNTS: Vec<GenesisAccount> = {

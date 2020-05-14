@@ -7,15 +7,18 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{runtime_args, CLValue, RuntimeArgs, SemVer};
+use types::{
+    contracts::{ContractVersion, CONTRACT_INITIAL_VERSION},
+    runtime_args, CLValue, RuntimeArgs, SemVer,
+};
 
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
 const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
-const INITIAL_VERSION: SemVer = SemVer::new(1, 0, 0);
-const UPGRADED_VERSION: SemVer = SemVer::new(2, 0, 0);
+const INITIAL_VERSION: ContractVersion = CONTRACT_INITIAL_VERSION;
+const UPGRADED_VERSION: ContractVersion = INITIAL_VERSION + 1;
 const PURSE_NAME_ARG_NAME: &str = "purse_name";
 const HELLO: &str = "Hello";
 const PURSE_1: &str = "purse_1";
@@ -145,7 +148,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
         // TODO update to pass SemVer once supported into contracts, instead of
         // INITIAL_VERSION.major
-        let args = (*stored_contract_hash, INITIAL_VERSION.major, PURSE_1);
+        let args = (*stored_contract_hash, INITIAL_VERSION, PURSE_1);
         let exec_request =
             { ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args).build() };
 
@@ -181,8 +184,8 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
     {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
         // TODO update to pass SemVer once supported into contracts, instead of
-        // UPGRADED_VERSION.major
-        let args = (*stored_contract_hash, UPGRADED_VERSION.major, PURSE_1);
+        // UPGRADED_VERSION
+        let args = (*stored_contract_hash, UPGRADED_VERSION, PURSE_1);
         let exec_request =
             { ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args).build() };
 

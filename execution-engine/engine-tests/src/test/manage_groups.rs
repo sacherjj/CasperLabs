@@ -1,4 +1,5 @@
 use assert_matches::assert_matches;
+use contracts::CONTRACT_INITIAL_VERSION;
 use engine_core::{engine_state::Error, execution};
 use engine_test_support::{
     internal::{
@@ -9,7 +10,7 @@ use engine_test_support::{
 };
 use lazy_static::lazy_static;
 use std::{collections::BTreeSet, iter::FromIterator};
-use types::{contracts, contracts::MAX_GROUP_UREFS, runtime_args, Group, Key, RuntimeArgs, SemVer};
+use types::{contracts, contracts::MAX_GROUP_UREFS, runtime_args, Group, Key, RuntimeArgs};
 
 const CONTRACT_GROUPS: &str = "manage_groups.wasm";
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
@@ -71,7 +72,7 @@ fn should_create_and_remove_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -89,7 +90,7 @@ fn should_create_and_remove_group() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     assert_eq!(contract_metadata.groups().len(), 1);
     let group_1 = contract_metadata
@@ -109,7 +110,7 @@ fn should_create_and_remove_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 REMOVE_GROUP,
                 args,
             )
@@ -127,7 +128,7 @@ fn should_create_and_remove_group() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     assert_eq!(
         contract_metadata.groups().get(&Group::new(GROUP_1_NAME)),
@@ -173,7 +174,7 @@ fn should_create_and_extend_user_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -191,7 +192,7 @@ fn should_create_and_extend_user_group() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     assert_eq!(contract_metadata.groups().len(), 1);
     let group_1 = contract_metadata
@@ -212,7 +213,7 @@ fn should_create_and_extend_user_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 EXTEND_GROUP_UREFS,
                 args,
             )
@@ -230,7 +231,7 @@ fn should_create_and_extend_user_group() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     let group_1_extended = contract_metadata
         .groups()
@@ -280,7 +281,7 @@ fn should_create_and_remove_urefs_from_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -298,7 +299,7 @@ fn should_create_and_remove_urefs_from_group() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     assert_eq!(contract_metadata.groups().len(), 1);
     let group_1 = contract_metadata
@@ -321,7 +322,7 @@ fn should_create_and_remove_urefs_from_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 REMOVE_GROUP_UREFS,
                 args,
             )
@@ -339,7 +340,7 @@ fn should_create_and_remove_urefs_from_group() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     let group_1_modified = contract_metadata
         .groups()
@@ -386,7 +387,7 @@ fn should_limit_max_urefs_while_extending() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -404,7 +405,7 @@ fn should_limit_max_urefs_while_extending() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     assert_eq!(contract_metadata.groups().len(), 1);
     let group_1 = contract_metadata
@@ -425,7 +426,7 @@ fn should_limit_max_urefs_while_extending() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 EXTEND_GROUP_UREFS,
                 args,
             )
@@ -450,7 +451,7 @@ fn should_limit_max_urefs_while_extending() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 EXTEND_GROUP_UREFS,
                 args,
             )
@@ -468,7 +469,7 @@ fn should_limit_max_urefs_while_extending() {
         .query(None, *metadata_hash, &[])
         .expect("should have result");
     let contract_metadata = query_result
-        .as_contract_metadata()
+        .as_contract_package()
         .expect("should be metadata");
     let group_1_modified = contract_metadata
         .groups()

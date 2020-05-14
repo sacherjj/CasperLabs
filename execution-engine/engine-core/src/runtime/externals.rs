@@ -454,7 +454,7 @@ where
                 // args(0) = pointer to wasm memory where to write 32-byte Hash address
                 // args(1) = pointer to wasm memory where to write 32-byte access key address
                 let (hash_dest_ptr, access_dest_ptr) = Args::parse(args)?;
-                let (hash_addr, access_addr) = self.create_contract_metadata_at_hash()?;
+                let (hash_addr, access_addr) = self.create_contract_package_at_hash()?;
                 self.function_address(hash_addr, hash_dest_ptr)?;
                 self.function_address(access_addr, access_dest_ptr)?;
                 Ok(None)
@@ -482,7 +482,8 @@ where
                     output_size_ptr,
                 ) = Args::parse(args)?;
 
-                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
+                let contract_package_hash: ContractPackageHash =
+                    self.t_from_mem(meta_key_ptr, meta_key_size)?;
                 let access_key = {
                     let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
@@ -492,7 +493,7 @@ where
                     self.t_from_mem(existing_urefs_ptr, existing_urefs_size)?;
 
                 let ret = self.create_contract_user_group(
-                    metadata_key,
+                    contract_package_hash,
                     access_key,
                     label,
                     num_new_urefs,
@@ -514,8 +515,8 @@ where
                 // args(8) = size of output buffer
                 // args(9) = pointer to bytes written
                 let (
-                    meta_key_ptr,
-                    meta_key_size,
+                    contract_package_hash_ptr,
+                    contract_package_hash_size,
                     access_key_ptr,
                     _version_ptr,
                     entry_points_ptr,
@@ -527,8 +528,8 @@ where
                     bytes_written_ptr,
                 ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
 
-                let contract_package_hash =
-                    self.key_from_mem(meta_key_ptr, meta_key_size)?.into_seed();
+                let contract_package_hash: ContractPackageHash =
+                    self.t_from_mem(contract_package_hash_ptr, contract_package_hash_size)?;
 
                 let access_key = {
                     let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;

@@ -7,7 +7,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{runtime_args, Key, RuntimeArgs, SemVer};
+use types::{contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key, RuntimeArgs};
 
 const CONTRACT_HEADERS: &str = "contract_context.wasm";
 const METADATA_HASH_KEY: &str = "metadata_hash_key";
@@ -33,7 +33,7 @@ fn should_calling_session_and_contract_has_correct_context() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 SESSION_CODE_TEST,
                 args,
             )
@@ -51,7 +51,7 @@ fn should_calling_session_and_contract_has_correct_context() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 CONTRACT_CODE_TEST,
                 args,
             )
@@ -69,7 +69,7 @@ fn should_calling_session_and_contract_has_correct_context() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 ADD_NEW_KEY_AS_SESSION,
                 args,
             )
@@ -156,7 +156,7 @@ fn should_not_call_session_from_contract() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
-                SemVer::V1_0_0,
+                CONTRACT_INITIAL_VERSION,
                 SESSION_CODE_CALLER_AS_CONTRACT,
                 args,
             )

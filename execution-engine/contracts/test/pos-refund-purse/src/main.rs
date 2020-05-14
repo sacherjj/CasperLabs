@@ -5,7 +5,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, Key, URef, U512};
+use types::{runtime_args, ApiError, Key, RuntimeArgs, URef, U512};
 
 #[repr(u16)]
 enum Error {
@@ -15,16 +15,24 @@ enum Error {
     IncorrectAccessRights,
 }
 
-fn set_refund_purse(pos: Key, p: URef) {
-    runtime::call_contract(pos, "set_refund_purse", (p,))
+pub const ARG_PURSE: &str = "purse";
+
+fn set_refund_purse(contract_key: Key, p: &URef) {
+    runtime::call_contract(
+        contract_key,
+        "set_refund_purse",
+        runtime_args! {
+            ARG_PURSE => *p,
+        },
+    )
 }
 
 fn get_refund_purse(pos: Key) -> Option<URef> {
-    runtime::call_contract(pos, "get_refund_purse", ())
+    runtime::call_contract(pos, "get_refund_purse", runtime_args! {})
 }
 
 fn get_payment_purse(pos: Key) -> URef {
-    runtime::call_contract(pos, "get_payment_purse", ())
+    runtime::call_contract(pos, "get_payment_purse", runtime_args! {})
 }
 
 fn submit_payment(pos: Key, amount: U512) {
@@ -46,7 +54,7 @@ pub extern "C" fn call() {
         }
 
         // it should return Some(x) after calling set_refund_purse(x)
-        set_refund_purse(pos, refund_purse);
+        set_refund_purse(pos, &refund_purse);
         let refund_purse = match get_refund_purse(pos) {
             None => runtime::revert(ApiError::User(Error::NotFound as u16)),
             Some(x) if x.addr() == refund_purse.addr() => x,
@@ -61,7 +69,7 @@ pub extern "C" fn call() {
     {
         let refund_purse = system::create_purse();
         // get_refund_purse should return correct value after setting a second time
-        set_refund_purse(pos, refund_purse);
+        set_refund_purse(pos, &refund_purse);
         match get_refund_purse(pos) {
             None => runtime::revert(ApiError::User(Error::NotFound as u16)),
             Some(uref) if uref.addr() == refund_purse.addr() => (),

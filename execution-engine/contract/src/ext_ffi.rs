@@ -106,10 +106,10 @@ extern "C" {
     ) -> i32;
     pub fn get_main_purse(dest_ptr: *mut u8);
     pub fn read_host_buffer(dest_ptr: *mut u8, dest_size: usize, bytes_written: *mut usize) -> i32;
-    pub fn create_contract_metadata_at_hash(hash_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
+    pub fn create_contract_package_at_hash(hash_addr_ptr: *mut u8, access_addr_ptr: *mut u8);
     pub fn create_contract_user_group(
-        contract_metadata_key_ptr: *const u8,
-        contract_metadata_key_size: usize,
+        contract_package_hash_ptr: *const u8,
+        contract_package_hash_size: usize,
         access_ptr: *const u8,
         label_ptr: *const u8,
         label_size: usize,
@@ -119,8 +119,8 @@ extern "C" {
         output_size_ptr: *mut usize,
     ) -> i32;
     pub fn add_contract_version(
-        contract_metadata_key_ptr: *const u8,
-        contract_metadata_key_size: usize,
+        contract_package_hash_ptr: *const u8,
+        contract_package_hash_size: usize,
         access_ptr: *const u8,
         version_ptr: *const u8,
         entry_points_ptr: *const u8,
@@ -132,8 +132,8 @@ extern "C" {
         bytes_written_ptr: *mut usize,
     ) -> i32;
     pub fn remove_contract_version(
-        contract_metadata_key_ptr: *const u8,
-        contract_metadata_key_size: usize,
+        contract_package_hash_ptr: *const u8,
+        contract_package_hash_size: usize,
         access_ptr: *const u8,
         version_ptr: *const u8,
     ) -> i32;
