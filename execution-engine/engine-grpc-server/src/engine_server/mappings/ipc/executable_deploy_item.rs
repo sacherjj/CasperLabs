@@ -20,12 +20,14 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
             DeployPayload_oneof_payload::stored_contract_hash(pb_stored_contract_hash) => {
                 ExecutableDeployItem::StoredContractByHash {
                     hash: pb_stored_contract_hash.hash,
+                    entry_point: pb_stored_contract_hash.entry_point_name,
                     args: pb_stored_contract_hash.args,
                 }
             }
             DeployPayload_oneof_payload::stored_contract_name(pb_stored_contract_name) => {
                 ExecutableDeployItem::StoredContractByName {
                     name: pb_stored_contract_name.name,
+                    entry_point: pb_stored_contract_name.entry_point_name,
                     args: pb_stored_contract_name.args,
                 }
             }
@@ -69,14 +71,24 @@ impl From<ExecutableDeployItem> for DeployPayload {
                 code.set_code(module_bytes);
                 code.set_args(args);
             }
-            ExecutableDeployItem::StoredContractByHash { hash, args } => {
+            ExecutableDeployItem::StoredContractByHash {
+                hash,
+                entry_point,
+                args,
+            } => {
                 let inner = result.mut_stored_contract_hash();
                 inner.set_hash(hash);
+                inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }
-            ExecutableDeployItem::StoredContractByName { name, args } => {
+            ExecutableDeployItem::StoredContractByName {
+                name,
+                entry_point,
+                args,
+            } => {
                 let inner = result.mut_stored_contract_name();
                 inner.set_name(name);
+                inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }
             ExecutableDeployItem::StoredVersionedContractByName {

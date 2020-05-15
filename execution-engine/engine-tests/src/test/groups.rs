@@ -26,7 +26,7 @@ const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_as_session";
 const UNCALLABLE_SESSION: &str = "uncallable_session";
 const UNCALLABLE_CONTRACT: &str = "uncallable_contract";
-const CALL_RESTRICTED_ENTRYPOINTS: &str = "call_restricted_entrypoints";
+const CALL_RESTRICTED_ENTRY_POINTS: &str = "call_restricted_entry_points";
 
 lazy_static! {
     static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;
@@ -56,7 +56,7 @@ fn should_call_group_restricted_session() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let _metadata_hash = account
         .named_keys()
         .get(METADATA_HASH_KEY)
         .expect("should have contract metadata");
@@ -69,9 +69,7 @@ fn should_call_group_restricted_session() {
         // This inserts metadata as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
-        let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
-        };
+        let args = runtime_args! {};
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
@@ -376,7 +374,7 @@ fn should_call_group_restricted_contract() {
 
 #[ignore]
 #[test]
-fn should_call_group_restricted_contract_from_wrong_account() {
+fn should_not_call_group_restricted_contract_from_wrong_account() {
     // This test runs a contract that's after every call extends the same key with
     // more data
     let exec_request_1 =
@@ -773,7 +771,7 @@ fn should_not_call_uncallable_contract_from_deploy() {
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
-                CALL_RESTRICTED_ENTRYPOINTS,
+                CALL_RESTRICTED_ENTRY_POINTS,
                 args,
             )
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
@@ -859,7 +857,7 @@ fn should_not_call_uncallable_session_from_deploy() {
             .with_stored_versioned_contract_by_name(
                 METADATA_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
-                CALL_RESTRICTED_ENTRYPOINTS,
+                CALL_RESTRICTED_ENTRY_POINTS,
                 args,
             )
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))

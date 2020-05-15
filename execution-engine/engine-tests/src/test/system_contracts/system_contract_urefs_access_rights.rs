@@ -7,7 +7,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, U512};
+use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS: &str =
     "check_system_contract_urefs_access_rights.wasm";
@@ -26,7 +26,7 @@ fn should_have_read_only_access_to_system_contract_urefs() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE },
     )
     .build();
 

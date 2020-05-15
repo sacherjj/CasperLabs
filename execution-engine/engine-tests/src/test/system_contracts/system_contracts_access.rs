@@ -14,7 +14,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, ContractHash, U512};
+use types::{account::PublicKey, runtime_args, ContractHash, RuntimeArgs, U512};
 
 const CONTRACT_SYSTEM_CONTRACTS_ACCESS: &str = "system_contracts_access.wasm";
 const CONTRACT_OVERWRITE_UREF_CONTENT: &str = "overwrite_uref_content.wasm";
@@ -43,7 +43,7 @@ fn should_verify_system_contracts_access_rights_default() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE },
     )
     .build();
 
@@ -88,7 +88,7 @@ fn should_not_overwrite_system_contract_uref_as_user() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE },
     )
     .build();
 

@@ -1,4 +1,7 @@
-use types::contracts::{Contract, NamedKeys};
+use types::{
+    contracts::{Contract, NamedKeys},
+    ContractPackageHash, ContractWasmHash, EntryPoints,
+};
 
 use super::NamedKeyMap;
 use crate::engine_server::{mappings::ParsingError, state};
@@ -34,12 +37,30 @@ impl TryFrom<state::Contract> for Contract {
             }
             named_keys
         };
+
+        let contract_package_hash: ContractPackageHash = value
+            .contract_package_hash
+            .as_slice()
+            .try_into()
+            .map_err(|_| ParsingError::from("Unable to parse contract package hash"))?;
+        let contract_wasm_hash: ContractWasmHash =
+            value
+                .contract_wasm_hash
+                .as_slice()
+                .try_into()
+                .map_err(|_| ParsingError::from("Unable to parse contract package hash"))?;
+
+        let mut entry_points = EntryPoints::new();
+        for entry_point in value.take_entry_points().into_iter() {
+            entry_points.add_entry_point(entry_point.try_into()?);
+        }
+
         Ok(Contract::new(
-            [0; 32],
-            [0; 32],
+            contract_package_hash,
+            contract_wasm_hash,
             named_keys,
-            Default::default(),
-            Default::default(),
+            entry_points,
+            value.take_protocol_version().try_into()?,
         ))
     }
 }
@@ -50,12 +71,13 @@ mod tests {
 
     use super::*;
     use crate::engine_server::mappings::test_utils;
-    use engine_shared::contract_wasm::{gens, ContractWasm};
+    use types::gens;
 
     proptest! {
+
         #[test]
-        fn round_trip(contract_wasm in gens::contract_wasm_arb()) {
-            test_utils::protobuf_round_trip::<ContractWasm, state::ContractWasm>(contract_wasm);
+        fn round_trip(contract in gens::contract_arb()) {
+            test_utils::protobuf_round_trip::<Contract, state::Contract>(contract);
         }
     }
 }

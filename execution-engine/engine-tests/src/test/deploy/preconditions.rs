@@ -8,7 +8,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, U512};
+use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 
@@ -26,7 +26,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(transferred_amount)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
             .with_address(nonexistent_account_addr)
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
@@ -95,7 +95,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(transferred_amount)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
             // invalid authorization key to force error

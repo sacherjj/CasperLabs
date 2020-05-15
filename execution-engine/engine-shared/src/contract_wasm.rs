@@ -1,8 +1,28 @@
+use std::{
+    cmp,
+    fmt::{Debug, Display},
+};
 use types::bytesrepr::{self, Error, FromBytes, ToBytes};
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+const CONTRACT_WASM_MAX_DISPLAY_LEN: usize = 64;
+
+#[derive(PartialEq, Eq, Clone)]
 pub struct ContractWasm {
     bytes: Vec<u8>,
+}
+
+impl Display for ContractWasm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{}", base16::encode_lower(&self.bytes))
+    }
+}
+
+impl Debug for ContractWasm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let size_limit = cmp::min(CONTRACT_WASM_MAX_DISPLAY_LEN, self.bytes.len());
+        let sliced_bytes = &self.bytes[..size_limit];
+        write!(f, "ContractWasm({:?})", base16::encode_lower(sliced_bytes))
+    }
 }
 
 impl ContractWasm {

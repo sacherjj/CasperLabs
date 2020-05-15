@@ -42,7 +42,7 @@ fn should_run_pos_install_contract() {
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (SYSTEM_ADDR, U512::from(TRANSFER_AMOUNT)),
+        runtime_args! { "target" =>SYSTEM_ADDR, "amount" => U512::from(TRANSFER_AMOUNT) },
     )
     .build();
 

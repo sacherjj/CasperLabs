@@ -6,7 +6,10 @@ use engine_core::{
     DeployHash,
 };
 use types::{
-    account::PublicKey, bytesrepr::ToBytes, contracts::ContractVersion, HashAddr, RuntimeArgs, URef,
+    account::PublicKey,
+    bytesrepr::ToBytes,
+    contracts::{ContractVersion, DEFAULT_ENTRY_POINT_NAME},
+    HashAddr, RuntimeArgs, URef,
 };
 
 use crate::internal::utils;
@@ -53,8 +56,11 @@ impl DeployItemBuilder {
 
     pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.payment_code =
-            Some(ExecutableDeployItem::StoredContractByHash { hash, args });
+        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByHash {
+            hash,
+            entry_point: DEFAULT_ENTRY_POINT_NAME.into(),
+            args,
+        });
         self
     }
 
@@ -74,6 +80,7 @@ impl DeployItemBuilder {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByName {
             name: uref_name.to_owned(),
+            entry_point: DEFAULT_ENTRY_POINT_NAME.into(),
             args,
         });
         self
@@ -93,8 +100,11 @@ impl DeployItemBuilder {
 
     pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.session_code =
-            Some(ExecutableDeployItem::StoredContractByHash { hash, args });
+        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByHash {
+            hash,
+            entry_point: DEFAULT_ENTRY_POINT_NAME.into(),
+            args,
+        });
         self
     }
 
@@ -114,6 +124,7 @@ impl DeployItemBuilder {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByName {
             name: uref_name.to_owned(),
+            entry_point: DEFAULT_ENTRY_POINT_NAME.to_owned(),
             args,
         });
         self

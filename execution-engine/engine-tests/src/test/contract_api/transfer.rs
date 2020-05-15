@@ -9,7 +9,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, ApiError, U512};
+use types::{account::PublicKey, runtime_args, ApiError, RuntimeArgs, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
@@ -330,14 +330,14 @@ fn should_transfer_total_amount() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE },
     )
     .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (ACCOUNT_2_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_2_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE },
     )
     .build();
     builder

@@ -12,8 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, EntryPoint,
-    EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
+    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractPackage,
+    EntryPoint, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
     },
     execution::{address_generator::AddressGenerator, Error},
     runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
-    runtime_context::RuntimeContext,
+    runtime_context::{self, RuntimeContext},
     tracking_copy::TrackingCopy,
 };
 
@@ -99,6 +99,7 @@ impl Executor {
         phase: Phase,
         protocol_data: ProtocolData,
         system_contract_cache: SystemContractCache,
+        contract_package: &ContractPackage,
     ) -> ExecutionResult
     where
         R: StateReader<Key, StoredValue>,
@@ -106,7 +107,7 @@ impl Executor {
     {
         let entry_point_name = entry_point.name();
         let entry_point_type = entry_point.entry_point_type();
-        let _entry_point_access = entry_point.access();
+        let entry_point_access = entry_point.access();
 
         let (instance, memory) =
             on_fail_charge!(instance_and_memory(module.clone(), protocol_version));
@@ -152,6 +153,17 @@ impl Executor {
         );
 
         let mut runtime = Runtime::new(self.config, system_contract_cache, memory, module, context);
+
+        let accounts_access_rights = {
+            let keys: Vec<Key> = account.named_keys().values().cloned().collect();
+            extract_access_rights_from_keys(keys)
+        };
+
+        on_fail_charge!(runtime_context::validate_entry_point_access_with(
+            &contract_package,
+            entry_point_access,
+            |uref| runtime_context::uref_has_access_rights(uref, &accounts_access_rights)
+        ));
 
         if !self.config.use_system_contracts() {
             if runtime.is_mint(base_key) {

@@ -350,12 +350,12 @@ impl FromBytes for ContractPackage {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (access_key, bytes) = URef::from_bytes(bytes)?;
         let (versions, bytes) = ContractVersions::from_bytes(bytes)?;
-        let (removed_versions, bytes) = RemovedVersions::from_bytes(bytes)?;
+        let (disabled_versions, bytes) = RemovedVersions::from_bytes(bytes)?;
         let (groups, bytes) = BTreeMap::<Group, BTreeSet<URef>>::from_bytes(bytes)?;
         let result = ContractPackage {
             access_key,
             versions,
-            disabled_versions: removed_versions,
+            disabled_versions,
             groups,
         };
 
@@ -427,6 +427,16 @@ impl EntryPoints {
             .into_iter()
             .map(|(_name, value)| value.into())
             .collect()
+    }
+}
+
+impl From<Vec<EntryPoint>> for EntryPoints {
+    fn from(entry_points: Vec<EntryPoint>) -> EntryPoints {
+        let entries = entry_points
+            .into_iter()
+            .map(|entry_point| (String::from(entry_point.name()), entry_point))
+            .collect();
+        EntryPoints(entries)
     }
 }
 
@@ -570,10 +580,11 @@ impl Default for Contract {
 
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = self.contract_package_hash.to_bytes()?;
-        result.append(&mut ToBytes::to_bytes(&self.contract_wasm_hash)?);
-        result.append(&mut ToBytes::to_bytes(&self.entry_points)?);
-        result.append(&mut ToBytes::to_bytes(&self.named_keys)?);
+        let mut result = bytesrepr::allocate_buffer(self)?;
+        result.append(&mut self.contract_package_hash.to_bytes()?);
+        result.append(&mut self.contract_wasm_hash.to_bytes()?);
+        result.append(&mut self.named_keys.to_bytes()?);
+        result.append(&mut self.entry_points.to_bytes()?);
         result.append(&mut self.protocol_version.to_bytes()?);
         Ok(result)
     }
@@ -591,15 +602,15 @@ impl FromBytes for Contract {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (contract_package_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
         let (contract_wasm_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
-        let (entry_points, bytes) = EntryPoints::from_bytes(bytes)?;
         let (named_keys, bytes) = BTreeMap::<String, Key>::from_bytes(bytes)?;
+        let (entry_points, bytes) = EntryPoints::from_bytes(bytes)?;
         let (protocol_version, bytes) = ProtocolVersion::from_bytes(bytes)?;
         Ok((
             Contract {
                 contract_package_hash,
                 contract_wasm_hash,
                 named_keys,
-                entry_points: entry_points,
+                entry_points,
                 protocol_version,
             },
             bytes,
@@ -643,35 +654,22 @@ impl FromBytes for EntryPointType {
 /// Default name for an entry point
 pub const DEFAULT_ENTRY_POINT_NAME: &str = "call";
 
+/// Collection of entry point parameters.
+pub type Parameters = Vec<Parameter>;
+
 /// Type signature of a method. Order of arguments matter since can be
 /// referenced by index as well as name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EntryPoint {
     name: String,
-    args: Vec<Parameter>,
+    args: Parameters,
     ret: CLType,
     access: EntryPointAccess,
     entry_point_type: EntryPointType,
 }
 
-impl
-    Into<(
-        String,
-        Vec<Parameter>,
-        CLType,
-        EntryPointAccess,
-        EntryPointType,
-    )> for EntryPoint
-{
-    fn into(
-        self,
-    ) -> (
-        String,
-        Vec<Parameter>,
-        CLType,
-        EntryPointAccess,
-        EntryPointType,
-    ) {
+impl Into<(String, Parameters, CLType, EntryPointAccess, EntryPointType)> for EntryPoint {
+    fn into(self) -> (String, Parameters, CLType, EntryPointAccess, EntryPointType) {
         (
             self.name,
             self.args,
@@ -686,7 +684,7 @@ impl EntryPoint {
     /// `EntryPoint` constructor.
     pub fn new<T: Into<String>>(
         name: T,
-        args: Vec<Parameter>,
+        args: Parameters,
         ret: CLType,
         access: EntryPointAccess,
         entry_point_type: EntryPointType,
@@ -697,17 +695,6 @@ impl EntryPoint {
             ret,
             access,
             entry_point_type,
-        }
-    }
-
-    /// Creates default entry point for a contract.
-    pub fn default_for_contract() -> Self {
-        EntryPoint {
-            name: DEFAULT_ENTRY_POINT_NAME.to_string(),
-            args: Vec::new(),
-            ret: CLType::Unit,
-            access: EntryPointAccess::Public,
-            entry_point_type: EntryPointType::Contract,
         }
     }
 
@@ -724,6 +711,11 @@ impl EntryPoint {
     /// Get the arguments for this method.
     pub fn args(&self) -> &[Parameter] {
         self.args.as_slice()
+    }
+
+    /// Get the return type.
+    pub fn ret(&self) -> &CLType {
+        &self.ret
     }
 
     /// Obtains entry point
@@ -985,69 +977,3 @@ mod tests {
         assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group no longer exists
     }
 }
-
-// TODO: impl prop test gens
-// pub mod gens {
-//     use proptest::{collection::vec, prelude::*};
-//
-//     use super::{Contract, ContractPackage, EntryPoint, EntryPointType, EntryPoints};
-//     use crate::{
-//         gens::{cl_value_arb, named_keys_arb, protocol_version_arb, u8_slice_32},
-//         EntryPointAccess, NamedArg, RuntimeArgs,
-//     };
-//     use std::collections::btree_map::Entry;
-//
-//     pub fn contract_arb() -> impl Strategy<Value = Contract> {
-//         protocol_version_arb().prop_flat_map(move |protocol_version_arb| {
-//             named_keys_arb(20).prop_flat_map(move |urefs| {
-//                 Contract::new(
-//                     u8_slice_32(),
-//                     u8_slice_32(),
-//                     urefs.clone(),
-//                     entry_points_arb,
-//                     protocol_version_arb,
-//                 )
-//             })
-//         })
-//     }
-
-// pub fn contract_package_arb() -> impl Strategy<Value = ContractPackage> {
-//     //TODO: impl
-// }
-
-// pub fn named_args_arb() -> impl Strategy<Value = NamedArgs> {
-//     NamedArg::new(string_arb(), cl_value_arb())
-// }
-//
-// pub fn runtime_args_arb() -> impl Strategy<Value = RuntimeArgs> {
-//     prop_oneof![
-//         Just(RuntimeArgs::Named(named_args_arb())),
-//         Just(RuntimeArgs::Positional(
-//             vec(cl_value_arb(), 0..3).prop_map(|v| v)()
-//         )),
-//     ]
-// }
-//
-// pub fn entry_point_access_arb() -> impl Strategy<Value = EntryPointAccess> {
-//     prop_oneof![
-//         Just(EntryPointAccess::Public),
-//         Just(EntryPointAccess::Groups(vec![])),
-//     ]
-// }
-//
-// pub fn entry_point_type_arb() -> impl Strategy<Value = EntryPointType> {
-//     prop_oneof![
-//         Just(EntryPointType::Session),
-//         Just(EntryPointType::Contract),
-//     ]
-// }
-
-// pub fn entry_point_arb() -> impl Strategy<Value = EntryPoint> {
-//     //EntryPoint::new(name,args,CLType,entry_point_access_arb, entry_point_type_arb)
-//     //TODO: impl//
-// }
-
-// pub fn entry_points_arb() -> impl Strategy<Value = EntryPoints> {
-//     //TODO: impl
-// }
-// }

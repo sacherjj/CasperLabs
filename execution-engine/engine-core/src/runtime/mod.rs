@@ -1955,7 +1955,7 @@ where
         let entry_point = contract
             .get_entry_point(entry_point_name)
             .cloned()
-            .ok_or(Error::NoSuchMethod)?;
+            .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
         self.execute_contract(
             key,
@@ -2020,7 +2020,7 @@ where
         let entry_point = contract
             .get_entry_point(&entry_point_name)
             .cloned()
-            .ok_or(Error::NoSuchMethod)?;
+            .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
         self.validate_entry_point_access(&contract_package, entry_point.access())?;
 
