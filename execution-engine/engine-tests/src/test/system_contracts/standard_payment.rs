@@ -12,7 +12,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::PublicKey, runtime_args, ApiError, Key, RuntimeArgs, URef, U512};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
@@ -28,7 +28,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         TRANSFER_PURSE_TO_ACCOUNT_WASM,
-        (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
+        runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(MAX_PAYMENT - 1) },
     )
     .build();
 
@@ -83,7 +83,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(1)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(1) },
             )
             .with_empty_payment_bytes((U512::from(1),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -367,7 +367,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_session_code(
                 ENDLESS_LOOP_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
@@ -463,7 +463,7 @@ fn should_correctly_charge_when_session_code_fails() {
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_session_code(
                 REVERT_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
@@ -519,7 +519,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -597,7 +597,7 @@ fn should_finalize_to_rewards_purse() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -634,7 +634,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(transfer_amount)),
+                runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transfer_amount) }
             )
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])

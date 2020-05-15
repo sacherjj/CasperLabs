@@ -18,12 +18,8 @@ pub extern "C" fn call() {
         Ok(_) => {}
     };
 
-    let key_management_threshold: Weight = runtime::get_arg(0)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let deploy_threshold: Weight = runtime::get_arg(1)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let key_management_threshold: Weight = runtime::get_named_arg("key_management_threshold");
+    let deploy_threshold: Weight = runtime::get_named_arg("deploy_threshold");
 
     if key_management_threshold != Weight::new(0) {
         account::set_action_threshold(ActionType::KeyManagement, key_management_threshold)

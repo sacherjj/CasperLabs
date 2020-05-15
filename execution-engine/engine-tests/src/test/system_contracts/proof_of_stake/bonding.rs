@@ -9,7 +9,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::PublicKey, runtime_args, ApiError, Key, RuntimeArgs, URef, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
@@ -72,7 +72,7 @@ fn should_run_successful_bond_and_unbond() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
-        (String::from(TEST_BOND), U512::from(GENESIS_ACCOUNT_STAKE)),
+        runtime_args! { "target" =>String::from(TEST_BOND), "amount" => U512::from(GENESIS_ACCOUNT_STAKE) }
     )
     .build();
 

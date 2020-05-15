@@ -10,7 +10,7 @@ use engine_test_support::{
     internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, URef, U512};
+use types::{account::PublicKey, runtime_args, Key, RuntimeArgs, URef, U512};
 
 const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
 const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
@@ -73,7 +73,7 @@ fn should_not_be_able_to_unbond_reward() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER,
-        (ACCOUNT_ADDR_1, U512::from(100)),
+        runtime_args! { "target" =>ACCOUNT_ADDR_1, "amount" => U512::from(100) },
     )
     .build();
 

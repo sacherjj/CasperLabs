@@ -10,7 +10,8 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
-    account::PublicKey, contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key, RuntimeArgs, U512,
+    account::PublicKey, contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key,
+    RuntimeArgs, U512,
 };
 
 const CONTRACT_GROUPS: &str = "groups.wasm";
@@ -56,7 +57,7 @@ fn should_call_group_restricted_session() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let _metadata_hash = account
         .named_keys()
         .get(METADATA_HASH_KEY)
         .expect("should have contract metadata");
@@ -70,7 +71,6 @@ fn should_call_group_restricted_session() {
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)

@@ -9,7 +9,7 @@ use engine_test_support::{
 };
 use types::{
     account::{PublicKey, Weight},
-    U512,
+    runtime_args, RuntimeArgs, U512,
 };
 
 const CONTRACT_ADD_UPDATE_ASSOCIATED_KEY: &str = "add_update_associated_key.wasm";
@@ -31,13 +31,13 @@ fn should_manage_associated_key() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_FUND),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_FUND },
     )
     .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_ADD_UPDATE_ASSOCIATED_KEY,
-        (DEFAULT_ACCOUNT_ADDR,),
+        runtime_args! { "account" => DEFAULT_ACCOUNT_ADDR, },
     )
     .build();
 

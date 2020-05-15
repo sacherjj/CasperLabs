@@ -15,7 +15,7 @@ use engine_core::engine_state::EngineConfig;
 use engine_test_support::internal::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_PAYMENT,
 };
-use types::U512;
+use types::{runtime_args, RuntimeArgs, U512};
 
 use casperlabs_engine_tests::profiling;
 
@@ -101,7 +101,7 @@ fn main() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "simple_transfer.wasm",
-                (account_2_public_key, U512::from(TRANSFER_AMOUNT)),
+                runtime_args! { "target" =>account_2_public_key, "amount" => U512::from(TRANSFER_AMOUNT) }
             )
             .with_payment_code(STANDARD_PAYMENT_WASM, (*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[account_1_public_key])

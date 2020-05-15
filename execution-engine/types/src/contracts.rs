@@ -350,12 +350,12 @@ impl FromBytes for ContractPackage {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (access_key, bytes) = URef::from_bytes(bytes)?;
         let (versions, bytes) = ContractVersions::from_bytes(bytes)?;
-        let (removed_versions, bytes) = RemovedVersions::from_bytes(bytes)?;
+        let (disabled_versions, bytes) = RemovedVersions::from_bytes(bytes)?;
         let (groups, bytes) = BTreeMap::<Group, BTreeSet<URef>>::from_bytes(bytes)?;
         let result = ContractPackage {
             access_key,
             versions,
-            disabled_versions: removed_versions,
+            disabled_versions,
             groups,
         };
 
@@ -559,8 +559,8 @@ impl Default for Contract {
     fn default() -> Self {
         let entry_points = EntryPoints::default();
         Contract {
-            contract_package_hash: [0; 32],
-            contract_wasm_hash: [0; 32],
+            contract_package_hash: [127; 32],
+            contract_wasm_hash: [128; 32],
             named_keys: BTreeMap::new(),
             entry_points,
             protocol_version: ProtocolVersion::V1_0_0,
@@ -570,10 +570,11 @@ impl Default for Contract {
 
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = self.contract_package_hash.to_bytes()?;
-        result.append(&mut ToBytes::to_bytes(&self.contract_wasm_hash)?);
-        result.append(&mut ToBytes::to_bytes(&self.entry_points)?);
-        result.append(&mut ToBytes::to_bytes(&self.named_keys)?);
+        let mut result = bytesrepr::allocate_buffer(self)?;
+        result.append(&mut self.contract_package_hash.to_bytes()?);
+        result.append(&mut self.contract_wasm_hash.to_bytes()?);
+        result.append(&mut self.named_keys.to_bytes()?);
+        result.append(&mut self.entry_points.to_bytes()?);
         result.append(&mut self.protocol_version.to_bytes()?);
         Ok(result)
     }
@@ -591,8 +592,8 @@ impl FromBytes for Contract {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (contract_package_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
         let (contract_wasm_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
-        let (entry_points, bytes) = EntryPoints::from_bytes(bytes)?;
         let (named_keys, bytes) = BTreeMap::<String, Key>::from_bytes(bytes)?;
+        let (entry_points, bytes) = EntryPoints::from_bytes(bytes)?;
         let (protocol_version, bytes) = ProtocolVersion::from_bytes(bytes)?;
         Ok((
             Contract {
@@ -697,17 +698,6 @@ impl EntryPoint {
             ret,
             access,
             entry_point_type,
-        }
-    }
-
-    /// Creates default entry point for a contract.
-    pub fn default_for_contract() -> Self {
-        EntryPoint {
-            name: DEFAULT_ENTRY_POINT_NAME.to_string(),
-            args: Vec::new(),
-            ret: CLType::Unit,
-            access: EntryPointAccess::Public,
-            entry_point_type: EntryPointType::Contract,
         }
     }
 

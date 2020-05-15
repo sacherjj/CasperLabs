@@ -1,4 +1,8 @@
-use types::{bytesrepr, contracts::ContractVersion, HashAddr, RuntimeArgs};
+use types::{
+    bytesrepr,
+    contracts::{ContractVersion, DEFAULT_ENTRY_POINT_NAME},
+    HashAddr, RuntimeArgs,
+};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum ExecutableDeployItem {
@@ -9,13 +13,12 @@ pub enum ExecutableDeployItem {
     },
     StoredContractByHash {
         hash: Vec<u8>,
-        // TODO: add entrypoint -> once local key is replaced with hash, add_contract_version could
-        // return hash
+        entry_point: String,
         args: Vec<u8>,
     },
     StoredContractByName {
         name: String,
-        // TODO: add entrypoint name
+        entry_point: String,
         args: Vec<u8>,
     },
     StoredVersionedContractByName {
@@ -38,8 +41,8 @@ impl ExecutableDeployItem {
             ExecutableDeployItem::ModuleBytes { args, .. }
             | ExecutableDeployItem::StoredContractByHash { args, .. }
             | ExecutableDeployItem::StoredContractByName { args, .. } => {
-                let vec: RuntimeArgs = bytesrepr::deserialize(args)?;
-                Ok(vec.into())
+                let runtime_args: RuntimeArgs = bytesrepr::deserialize(args)?;
+                Ok(runtime_args)
             }
             ExecutableDeployItem::StoredVersionedContractByHash { args, .. }
             | ExecutableDeployItem::StoredVersionedContractByName { args, .. } => {
@@ -55,9 +58,9 @@ impl ExecutableDeployItem {
             | ExecutableDeployItem::StoredVersionedContractByHash { entry_point, .. } => {
                 &entry_point
             }
-            ExecutableDeployItem::ModuleBytes { .. }
-            | ExecutableDeployItem::StoredContractByHash { .. }
-            | ExecutableDeployItem::StoredContractByName { .. } => "call",
+            ExecutableDeployItem::ModuleBytes { .. } => DEFAULT_ENTRY_POINT_NAME,
+            ExecutableDeployItem::StoredContractByHash { entry_point, .. }
+            | ExecutableDeployItem::StoredContractByName { entry_point, .. } => &entry_point,
         }
     }
 }

@@ -7,7 +7,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, U512};
+use types::{account::PublicKey, runtime_args, Key, RuntimeArgs, U512};
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
@@ -52,7 +52,7 @@ fn should_insert_mint_add_keys_transform() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE},
     )
     .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
@@ -86,7 +86,7 @@ fn should_insert_account_into_named_keys() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE},
     )
     .build();
 
@@ -96,16 +96,16 @@ fn should_insert_account_into_named_keys() {
         (TEST_PURSE_NAME,),
     )
     .build();
-    let account_1 = WasmTestBuilder::default()
-        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
-        .exec(exec_request_1)
-        .expect_success()
-        .commit()
-        .exec(exec_request_2)
-        .expect_success()
-        .commit()
-        .finish()
-        .builder()
+
+    let mut builder = WasmTestBuilder::default();
+
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
+    builder.exec(exec_request_1).expect_success().commit();
+
+    builder.exec(exec_request_2).expect_success().commit();
+
+    let account_1 = builder
         .get_account(ACCOUNT_1_ADDR)
         .expect("should have account");
 
@@ -121,7 +121,7 @@ fn should_create_usable_purse() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *ACCOUNT_1_INITIAL_BALANCE),
+        runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => *ACCOUNT_1_INITIAL_BALANCE},
     )
     .build();
 
