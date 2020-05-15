@@ -14,3 +14,19 @@ impl From<state::ContractWasm> for ContractWasm {
         ContractWasm::new(contract.take_wasm())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use proptest::proptest;
+
+    use super::*;
+    use crate::engine_server::mappings::test_utils;
+    use engine_shared::contract_wasm::{gens, ContractWasm};
+
+    proptest! {
+        #[test]
+        fn round_trip(contract_wasm in gens::contract_wasm_arb()) {
+            test_utils::protobuf_round_trip::<ContractWasm, state::ContractWasm>(contract_wasm);
+        }
+    }
+}
