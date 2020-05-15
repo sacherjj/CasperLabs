@@ -42,9 +42,9 @@ use types::{
     runtime_args,
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
-    AccessRights, BlockTime, CLType, CLValue, Contract, ContractHash, ContractPackageHash,
-    ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType, Key, NamedArg, Phase,
-    ProtocolVersion, RuntimeArgs, URef, KEY_HASH_LENGTH, U512,
+    AccessRights, BlockTime, CLType, CLValue, Contract, ContractHash, ContractPackage,
+    ContractPackageHash, ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType, Key,
+    NamedArg, Phase, ProtocolVersion, RuntimeArgs, URef, KEY_HASH_LENGTH, U512,
 };
 
 pub use self::{
@@ -90,6 +90,7 @@ pub struct EngineState<S> {
 pub enum GetModuleResult {
     Session {
         module: Module,
+        contract_package: ContractPackage,
         // named_keys (from account)
         entry_point: EntryPoint,
     },
@@ -97,6 +98,7 @@ pub enum GetModuleResult {
         base_key: Key,
         module: Module,
         contract: Contract,
+        contract_package: ContractPackage,
         // named_keys (from contract)
         entry_point: EntryPoint,
     },
@@ -786,6 +788,7 @@ where
                 let module = preprocessor.preprocess(&module_bytes)?;
                 Ok(GetModuleResult::Session {
                     module,
+                    contract_package: ContractPackage::default(),
                     entry_point: EntryPoint::default(),
                 })
             }
@@ -807,6 +810,7 @@ where
                 )?;
                 Ok(GetModuleResult::Session {
                     module,
+                    contract_package: ContractPackage::default(),
                     entry_point: EntryPoint::default(),
                 })
             }
@@ -828,6 +832,7 @@ where
                 )?;
                 Ok(GetModuleResult::Session {
                     module,
+                    contract_package: ContractPackage::default(),
                     entry_point: EntryPoint::default(),
                 })
             }
@@ -862,9 +867,10 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, contract_hash)?;
 
-                let method_entry_point = contract
-                    .get_entry_point(entry_point)
-                    .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
+                let method_entry_point =
+                    contract.get_entry_point(entry_point).ok_or_else(|| {
+                        error::Error::Exec(execution::Error::NoSuchMethod(entry_point.to_owned()))
+                    })?;
 
                 let contract_wasm = tracking_copy
                     .borrow_mut()
@@ -875,12 +881,14 @@ where
                 match method_entry_point.entry_point_type() {
                     EntryPointType::Session => Ok(GetModuleResult::Session {
                         module,
+                        contract_package: contract_package.to_owned(),
                         entry_point: method_entry_point.to_owned(),
                     }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_hash.into(),
                         contract: contract.to_owned(),
+                        contract_package: contract_package.to_owned(),
                         entry_point: method_entry_point.to_owned(),
                     }),
                 }
@@ -912,9 +920,10 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, contract_hash)?;
 
-                let method_entry_point = contract
-                    .get_entry_point(entry_point)
-                    .ok_or_else(|| error::Error::Exec(execution::Error::NoSuchMethod))?;
+                let method_entry_point =
+                    contract.get_entry_point(entry_point).ok_or_else(|| {
+                        error::Error::Exec(execution::Error::NoSuchMethod(entry_point.to_owned()))
+                    })?;
 
                 let contract_wasm = tracking_copy
                     .borrow_mut()
@@ -925,12 +934,14 @@ where
                 match method_entry_point.entry_point_type() {
                     EntryPointType::Session => Ok(GetModuleResult::Session {
                         module,
+                        contract_package: contract_package.to_owned(),
                         entry_point: method_entry_point.to_owned(),
                     }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_hash.into(),
                         contract: contract.to_owned(),
+                        contract_package: contract_package.to_owned(),
                         entry_point: method_entry_point.to_owned(),
                     }),
                 }
@@ -1216,6 +1227,7 @@ where
                 )
                 .map(|module| GetModuleResult::Session {
                     module,
+                    contract_package: ContractPackage::default(),
                     entry_point: EntryPoint::default(),
                 })
             } else {
@@ -1239,19 +1251,38 @@ where
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
 
-            let (payment_module, payment_base_key, mut payment_named_keys, payment_entry_point) =
-                match payment_module {
-                    GetModuleResult::Session {
-                        module,
-                        entry_point,
-                    } => (module, base_key, account.named_keys().clone(), entry_point),
-                    GetModuleResult::Contract {
-                        module,
-                        base_key,
-                        contract,
-                        entry_point,
-                    } => (module, base_key, contract.named_keys().clone(), entry_point),
-                };
+            let (
+                payment_module,
+                payment_base_key,
+                mut payment_named_keys,
+                payment_package,
+                payment_entry_point,
+            ) = match payment_module {
+                GetModuleResult::Session {
+                    module,
+                    contract_package,
+                    entry_point,
+                } => (
+                    module,
+                    base_key,
+                    account.named_keys().clone(),
+                    contract_package,
+                    entry_point,
+                ),
+                GetModuleResult::Contract {
+                    module,
+                    base_key,
+                    contract,
+                    contract_package,
+                    entry_point,
+                } => (
+                    module,
+                    base_key,
+                    contract.named_keys().clone(),
+                    contract_package,
+                    entry_point,
+                ),
+            };
 
             let payment_args = match payment.clone().take_args() {
                 Ok(args) => args,
@@ -1282,6 +1313,7 @@ where
                     phase,
                     protocol_data,
                     system_contract_cache,
+                    &payment_package,
                 )
             } else {
                 // use host side standard payment
@@ -1423,19 +1455,38 @@ where
 
         // session_code_spec_2: execute session code
 
-        let (session_module, session_base_key, session_named_keys, session_entry_point) =
-            match session_module {
-                GetModuleResult::Session {
-                    module,
-                    entry_point,
-                } => (module, base_key, account.named_keys().clone(), entry_point),
-                GetModuleResult::Contract {
-                    module,
-                    base_key,
-                    contract,
-                    entry_point,
-                } => (module, base_key, contract.named_keys().clone(), entry_point),
-            };
+        let (
+            session_module,
+            session_base_key,
+            session_named_keys,
+            session_package,
+            session_entry_point,
+        ) = match session_module {
+            GetModuleResult::Session {
+                module,
+                contract_package,
+                entry_point,
+            } => (
+                module,
+                base_key,
+                account.named_keys().clone(),
+                contract_package,
+                entry_point,
+            ),
+            GetModuleResult::Contract {
+                module,
+                base_key,
+                contract,
+                contract_package,
+                entry_point,
+            } => (
+                module,
+                base_key,
+                contract.named_keys().clone(),
+                contract_package,
+                entry_point,
+            ),
+        };
 
         let session_args = match session.clone().take_args() {
             Ok(args) => args,
@@ -1445,7 +1496,6 @@ where
                 return Ok(ExecutionResult::precondition_failure(exec_err.into()));
             }
         };
-
         let session_result = {
             // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during
             // payment code execution) * conv_rate, yes session
@@ -1473,6 +1523,7 @@ where
                 Phase::Session,
                 protocol_data,
                 system_contract_cache,
+                &session_package,
             )
         };
         log::debug!("Session result {:?}", session_result);

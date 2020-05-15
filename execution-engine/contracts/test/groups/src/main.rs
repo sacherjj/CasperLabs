@@ -244,5 +244,5 @@ pub extern "C" fn call() {
 
     let restricted_uref = create_group(contract_package_hash, access_uref);
 
-    install_version_1(contract_package_hash.into(), access_uref, restricted_uref);
+    install_version_1(contract_package_hash, access_uref, restricted_uref);
 }

@@ -77,8 +77,8 @@ pub enum Error {
     UnsupportedWasmStart,
     #[fail(display = "Invalid contract version")]
     InvalidContractVersion,
-    #[fail(display = "No such method")]
-    NoSuchMethod,
+    #[fail(display = "No such method: {}", _0)]
+    NoSuchMethod(String),
     #[fail(display = "Wasm preprocessing error: {}", _0)]
     WasmPreprocessing(engine_wasm_prep::PreprocessingError),
 }
