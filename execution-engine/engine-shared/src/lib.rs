@@ -1,5 +1,3 @@
-#![feature(never_type)]
-
 pub mod additive_map;
 #[macro_use]
 pub mod gas;

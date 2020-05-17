@@ -44,7 +44,7 @@ impl CountingDb {
 }
 
 impl StateReader<Key, StoredValue> for CountingDb {
-    type Error = !;
+    type Error = String;
     fn read(
         &self,
         _correlation_id: CorrelationId,

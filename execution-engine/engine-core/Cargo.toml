@@ -47,3 +47,16 @@ proptest = "0.9.4"
 
 [features]
 test-support = []
+no-unstable-features = [
+    "contract/no-unstable-features",
+    "engine-shared/no-unstable-features",
+    "engine-storage/no-unstable-features",
+    "engine-wasm-prep/no-unstable-features",
+    "mint/no-unstable-features",
+    "proof-of-stake/no-unstable-features",
+    "standard-payment/no-unstable-features",
+    "types/no-unstable-features"
+]
+
+[package.metadata.docs.rs]
+features = ["no-unstable-features"]

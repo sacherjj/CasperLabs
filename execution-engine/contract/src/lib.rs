@@ -55,12 +55,9 @@
 //! submodules.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(
-    alloc_error_handler,
-    alloc_layout_extra,
-    allocator_api,
-    core_intrinsics,
-    lang_items
+#![cfg_attr(
+    not(feature = "std"),
+    feature(alloc_error_handler, core_intrinsics, lang_items)
 )]
 #![doc(html_root_url = "https://docs.rs/casperlabs-contract/0.4.1")]
 #![doc(

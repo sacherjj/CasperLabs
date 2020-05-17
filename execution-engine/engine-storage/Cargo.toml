@@ -24,3 +24,13 @@ lazy_static = "1"
 proptest = "0.9.4"
 rand = "0.7.2"
 tempfile = "3"
+
+[features]
+no-unstable-features = [
+    "engine-shared/no-unstable-features",
+    "engine-wasm-prep/no-unstable-features",
+    "types/no-unstable-features"
+]
+
+[package.metadata.docs.rs]
+features = ["no-unstable-features"]

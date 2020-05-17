@@ -14,6 +14,7 @@ license-file = "../../LICENSE"
 default = ["base16/alloc"]
 std = ["base16/std"]
 gens = ["std", "proptest/std"]
+no-unstable-features = []
 
 [dependencies]
 base16 = { version = "0.2.1", default-features = false }
@@ -30,3 +31,6 @@ uint = { version = "0.8.2", default-features = false, features = [] }
 [dev-dependencies]
 proptest = "0.9.4"
 version-sync = "0.8"
+
+[package.metadata.docs.rs]
+features = ["no-unstable-features"]

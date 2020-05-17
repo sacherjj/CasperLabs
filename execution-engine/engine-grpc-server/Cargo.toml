@@ -42,6 +42,13 @@ rand = "0.7.2"
 
 [features]
 test-support = ["engine-core/test-support"]
+no-unstable-features = [
+    "engine-core/no-unstable-features",
+    "engine-shared/no-unstable-features",
+    "engine-storage/no-unstable-features",
+    "engine-wasm-prep/no-unstable-features",
+    "types/no-unstable-features"
+]
 
 [[bin]]
 name = "casperlabs-engine-grpc-server"
@@ -62,3 +69,6 @@ assets = [
 	["packaging/casperlabs-engine-grpc-server.service", "/lib/systemd/system/casperlabs-engine-grpc-server.service", "644"],
 	["../target/release/casperlabs-engine-grpc-server", "/usr/bin/casperlabs-engine-grpc-server", "755"]
 ]
+
+[package.metadata.docs.rs]
+features = ["no-unstable-features"]

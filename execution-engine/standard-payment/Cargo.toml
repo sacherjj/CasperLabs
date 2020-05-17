@@ -11,6 +11,10 @@ license-file = "../../LICENSE"
 
 [features]
 std = ["types/std"]
+no-unstable-features = ["types/no-unstable-features"]
 
 [dependencies]
 types = { version = "0.4.1", path = "../types", package = "casperlabs-types" }
+
+[package.metadata.docs.rs]
+features = ["no-unstable-features"]
