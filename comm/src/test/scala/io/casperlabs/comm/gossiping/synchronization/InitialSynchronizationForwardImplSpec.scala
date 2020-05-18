@@ -108,7 +108,7 @@ class InitialSynchronizationForwardImplSpec
           successfulNodes ++ failingNodes,
           Task(dag),
           memoizeNodes = memoize,
-          maybeFail =
+          maybeFailDownload =
             (node, _) => if (failingNodes(node)) Some(new RuntimeException("Boom!")) else None,
           skipFailedNodesInNextRounds = true
         ) { (initialSynchronizer, mockDownloadManager) =>
@@ -242,7 +242,7 @@ class InitialSynchronizationForwardImplSpec
           Task(rest),
           skipFailedNodesInNextRounds = true,
           minSuccessful = 1,
-          maybeFail = (_, summary) =>
+          maybeFailSchedule = (_, summary) =>
             if (summary == rest.head) {
               Some(GossipError.MissingDependencies(summary.blockHash, List(genesis.blockHash)))
             } else None,
@@ -260,7 +260,7 @@ class InitialSynchronizationForwardImplSpec
             s shouldBe Set(genesis.blockHash)
             // It should try download once, then sync and download genesis, then the original again.
             downloadManager.requestsCounter.get()(nodes.head) shouldBe 3
-            // For the record: because we aren't distinguishing in `maybeFail` based on which attempt
+            // For the record: because we aren't distinguishing in `maybeFailSchedule` based on which attempt
             // it it is, the overall download will still fail in this test.
             r.isLeft shouldBe true
           }
@@ -278,15 +278,18 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     override def recentlyAlivePeersAscendingDistance = Task.now(nodes)
   }
 
-  class MockBlockDownloadManager(maybeFail: (Node, BlockSummary) => Option[Throwable])
-      extends BlockDownloadManager[Task] {
+  class MockBlockDownloadManager(
+      maybeFailSchedule: (Node, BlockSummary) => Option[Throwable],
+      maybeFailDownload: (Node, BlockSummary) => Option[Throwable]
+  ) extends BlockDownloadManager[Task] {
     val requestsCounter = Atomic(Map.empty[Node, Int].withDefaultValue(0))
 
     def scheduleDownload(summary: BlockSummary, source: Node, relay: Boolean) =
       Task.delay {
         requestsCounter.transform(m => m + (source -> (m(source) + 1)))
-        maybeFail(source, summary).fold(Task.unit)(Task.raiseError(_))
-      }
+      } >>
+        maybeFailSchedule(source, summary).fold(Task.unit)(Task.raiseError(_)) >>
+        Task.now(maybeFailDownload(source, summary).fold(Task.unit)(Task.raiseError(_)))
 
     override def isScheduled(id: ByteString): Task[Boolean] = Task.now(false)
     override def addSource(id: ByteString, source: Node): Task[Task[Unit]] =
@@ -341,7 +344,8 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         nodes: List[Node],
         produceDag: Task[Vector[BlockSummary]],
         correctRanges: Boolean = true,
-        maybeFail: (Node, BlockSummary) => Option[Throwable] = (_, _) => None,
+        maybeFailSchedule: (Node, BlockSummary) => Option[Throwable] = (_, _) => None,
+        maybeFailDownload: (Node, BlockSummary) => Option[Throwable] = (_, _) => None,
         sync: Set[ByteString] => Task[Vector[BlockSummary]] = _ => Task.now(Vector.empty),
         selectNodes: List[Node] => List[Node] = _.distinct,
         memoizeNodes: Boolean = false,
@@ -354,7 +358,7 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
         test: (InitialSynchronization[Task], MockBlockDownloadManager) => Task[Unit]
     ): Unit = {
       val mockGossipService   = new MockGossipService(produceDag, correctRanges)
-      val mockDownloadManager = new MockBlockDownloadManager(maybeFail)
+      val mockDownloadManager = new MockBlockDownloadManager(maybeFailSchedule, maybeFailDownload)
       val mockSynchronizer    = new MockSynchronizer(sync)
       val effect = new InitialSynchronizationForwardImpl[Task](
         nodeDiscovery = new MockNodeDiscovery(nodes),
