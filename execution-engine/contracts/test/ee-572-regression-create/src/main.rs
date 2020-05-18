@@ -2,28 +2,46 @@
 #![no_main]
 #[allow(unused_imports)]
 use contract;
-//
-// use core::convert::Into;
-//
-// use contract::{
-//     contract_api::{runtime, storage},
-//     unwrap_or_revert::UnwrapOrRevert,
-// };
-// use types::{AccessRights, CLValue, Key, URef};
-//
-// const DATA: &str = "data";
-// const CONTRACT_NAME: &str = "create";
-//
-// #[no_mangle]
-// pub extern "C" fn create() {
-//     let reference: URef = storage::new_uref(DATA);
-//     let read_only_reference: URef = URef::new(reference.addr(), AccessRights::READ);
-//     let return_value = CLValue::from_t(read_only_reference).unwrap_or_revert();
-//     runtime::ret(return_value)
-// }
+
+use core::convert::Into;
+
+use contract::{
+    contract_api::{runtime, storage},
+    unwrap_or_revert::UnwrapOrRevert,
+};
+use types::{
+    contracts::Parameters, AccessRights, CLType, CLValue, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Key, URef,
+};
+
+const DATA: &str = "data";
+const CONTRACT_NAME: &str = "create";
+
+#[no_mangle]
+pub extern "C" fn create() {
+    let reference: URef = storage::new_uref(DATA);
+    let read_only_reference: URef = URef::new(reference.addr(), AccessRights::READ);
+    let return_value = CLValue::from_t(read_only_reference).unwrap_or_revert();
+    runtime::ret(return_value)
+}
 
 #[no_mangle]
 pub extern "C" fn call() {
-    // let contract: Key = storage::store_function_at_hash(CONTRACT_NAME,
-    // Default::default()).into(); runtime::put_key(CONTRACT_NAME, contract)
+    let mut entry_points = {
+        let mut entry_points = EntryPoints::new();
+
+        let entry_point = EntryPoint::new(
+            "create",
+            Parameters::default(),
+            CLType::URef,
+            EntryPointAccess::Public,
+            EntryPointType::Contract,
+        );
+
+        entry_points.add_entry_point(entry_point);
+
+        entry_points
+    };
+    let mut contract_hash = storage::new_contract(entry_points, None, None, None);
+    runtime::put_key(CONTRACT_NAME, contract_hash.into());
 }

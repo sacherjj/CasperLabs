@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+#[macro_use]
 extern crate alloc;
 
 use alloc::{string::ToString, vec::Vec};
@@ -15,13 +16,13 @@ use types::{
     RuntimeArgs,
 };
 
-const ENTRY_POINT_NAME: &str = "get_caller";
+const ENTRY_POINT_NAME: &str = "get_caller_ext";
 const HASH_KEY_NAME: &str = "caller_subcall";
 const ACCESS_KEY_NAME: &str = "caller_subcall_access";
 const ARG_ACCOUNT: &str = "account";
 
 #[no_mangle]
-pub extern "C" fn get_caller() {
+pub extern "C" fn get_caller_ext() {
     let caller_public_key: PublicKey = runtime::get_caller();
     runtime::ret(CLValue::from_t(caller_public_key).unwrap_or_revert());
 }

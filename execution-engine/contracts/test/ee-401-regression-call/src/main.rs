@@ -18,11 +18,7 @@ pub extern "C" fn call() {
         .into_hash()
         .unwrap_or_revert();
 
-    let result: URef = runtime::call_contract(
-        contract_hash,
-        DEFAULT_ENTRY_POINT_NAME,
-        RuntimeArgs::default(),
-    );
+    let result: URef = runtime::call_contract(contract_hash, "hello_ext", RuntimeArgs::default());
 
     let value = storage::read(result);
 
