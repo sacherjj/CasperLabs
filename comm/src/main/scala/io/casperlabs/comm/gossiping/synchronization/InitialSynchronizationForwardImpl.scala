@@ -65,27 +65,21 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
      *           \ J - K -|- L
      * */
     def schedule(peer: Node, summary: BlockSummary): F[WaitHandle[F]] = {
-      val download = downloadManager.scheduleDownload(summary, peer, relay = false)
+      val trySchedule = downloadManager.scheduleDownload(summary, peer, relay = false)
 
-      // Map over the wait handle returned by the schedule without waiting on it,
-      // so that we can schedule the rest of them (some of it can be downloaddd in parallel).
-      download.map { handle =>
-        // Attach an error handler to the handle.
-        handle.recoverWith {
-          case GossipError.MissingDependencies(_, missing) =>
-            for {
-              missingDag <- synchronizer.syncDag(peer, missing.toSet).rethrow
-              missingHandles <- missingDag.traverse { dep =>
-                                 downloadManager.scheduleDownload(dep, peer, relay = false)
-                               }
-              // Wait for all these extra backfilling downloads to finish.
-              _ <- missingHandles.sequence
-              // Now try the original download again.
-              retryHandle <- download
-              // Whoever is waiting on `handle` now has to wait on the `retryHandle` instead.
-              _ <- retryHandle
-            } yield ()
-        }
+      trySchedule.recoverWith {
+        case GossipError.MissingDependencies(_, missing) =>
+          // The scheduling failed. Create another wait handle by doing a normal synchronization.
+          for {
+            missingDag <- synchronizer.syncDag(peer, missing.toSet).rethrow
+            missingHandles <- missingDag.traverse { dep =>
+                               downloadManager.scheduleDownload(dep, peer, relay = false)
+                             }
+            // Wait for all these extra backfilling downloads to finish.
+            _ <- missingHandles.sequence
+            // Now try the schedule the original again, and return the handle to be waited upon.
+            handle <- trySchedule
+          } yield handle
       }
     }
 
