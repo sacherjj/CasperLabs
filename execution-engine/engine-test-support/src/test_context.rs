@@ -47,6 +47,25 @@ impl TestContext {
         let purse = URef::new(purse_addr, AccessRights::READ);
         self.inner.get_purse_balance(purse)
     }
+
+    /// Gets the execution cost of a session run given by index.
+    pub fn exec_cost(&self, index: usize) -> U512 {
+        self.inner.exec_costs(index)[0].value()
+    }
+
+    /// Gets the execution cost of the last session run
+    pub fn get_last_exec_cost(&self) -> U512 {
+        self.inner.get_last_exec_costs()[0].value()
+    }
+
+    /// Gets the balance of the account's main purse
+    pub fn get_main_purse_balance(&self, account_key: PublicKey) -> U512 {
+        let account = self
+            .inner
+            .get_account(account_key)
+            .expect("No account found for account_key.");
+        self.get_balance(account.main_purse().addr())
+    }
 }
 
 /// Builder for a [`TestContext`].

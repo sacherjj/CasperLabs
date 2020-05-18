@@ -652,6 +652,10 @@ where
         utils::get_exec_costs(exec_response)
     }
 
+    pub fn get_last_exec_costs(&self) -> Vec<Gas> {
+        self.exec_costs(self.get_exec_responses_count() - 1)
+    }
+
     pub fn exec_error_message(&self, index: usize) -> Option<String> {
         let response = self.get_exec_response(index)?;
         Some(utils::get_error_message(response))
