@@ -49,11 +49,16 @@ impl TestContext {
     }
 
     /// Gets the execution cost of a session run given by index.
+    ///
+    /// Returns value in Motes
     pub fn exec_cost(&self, index: usize) -> U512 {
-        self.inner.exec_costs(index)[0].value()
+        // TODO: WHERE CAN I PULL THE MAGIC 10 FROM...
+        self.inner.exec_costs(index)[0].value() * 10
     }
 
     /// Gets the execution cost of the last session run
+    ///
+    /// Returns value in Motes
     pub fn get_last_exec_cost(&self) -> U512 {
         self.inner.get_last_exec_costs()[0].value()
     }
