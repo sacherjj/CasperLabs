@@ -144,6 +144,14 @@ test-contracts-rs: build-contracts-rs
 	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
 	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "use-system-contracts" -- --ignored --nocapture
 
+.PHONY: test-contracts-rabbit-rs
+test-contracts-rabbit-rs: build-contracts-rs
+	$(CARGO) test $(CARGO_FLAGS) -p casperlabs-engine-tests -- --ignored --nocapture
+
+.PHONY: test-contracts-turtle-rs
+test-contracts-turtle-rs: build-contracts-rs
+	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "use-system-contracts" -- --ignored --nocapture
+
 .PHONY: test-contracts-enable-bonding-rs
 test-contracts-enable-bonding-rs: build-contracts-enable-bonding-rs
 	$(CARGO) test $(CARGO_FLAGS) --manifest-path "engine-tests/Cargo.toml" --features "enable-bonding" -- --ignored --nocapture

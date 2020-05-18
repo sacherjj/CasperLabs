@@ -10,7 +10,7 @@ use types::{
     api_error,
     bytesrepr::{self, ToBytes},
     contracts::EntryPoints,
-    ContractPackageHash, Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512,
+    ContractHash, ContractPackageHash, Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512,
     UREF_SERIALIZED_LENGTH,
 };
 
@@ -141,38 +141,6 @@ where
                 let (value_ptr, value_size): (_, u32) = Args::parse(args)?;
                 scoped_timer.add_property("value_size", value_size.to_string());
                 Err(self.ret(value_ptr, value_size as usize))
-            }
-
-            FunctionIndex::CallContractFuncIndex => {
-                // args(0) = pointer to key where contract is at in global state
-                // args(1) = size of key
-                // args(2) = pointer to function arguments in Wasm memory
-                // args(3) = size of arguments
-                // args(4) = pointer to result size (output)
-                let (
-                    key_ptr,
-                    key_size,
-                    entry_point_name_ptr,
-                    entry_point_name_size,
-                    args_ptr,
-                    args_size,
-                    result_size_ptr,
-                ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
-                scoped_timer.add_property("args_size", args_size.to_string());
-
-                let key_contract: Key = self.key_from_mem(key_ptr, key_size)?;
-                let entry_point_name: String =
-                    self.t_from_mem(entry_point_name_ptr, entry_point_name_size)?;
-                let args_bytes: Vec<u8> = self.bytes_from_mem(args_ptr, args_size as usize)?;
-
-                let ret = self.call_contract_host_buffer(
-                    key_contract,
-                    &entry_point_name,
-                    args_bytes,
-                    result_size_ptr,
-                    &mut scoped_timer,
-                )?;
-                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             FunctionIndex::GetKeyFuncIndex => {
@@ -575,6 +543,44 @@ where
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(result))))
             }
 
+            FunctionIndex::CallContractFuncIndex => {
+                // args(0) = pointer to contract hash where contract is at in global state
+                // args(1) = size of contract hash
+                // args(2) = pointer to entry point
+                // args(3) = size of entry point
+                // args(4) = pointer to function arguments in Wasm memory
+                // args(5) = size of arguments
+                // args(6) = pointer to result size (output)
+                let (
+                    contract_hash_ptr,
+                    contract_hash_size,
+                    entry_point_name_ptr,
+                    entry_point_name_size,
+                    args_ptr,
+                    args_size,
+                    result_size_ptr,
+                ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
+                scoped_timer.add_property("args_size", args_size.to_string());
+
+                let contract_hash: ContractHash =
+                    self.t_from_mem(contract_hash_ptr, contract_hash_size)?;
+                let entry_point_name: String =
+                    self.t_from_mem(entry_point_name_ptr, entry_point_name_size)?;
+                let args_bytes: Vec<u8> = {
+                    let args_size: u32 = args_size;
+                    self.bytes_from_mem(args_ptr, args_size as usize)?
+                };
+
+                let ret = self.call_contract_host_buffer(
+                    contract_hash,
+                    &entry_point_name,
+                    args_bytes,
+                    result_size_ptr,
+                    &mut scoped_timer,
+                )?;
+                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
+            }
+
             FunctionIndex::CallVersionedContract => {
                 // args(0) = pointer to contract_metadata_hash where contract is at in global state
                 // args(1) = size of contract_metadata_hash
@@ -588,8 +594,8 @@ where
                     contract_metadata_hash_ptr,
                     contract_metadata_hash_size,
                     version,
-                    method_ptr,
-                    method_size,
+                    entry_point_name_ptr,
+                    entry_point_name_size,
                     args_ptr,
                     args_size,
                     result_size_ptr,
@@ -598,7 +604,8 @@ where
                 let contract_metadata_hash: ContractPackageHash =
                     self.t_from_mem(contract_metadata_hash_ptr, contract_metadata_hash_size)?;
 
-                let method: String = self.t_from_mem(method_ptr, method_size)?;
+                let entry_point_name: String =
+                    self.t_from_mem(entry_point_name_ptr, entry_point_name_size)?;
                 let args_bytes: Vec<u8> = {
                     let args_size: u32 = args_size;
                     self.bytes_from_mem(args_ptr, args_size as usize)?
@@ -607,7 +614,7 @@ where
                 let ret = self.call_versioned_contract_host_buffer(
                     contract_metadata_hash,
                     version,
-                    method,
+                    entry_point_name,
                     args_bytes,
                     result_size_ptr,
                 )?;

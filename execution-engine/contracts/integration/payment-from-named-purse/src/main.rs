@@ -3,13 +3,16 @@
 
 extern crate alloc;
 
-use alloc::string::String;
+use alloc::{
+    string::{String, ToString},
+    vec,
+};
 
 use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, URef, U512};
+use types::{ApiError, CLValue, NamedArg, RuntimeArgs, URef, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
@@ -26,31 +29,41 @@ impl Into<ApiError> for Error {
     }
 }
 
-enum Arg {
-    Amount = 0,
-    Name = 1,
-}
+const ARG_AMOUNT: &str = "amount";
+const ARG_PURSE: &str = "purse";
+const ARG_PURSE_NAME: &str = "purse_name";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let amount: U512 = runtime::get_arg(Arg::Amount as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let name: String = runtime::get_arg(Arg::Name as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let purse: URef = get_named_purse(&name).unwrap_or_revert_with(Error::PosNotFound);
+    let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
+    let name: String = runtime::get_named_arg(ARG_PURSE_NAME);
 
-    let pos_pointer = system::get_proof_of_stake();
-    let payment_purse: URef = runtime::call_contract(pos_pointer.clone(), GET_PAYMENT_PURSE, ());
+    // get uref from current context's named_keys
+    let source = runtime::get_key(&name)
+        .unwrap_or_revert_with(Error::NamedPurseNotFound)
+        .into_uref()
+        .unwrap_or_revert_with(Error::PosNotFound);
 
-    runtime::call_contract::<_, ()>(pos_pointer, SET_REFUND_PURSE, (purse,));
+    let pos_contract_hash = system::get_proof_of_stake();
 
-    system::transfer_from_purse_to_purse(purse, payment_purse, amount).unwrap_or_revert();
-}
+    // set refund purse to source purse
+    {
+        let contract_hash = pos_contract_hash.clone();
+        let runtime_args = {
+            let args = vec![NamedArg::new(
+                ARG_PURSE.to_string(),
+                CLValue::from_t(source).unwrap_or_revert(),
+            )];
+            RuntimeArgs::Named(args)
+        };
+        runtime::call_contract::<()>(contract_hash, SET_REFUND_PURSE, runtime_args);
+    }
 
-fn get_named_purse(name: &str) -> Option<URef> {
-    let key = runtime::get_key(name).unwrap_or_revert_with(Error::NamedPurseNotFound);
-    let uref = key.into_uref()?;
-    Some(uref)
+    // fund payment purse
+    {
+        let target: URef =
+            runtime::call_contract(pos_contract_hash, GET_PAYMENT_PURSE, RuntimeArgs::default());
+
+        system::transfer_from_purse_to_purse(source, target, amount).unwrap_or_revert();
+    }
 }

@@ -5,7 +5,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{runtime_args, ApiError, Key, RuntimeArgs, URef, U512};
+use types::{runtime_args, ApiError, ContractHash, RuntimeArgs, URef, U512};
 
 #[repr(u16)]
 enum Error {
@@ -17,9 +17,9 @@ enum Error {
 
 pub const ARG_PURSE: &str = "purse";
 
-fn set_refund_purse(contract_key: Key, p: &URef) {
+fn set_refund_purse(contract_hash: ContractHash, p: &URef) {
     runtime::call_contract(
-        contract_key,
+        contract_hash,
         "set_refund_purse",
         runtime_args! {
             ARG_PURSE => *p,
@@ -27,15 +27,15 @@ fn set_refund_purse(contract_key: Key, p: &URef) {
     )
 }
 
-fn get_refund_purse(pos: Key) -> Option<URef> {
+fn get_refund_purse(pos: ContractHash) -> Option<URef> {
     runtime::call_contract(pos, "get_refund_purse", runtime_args! {})
 }
 
-fn get_payment_purse(pos: Key) -> URef {
+fn get_payment_purse(pos: ContractHash) -> URef {
     runtime::call_contract(pos, "get_payment_purse", runtime_args! {})
 }
 
-fn submit_payment(pos: Key, amount: U512) {
+fn submit_payment(pos: ContractHash, amount: U512) {
     let payment_purse = get_payment_purse(pos);
     let main_purse = account::get_main_purse();
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()

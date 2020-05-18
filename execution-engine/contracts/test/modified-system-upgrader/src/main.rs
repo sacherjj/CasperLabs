@@ -2,7 +2,7 @@
 #![no_main]
 
 use contract::contract_api::system;
-use types::Key;
+use types::ContractHash;
 
 pub const MODIFIED_MINT_EXT_FUNCTION_NAME: &str = "modified_mint_ext";
 pub const POS_EXT_FUNCTION_NAME: &str = "pos_ext";
@@ -24,10 +24,10 @@ pub extern "C" fn pay() {
     standard_payment::delegate();
 }
 
-fn upgrade_uref(_name: &str, _key: Key) {
+fn upgrade_uref(_name: &str, _contract_hash: ContractHash) {
     // TODO use new upgrade functionality
     unimplemented!();
-    //    runtime::upgrade_contract_at_uref(name, uref);
+    //    runtime::upgrade_contract_at_uref(name, _contract_hash);
 }
 
 fn upgrade_mint() {

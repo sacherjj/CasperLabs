@@ -132,13 +132,13 @@ impl DeployItemBuilder {
 
     pub fn with_stored_versioned_contract_by_name(
         mut self,
-        key_name: &str,
+        name: &str,
         version: ContractVersion,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredVersionedContractByName {
-            name: key_name.to_owned(),
+            name: name.to_owned(),
             version,
             entry_point: entry_point.to_owned(),
             args: args.to_bytes().expect("should serialize runtime args"),

@@ -11,11 +11,11 @@ use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes},
     contracts::ContractVersion,
-    ApiError, BlockTime, CLTyped, CLValue, ContractPackageHash, Key, Phase, RuntimeArgs, URef,
-    BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
+    ApiError, BlockTime, CLTyped, CLValue, ContractHash, ContractPackageHash, Key, Phase,
+    RuntimeArgs, URef, BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
 
-use crate::{args_parser::ArgsParser, contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
+use crate::{contract_api, ext_ffi, unwrap_or_revert::UnwrapOrRevert};
 
 /// Returns the given [`CLValue`] to the host, terminating the currently running module.
 ///
@@ -45,33 +45,32 @@ pub fn revert<T: Into<ApiError>>(error: T) -> ! {
 /// stored contract calls [`revert`], then execution stops and `call_contract` doesn't return.
 /// Otherwise `call_contract` returns `()`.
 #[allow(clippy::ptr_arg)]
-pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
-    contract_key: Key,
+pub fn call_contract<T: CLTyped + FromBytes>(
+    contract_hash: ContractHash,
     entry_point_name: &str,
-    args: A,
+    runtime_args: RuntimeArgs,
 ) -> T {
-    let (key_ptr, key_size, _bytes1) = contract_api::to_ptr(contract_key);
-    let (entry_point_name_ptr, entry_point_name_size, _bytes3) =
+    let (contract_hash_ptr, contract_hash_size, _bytes1) = contract_api::to_ptr(contract_hash);
+    let (entry_point_name_ptr, entry_point_name_size, _bytes2) =
         contract_api::to_ptr(entry_point_name);
-    let runtime_args: RuntimeArgs = args.parse().unwrap_or_revert();
-    let (args_ptr, args_size, _bytes2) = contract_api::to_ptr(runtime_args);
+    let (runtime_args_ptr, runtime_args_size, _bytes2) = contract_api::to_ptr(runtime_args);
+
     let bytes_written = {
         let mut bytes_written = MaybeUninit::uninit();
         let ret = unsafe {
             ext_ffi::call_contract(
-                key_ptr,
-                key_size,
+                contract_hash_ptr,
+                contract_hash_size,
                 entry_point_name_ptr,
                 entry_point_name_size,
-                args_ptr,
-                args_size,
+                runtime_args_ptr,
+                runtime_args_size,
                 bytes_written.as_mut_ptr(),
             )
         };
         api_error::result_from(ret).unwrap_or_revert();
         unsafe { bytes_written.assume_init() }
     };
-
     deserialize_contract_result(bytes_written)
 }
 
@@ -83,13 +82,13 @@ pub fn call_contract<A: ArgsParser, T: CLTyped + FromBytes>(
 /// `call_versioned_contract` doesn't return. Otherwise `call_versioned_contract` returns `()`.
 #[allow(clippy::ptr_arg)]
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
-    contract_metadata_hash: ContractPackageHash,
+    contract_package_hash: ContractPackageHash,
     contract_version: ContractVersion,
     entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> T {
-    let (contract_metadata_hash_ptr, contract_metadata_hash_size, _bytes1) =
-        contract_api::to_ptr(contract_metadata_hash);
+    let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
+        contract_api::to_ptr(contract_package_hash);
     let (entry_point_name_ptr, entry_point_name_size, _bytes2) =
         contract_api::to_ptr(entry_point_name);
     let (runtime_args_ptr, runtime_args_size, _bytes2) = contract_api::to_ptr(runtime_args);
@@ -98,8 +97,8 @@ pub fn call_versioned_contract<T: CLTyped + FromBytes>(
         let mut bytes_written = MaybeUninit::uninit();
         let ret = unsafe {
             ext_ffi::call_versioned_contract(
-                contract_metadata_hash_ptr,
-                contract_metadata_hash_size,
+                contract_package_hash_ptr,
+                contract_package_hash_size,
                 contract_version,
                 entry_point_name_ptr,
                 entry_point_name_size,
@@ -138,16 +137,17 @@ fn deserialize_contract_result<T: CLTyped + FromBytes>(bytes_written: usize) -> 
 /// If successful, this overwrites the value under `uref` with a new contract instance containing
 /// the original contract's named_keys, the current protocol version, and the newly created bytes of
 /// the stored function.
-pub fn upgrade_contract_at_uref(name: &str, uref: URef) {
-    let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
-    let key: Key = uref.into();
-    let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
-    let result_value =
-        unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
-    match api_error::result_from(result_value) {
-        Ok(()) => (),
-        Err(error) => revert(error),
-    }
+pub fn upgrade_contract_at_uref(_name: &str, _uref: URef) {
+    todo!("contracts are no longer stored under urefs");
+    // let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
+    // let key: Key = uref.into();
+    // let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
+    // let result_value =
+    //     unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
+    // match api_error::result_from(result_value) {
+    //     Ok(()) => (),
+    //     Err(error) => revert(error),
+    // }
 }
 
 fn get_arg_size(i: u32) -> Option<usize> {

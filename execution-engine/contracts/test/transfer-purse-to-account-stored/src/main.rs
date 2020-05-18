@@ -47,7 +47,7 @@ pub extern "C" fn transfer() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let methods = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
@@ -65,7 +65,7 @@ pub extern "C" fn call() {
     };
 
     storage::new_contract(
-        methods,
+        entry_points,
         None,
         Some(HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),

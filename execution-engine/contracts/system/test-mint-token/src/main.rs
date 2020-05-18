@@ -3,32 +3,88 @@
 
 extern crate alloc;
 
-use alloc::string::String;
+use alloc::{string::String, vec};
 
-use contract::contract_api::runtime;
-use types::{Key, U512};
+use alloc::string::ToString;
+use types::{CLValue, ContractHash, NamedArg, RuntimeArgs, URef, U512};
+
+use contract::{
+    contract_api::{runtime, system},
+    unwrap_or_revert::UnwrapOrRevert,
+};
+
+const ARG_AMOUNT: &str = "amount";
+const ARG_PURSE: &str = "purse";
+const ARG_SOURCE: &str = "source";
+const ARG_TARGET: &str = "target";
+const ARG_CREATE: &str = "create";
+const ARG_TRANSFER: &str = "transfer";
+const ARG_BALANCE: &str = "balance";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mint = Key::Hash([
-        164, 102, 153, 51, 236, 214, 169, 167, 126, 44, 250, 247, 179, 214, 203, 229, 239, 69, 145,
-        25, 5, 153, 113, 55, 255, 188, 176, 201, 7, 4, 42, 100,
-    ]);
+    let mint: ContractHash = system::get_mint();
 
-    let amount1 = U512::from(100);
-    let purse1: Key = runtime::call_contract(mint.clone(), "create", (amount1,));
+    let source = get_purse(mint.clone(), 100);
+    let target = get_purse(mint.clone(), 300);
 
-    let amount2 = U512::from(300);
-    let purse2: Key = runtime::call_contract(mint.clone(), "create", (amount2,));
+    assert!(
+        transfer(mint.clone(), source, target, U512::from(70)) == "Success!",
+        "transfer should succeed"
+    );
 
-    let result: String =
-        runtime::call_contract(mint.clone(), "transfer", (purse1, purse2, U512::from(70)));
+    assert!(
+        balance(mint.clone(), source).unwrap() == U512::from(30),
+        "source purse balance incorrect"
+    );
+    assert!(
+        balance(mint.clone(), target).unwrap() == U512::from(370),
+        "target balance incorrect"
+    );
+}
 
-    assert!(&result == "Success!");
+fn get_purse(mint: ContractHash, amount: u64) -> URef {
+    let amount = U512::from(amount);
+    let runtime_args = {
+        let args = vec![NamedArg::new(
+            ARG_AMOUNT.to_string(),
+            CLValue::from_t(amount).unwrap_or_revert(),
+        )];
+        RuntimeArgs::Named(args)
+    };
 
-    let new_amount1: Option<U512> = runtime::call_contract(mint.clone(), "balance", (purse1,));
-    let new_amount2: Option<U512> = runtime::call_contract(mint, "balance", (purse2,));
+    runtime::call_contract::<URef>(mint.clone(), ARG_CREATE, runtime_args)
+}
 
-    assert!(new_amount1.unwrap() == U512::from(30));
-    assert!(new_amount2.unwrap() == U512::from(370));
+fn transfer(mint: ContractHash, source: URef, target: URef, amount: U512) -> String {
+    let runtime_args = {
+        let args = vec![
+            NamedArg::new(
+                ARG_AMOUNT.to_string(),
+                CLValue::from_t(amount).unwrap_or_revert(),
+            ),
+            NamedArg::new(
+                ARG_SOURCE.to_string(),
+                CLValue::from_t(source).unwrap_or_revert(),
+            ),
+            NamedArg::new(
+                ARG_TARGET.to_string(),
+                CLValue::from_t(target).unwrap_or_revert(),
+            ),
+        ];
+        RuntimeArgs::Named(args)
+    };
+
+    runtime::call_contract::<String>(mint, ARG_TRANSFER, runtime_args)
+}
+
+fn balance(mint: ContractHash, purse: URef) -> Option<U512> {
+    let runtime_args = {
+        let args = vec![NamedArg::new(
+            ARG_PURSE.to_string(),
+            CLValue::from_t(purse).unwrap_or_revert(),
+        )];
+        RuntimeArgs::Named(args)
+    };
+    runtime::call_contract::<Option<U512>>(mint.clone(), ARG_BALANCE, runtime_args)
 }

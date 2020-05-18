@@ -1937,10 +1937,11 @@ where
     /// Calls contract living under a `key`, with supplied `args`.
     pub fn call_contract(
         &mut self,
-        key: Key,
+        contract_hash: ContractHash,
         entry_point_name: &str,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
+        let key = contract_hash.into();
         let contract = match self.context.read_gs(&key)? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -1971,23 +1972,19 @@ where
     /// types given in the contract header.
     pub fn call_versioned_contract(
         &mut self,
-        contract_metadata_hash: ContractPackageHash,
+        contract_package_hash: ContractPackageHash,
         version: ContractVersion,
         entry_point_name: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
-        let key = contract_metadata_hash.into();
-        // let (context_key, contract, contract_wasm, metadata, entrypoint) =
+        let key = contract_package_hash.into();
 
-        //
-        // Obtain contract package
-        //
         let contract_package = match self.context.read_gs(&key)? {
             Some(StoredValue::ContractPackage(contract_package)) => contract_package,
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a versioned contract",
-                    contract_metadata_hash
+                    contract_package_hash
                 )))
             }
             None => return Err(Error::KeyNotFound(key)),
@@ -2011,7 +2008,7 @@ where
             Some(_) => {
                 return Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a contract",
-                    contract_metadata_hash
+                    contract_package_hash
                 )))
             }
             None => return Err(Error::KeyNotFound(key)),
@@ -2248,7 +2245,7 @@ where
 
     fn call_contract_host_buffer(
         &mut self,
-        key: Key,
+        contract_hash: ContractHash,
         entry_point_name: &str,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
@@ -2260,16 +2257,16 @@ where
         }
         let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
         scoped_timer.pause();
-        let result = self.call_contract(key, entry_point_name, args)?;
+        let result = self.call_contract(contract_hash, entry_point_name, args)?;
         scoped_timer.unpause();
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
 
     fn call_versioned_contract_host_buffer(
         &mut self,
-        contract_metadata_hash: ContractPackageHash,
+        contract_package_hash: ContractPackageHash,
         version: ContractVersion,
-        method: String,
+        entry_point_name: String,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
@@ -2278,7 +2275,8 @@ where
             return Ok(Err(err));
         }
         let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
-        let result = self.call_versioned_contract(contract_metadata_hash, version, method, args)?;
+        let result =
+            self.call_versioned_contract(contract_package_hash, version, entry_point_name, args)?;
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
 
@@ -2849,8 +2847,8 @@ where
 
     /// Calls the "create" method on the mint contract at the given mint
     /// contract key
-    fn mint_create(&mut self, mint_contract_key: Key) -> Result<URef, Error> {
-        let result = self.call_contract(mint_contract_key, "create", RuntimeArgs::new())?;
+    fn mint_create(&mut self, mint_contract_hash: ContractHash) -> Result<URef, Error> {
+        let result = self.call_contract(mint_contract_hash, "create", RuntimeArgs::new())?;
         let purse = result.into_t()?;
 
         Ok(purse)
@@ -2865,7 +2863,7 @@ where
     /// contract key
     fn mint_transfer(
         &mut self,
-        mint_contract_key: Key,
+        mint_contract_hash: ContractHash,
         source: URef,
         target: URef,
         amount: U512,
@@ -2880,7 +2878,7 @@ where
             ARG_AMOUNT => amount,
         };
 
-        let result = self.call_contract(mint_contract_key, "transfer", args_values.clone())?;
+        let result = self.call_contract(mint_contract_hash, "transfer", args_values.clone())?;
         let result: Result<(), mint::Error> = result.into_t()?;
         Ok(result.map_err(system_contract_errors::Error::from)?)
     }
@@ -2893,7 +2891,7 @@ where
         target: PublicKey,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract().into();
+        let mint_contract_hash = self.get_mint_contract();
 
         let target_key = Key::Account(target);
 
@@ -2903,13 +2901,13 @@ where
             return Ok(Err(ApiError::Transfer));
         }
 
-        let target_purse = self.mint_create(mint_contract_key)?;
+        let target_purse = self.mint_create(mint_contract_hash)?;
 
         if source == target_purse {
             return Ok(Err(ApiError::Transfer));
         }
 
-        match self.mint_transfer(mint_contract_key, source, target_purse, amount) {
+        match self.mint_transfer(mint_contract_hash, source, target_purse, amount) {
             Ok(_) => {
                 // After merging in EE-704 system contracts lookup internally uses protocol data and
                 // this is used for backwards compatibility with explorer to query mint/pos urefs.

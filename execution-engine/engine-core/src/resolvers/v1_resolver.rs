@@ -84,10 +84,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 2][..], None),
                 FunctionIndex::RetFuncIndex.into(),
             ),
-            "call_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
-                FunctionIndex::CallContractFuncIndex.into(),
-            ),
             "get_key" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
                 FunctionIndex::GetKeyFuncIndex.into(),
@@ -196,14 +192,13 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
                 FunctionIndex::RemoveContractVersion.into(),
             ),
+            "call_contract" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
+                FunctionIndex::CallContractFuncIndex.into(),
+            ),
             "call_versioned_contract" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 8][..], Some(ValueType::I32)),
                 FunctionIndex::CallVersionedContract.into(),
-            ),
-            #[cfg(feature = "test-support")]
-            "print" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 2][..], None),
-                FunctionIndex::PrintIndex.into(),
             ),
             "get_named_arg_size" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], Some(ValueType::I32)),
@@ -224,6 +219,11 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             "remove_contract_user_group_urefs" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
                 FunctionIndex::RemoveContractUserGroupURefsIndex.into(),
+            ),
+            #[cfg(feature = "test-support")]
+            "print" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 2][..], None),
+                FunctionIndex::PrintIndex.into(),
             ),
             _ => {
                 return Err(InterpreterError::Function(format!(

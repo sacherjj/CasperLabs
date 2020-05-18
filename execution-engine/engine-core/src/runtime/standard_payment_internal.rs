@@ -30,8 +30,8 @@ where
         target: URef,
         amount: U512,
     ) -> Result<(), ApiError> {
-        let mint_contract_key = Key::from(self.get_mint_contract());
-        self.mint_transfer(mint_contract_key, source, target, amount)
+        let mint_contract_hash = self.get_mint_contract();
+        self.mint_transfer(mint_contract_hash, source, target, amount)
             .map_err(|error| match error {
                 execution::Error::SystemContract(system_contract_errors::Error::Mint(
                     mint_error,
@@ -47,11 +47,11 @@ where
     R::Error: Into<execution::Error>,
 {
     fn get_payment_purse(&mut self) -> Result<URef, ApiError> {
-        let pos_contract_key = self.get_pos_contract().into();
+        let pos_contract_hash = self.get_pos_contract();
 
         let cl_value = self
             .call_contract(
-                pos_contract_key,
+                pos_contract_hash,
                 METHOD_GET_PAYMENT_PURSE,
                 RuntimeArgs::new(),
             )

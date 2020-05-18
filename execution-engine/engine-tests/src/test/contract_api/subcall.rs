@@ -152,7 +152,7 @@ fn should_add_all_gas_for_subcall() {
 #[ignore]
 #[test]
 fn expensive_subcall_should_cost_more() {
-    const CONTRACT_NAME: &str = "measure_gas_subcall_2.wasm";
+    const CONTRACT_NAME: &str = "measure_gas_subcall.wasm";
     const DO_NOTHING: &str = "do_nothing_stored.wasm";
     const EXPENSIVE_CALCULATION: &str = "expensive_calculation.wasm";
     const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";

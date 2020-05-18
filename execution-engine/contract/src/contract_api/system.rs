@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
-    account::PublicKey, api_error, bytesrepr, ApiError, ContractHash, Key, SystemContractType,
+    account::PublicKey, api_error, bytesrepr, ApiError, ContractHash, SystemContractType,
     TransferResult, TransferredTo, URef, U512, UREF_SERIALIZED_LENGTH,
 };
 
@@ -19,7 +19,7 @@ pub const MINT_NAME: &str = "mint";
 /// Name of the reference to the Proof of Stake contract in the named keys.
 pub const POS_NAME: &str = "pos";
 
-fn get_system_contract(system_contract: SystemContractType) -> Key {
+fn get_system_contract(system_contract: SystemContractType) -> ContractHash {
     let system_contract_index = system_contract.into();
     let contract_hash: ContractHash = {
         let result = {
@@ -38,27 +38,27 @@ fn get_system_contract(system_contract: SystemContractType) -> Key {
         // Deserializes a valid URef passed from the host side
         bytesrepr::deserialize(contract_hash_bytes.to_vec()).unwrap_or_revert()
     };
-    Key::Hash(contract_hash)
+    contract_hash
 }
 
 /// Returns a read-only pointer to the Mint contract.
 ///
 /// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
-pub fn get_mint() -> Key {
+pub fn get_mint() -> ContractHash {
     get_system_contract(SystemContractType::Mint)
 }
 
 /// Returns a read-only pointer to the Proof of Stake contract.
 ///
 /// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
-pub fn get_proof_of_stake() -> Key {
+pub fn get_proof_of_stake() -> ContractHash {
     get_system_contract(SystemContractType::ProofOfStake)
 }
 
 /// Returns a read-only pointer to the Standard Payment contract.
 ///
 /// Any failure will trigger [`revert`](runtime::revert) with an appropriate [`ApiError`].
-pub fn get_standard_payment() -> Key {
+pub fn get_standard_payment() -> ContractHash {
     get_system_contract(SystemContractType::StandardPayment)
 }
 

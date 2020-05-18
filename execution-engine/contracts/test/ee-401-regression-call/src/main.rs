@@ -9,13 +9,20 @@ use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{contracts::DEFAULT_ENTRY_POINT_NAME, ApiError, Key, URef};
+use types::{contracts::DEFAULT_ENTRY_POINT_NAME, ApiError, ContractHash, RuntimeArgs, URef};
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_key: Key = runtime::get_key("hello_ext").unwrap_or_revert_with(ApiError::GetKey);
+    let contract_hash: ContractHash = runtime::get_key("hello_ext")
+        .unwrap_or_revert_with(ApiError::GetKey)
+        .into_hash()
+        .unwrap_or_revert();
 
-    let result: URef = runtime::call_contract(contract_key, DEFAULT_ENTRY_POINT_NAME, ());
+    let result: URef = runtime::call_contract(
+        contract_hash,
+        DEFAULT_ENTRY_POINT_NAME,
+        RuntimeArgs::default(),
+    );
 
     let value = storage::read(result);
 

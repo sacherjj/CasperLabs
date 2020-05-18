@@ -7,7 +7,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, URef, U512};
+use types::{ApiError, RuntimeArgs, URef, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 pub const ARG_AMOUNT: &str = "amount";
@@ -36,7 +36,8 @@ impl ProofOfStakeProvider for StandardPaymentContract {
         // TODO: can't use call_contract any more; should be calling
         // correct version of pos by has
         let pos_pointer = system::get_proof_of_stake();
-        let payment_purse = runtime::call_contract(pos_pointer, GET_PAYMENT_PURSE, ());
+        let payment_purse =
+            runtime::call_contract(pos_pointer, GET_PAYMENT_PURSE, RuntimeArgs::default());
         Ok(payment_purse)
     }
 }

@@ -1,13 +1,18 @@
 #![no_std]
 #![no_main]
 
+extern crate alloc;
+
+use alloc::{string::ToString, vec};
+
 use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, U512};
+use types::{CLValue, NamedArg, RuntimeArgs, U512};
 
 const UNBOND_METHOD_NAME: &str = "unbond";
+const ARG_AMOUNT: &str = "amount";
 
 // Unbonding contract.
 //
@@ -16,12 +21,16 @@ const UNBOND_METHOD_NAME: &str = "unbond";
 // Otherwise (`Some<u64>`) unbonds with part of the bonded stakes.
 #[no_mangle]
 pub extern "C" fn call() {
-    let pos_pointer = system::get_proof_of_stake();
+    let unbond_amount: Option<U512> =
+        runtime::get_named_arg::<Option<u64>>(ARG_AMOUNT).map(Into::into);
 
-    let arg_0: Option<u64> = runtime::get_arg(0)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let unbond_amount: Option<U512> = arg_0.map(Into::into);
-
-    runtime::call_contract(pos_pointer, UNBOND_METHOD_NAME, (unbond_amount,))
+    let contract_hash = system::get_proof_of_stake();
+    let runtime_args = {
+        let args = vec![NamedArg::new(
+            ARG_AMOUNT.to_string(),
+            CLValue::from_t(unbond_amount).unwrap_or_revert(),
+        )];
+        RuntimeArgs::Named(args)
+    };
+    runtime::call_contract(contract_hash, UNBOND_METHOD_NAME, runtime_args)
 }
