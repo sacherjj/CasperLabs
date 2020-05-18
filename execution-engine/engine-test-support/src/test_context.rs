@@ -48,19 +48,26 @@ impl TestContext {
         self.inner.get_purse_balance(purse)
     }
 
+    fn gas_rate(&self) -> U512 {
+        // TODO: WHERE CAN I PULL THE MAGIC 10 FROM...
+        U512::from(10u64)
+    }
+
     /// Gets the execution cost of a session run given by index.
     ///
     /// Returns value in Motes
     pub fn exec_cost(&self, index: usize) -> U512 {
-        // TODO: WHERE CAN I PULL THE MAGIC 10 FROM...
-        self.inner.exec_costs(index)[0].value() * 10
+        self.inner.exec_costs(index)[0].value() * self.gas_rate()
     }
 
     /// Gets the execution cost of the last session run
     ///
     /// Returns value in Motes
-    pub fn get_last_exec_cost(&self) -> U512 {
-        self.inner.get_last_exec_costs()[0].value()
+    pub fn get_last_exec_cost(&self) -> Option<U512> {
+        match self.inner.get_last_exec_costs() {
+            None => None,
+            Some(exec_costs) => Some(exec_costs[0].value() * self.gas_rate()),
+        }
     }
 
     /// Gets the balance of the account's main purse

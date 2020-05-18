@@ -24,17 +24,27 @@ fn test_context_should_return_exec_cost_and_last_exec_cost() {
 
     // Payment is not charged by default, so do nothing should execute with
     // zero payment and session costs.
+    // If --features "use-system-contracts", standard payment will run.
     let session = SessionBuilder::new(Code::from(DO_NOTHING_WASM), ())
         .with_address(DEFAULT_ACCOUNT_ADDR)
         .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
         .build();
     test_context.run(session);
 
-    let gas_cost_no_payment = test_context.exec_cost(0);
-    assert_eq!(gas_cost_no_payment, ZERO_U512);
+    let gas_cost = test_context.exec_cost(0);
+
+    // If feature is active, standard payment will consume gas.  Otherwise, no payment is run.
+    if cfg!(feature = "use-system-contracts") {
+        assert!(gas_cost > ZERO_U512);
+    } else {
+        assert_eq!(gas_cost, ZERO_U512);
+    }
 
     let account_balance = test_context.get_main_purse_balance(DEFAULT_ACCOUNT_ADDR);
-    assert_eq!(account_balance, U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE));
+    assert_eq!(
+        account_balance,
+        U512::from(DEFAULT_ACCOUNT_INITIAL_BALANCE) - gas_cost
+    );
 
     // Passing in standard_payment will execute and charge for payment code, but session cost
     // is still zero with do_nothing.
@@ -49,7 +59,7 @@ fn test_context_should_return_exec_cost_and_last_exec_cost() {
     test_context.run(session);
 
     // Testing get_last_exec_cost, could also be exec_cost(1)
-    let gas_cost_with_payment = test_context.get_last_exec_cost();
+    let gas_cost_with_payment = test_context.get_last_exec_cost().expect("exec_cost");
     assert!(gas_cost_with_payment > ZERO_U512);
 
     let account_balance = test_context.get_main_purse_balance(DEFAULT_ACCOUNT_ADDR);
