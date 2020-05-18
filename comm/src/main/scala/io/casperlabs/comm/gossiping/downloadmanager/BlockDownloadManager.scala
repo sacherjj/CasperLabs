@@ -135,18 +135,27 @@ class BlockDownloadManagerImpl[F[_]](
     * 2. Downloads missing deploys from the same peer.
     * 3. Restores full block by combining downloaded deploys and existing ones from the database.
     */
-  override protected def fetchAndRestore(source: Node, blockHash: ByteString): F[Block] =
-    for {
-      partialBlock         <- super.fetchAndRestore(source, blockHash)
-      fullDeploys          = partialBlock.getBody.deploys.map(_.getDeploy).filter(_.body.nonEmpty).toList
-      fullDeployHashes     = fullDeploys.map(_.deployHash).toSet
-      allDeployHashes      = partialBlock.getBody.deploys.map(_.getDeploy.deployHash).toSet
-      existingDeploys      <- backend.readDeploys((allDeployHashes diff fullDeployHashes).toList)
-      existingDeployHashes = existingDeploys.map(_.deployHash).toSet
-      missingDeployHashes  = allDeployHashes diff fullDeployHashes diff existingDeployHashes
-      missingDeploys       <- fetchAndRestoreDeploys(source, missingDeployHashes)
-      fullBlock            = partialBlock.withDeploys(fullDeploys ++ existingDeploys ++ missingDeploys)
-    } yield fullBlock
+  override protected def fetchAndRestore(source: Node, summary: BlockSummary): F[Block] =
+    if (summary.getHeader.deployCount == 0) {
+      Block()
+        .withBlockHash(summary.blockHash)
+        .withHeader(summary.getHeader)
+        .withSignature(summary.getSignature)
+        .withBody(Block.Body())
+        .pure[F]
+    } else {
+      for {
+        partialBlock         <- super.fetchAndRestore(source, summary)
+        fullDeploys          = partialBlock.getBody.deploys.map(_.getDeploy).filter(_.body.nonEmpty).toList
+        fullDeployHashes     = fullDeploys.map(_.deployHash).toSet
+        allDeployHashes      = partialBlock.getBody.deploys.map(_.getDeploy.deployHash).toSet
+        existingDeploys      <- backend.readDeploys((allDeployHashes diff fullDeployHashes).toList)
+        existingDeployHashes = existingDeploys.map(_.deployHash).toSet
+        missingDeployHashes  = allDeployHashes diff fullDeployHashes diff existingDeployHashes
+        missingDeploys       <- fetchAndRestoreDeploys(source, missingDeployHashes)
+        fullBlock            = partialBlock.withDeploys(fullDeploys ++ existingDeploys ++ missingDeploys)
+      } yield fullBlock
+    }
 
   /** Stream the chunks of a block without deploy bodies. */
   override def fetch(

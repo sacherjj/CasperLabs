@@ -514,21 +514,21 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
     val success                = signal.put(Signal.DownloadSuccess(id))
     def failure(ex: Throwable) = signal.put(Signal.DownloadFailure(id, ex))
 
-    def throttledFetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
+    def throttledFetchAndRestore(source: Node, handle: Handle): F[Downloadable] =
       // Indicate how many fetches we are trying to do at a time. If it's larger then the semaphore
       // we configured we'd know where we'd have to raise it to allow maximum throughput.
       semaphore
         .withPermit {
           ContextShift[F].evalOn(egressScheduler) {
             // Measure an individual download.
-            fetchAndRestore(source, id).timerGauge("restore")
+            fetchAndRestore(source, handle).timerGauge("restore")
           }
         }
         .timerGauge("fetches") // Measure with wait time.
 
     def tryDownload(handle: Handle, source: Node, relay: Boolean) =
       for {
-        downloadable <- throttledFetchAndRestore(source, id)
+        downloadable <- throttledFetchAndRestore(source, handle)
         _            <- backend.validate(downloadable)
         _            <- backend.store(downloadable)
         _            <- relaying.relay(List(handle.id.toByteString)).whenA(relay)
@@ -602,11 +602,11 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
   }
 
   /** Download from the source node and decompress it. */
-  protected def fetchAndRestore(source: Node, id: Identifier): F[Downloadable] =
+  protected def fetchAndRestore(source: Node, handle: Handle): F[Downloadable] =
     for {
-      content      <- restore(source, fetch(source, id))
+      content      <- restore(source, fetch(source, handle.id))
       downloadable <- Sync[F].fromTry(tryParseDownloadable(content))
-      _            <- checkId(source, downloadable, id)
+      _            <- checkId(source, downloadable, handle.id)
     } yield downloadable
 
   /** Fetches specified chunks, accumulates and validates them. */
