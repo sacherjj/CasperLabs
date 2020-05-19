@@ -8,7 +8,7 @@ import io.casperlabs.casper.api.BlockAPI
 import io.casperlabs.casper.api.BlockAPI.BlockAndMaybeDeploys
 import io.casperlabs.casper.consensus.info.{BlockInfo, DeployInfo}
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
-import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.Keys.PublicKeyHash
 import io.casperlabs.crypto.codec.{Base16, StringSyntax}
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.BlockInfoPagination.BlockInfoPageTokenParams
@@ -160,11 +160,11 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
                                               after
                                             )
                                         )
-          accountPublicKeyBs = PublicKey(accountKey)
+          accountHash = PublicKeyHash(accountKey)
           deploysWithOneMoreElem <- DeployStorage[F]
                                      .reader(deployView)
                                      .getDeploysByAccount(
-                                       accountPublicKeyBs,
+                                       accountHash,
                                        pageSize + 1,
                                        pageTokenParams.lastTimeStamp,
                                        pageTokenParams.lastDeployHash,

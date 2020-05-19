@@ -4,7 +4,7 @@ import com.google.protobuf.ByteString
 import doobie._
 import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.{BlockSummary, Deploy, DeploySummary, Era}
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, PublicKeyHash}
 import io.casperlabs.casper.consensus.info.{BlockInfo, Event}
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.models.DeployImplicits.DeployOps
@@ -17,6 +17,9 @@ trait DoobieCodecs {
 
   protected implicit val metaPublicKeyBS: Meta[PublicKeyBS] =
     Meta[Array[Byte]].imap(d => PublicKey(ByteString.copyFrom(d)))(_.toByteArray)
+
+  protected implicit val metaPublicKeyHash: Meta[PublicKeyHash] =
+    Meta[Array[Byte]].imap(d => PublicKeyHash(d))(identity)
 
   protected implicit val readDeploy: Read[Deploy] =
     Read[(Array[Byte], Option[Array[Byte]])].map {

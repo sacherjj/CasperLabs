@@ -13,7 +13,7 @@ import io.casperlabs.casper.MultiParentCasperRef
 import io.casperlabs.catscontrib.{Fs2Compiler, MonadThrowable}
 import io.casperlabs.comm.ServiceError.{FailedPrecondition, InvalidArgument, Unavailable}
 import io.casperlabs.comm.gossiping.relaying.DeployRelaying
-import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.Keys.PublicKeyHash
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
@@ -165,6 +165,7 @@ object GrpcCasperService {
         ): Task[ListDeployInfosResponse] =
           TaskLike[F].apply {
             for {
+              // TODO (NDSC-58): Fix field names.
               accountPublicKeyBase16 <- validateAccountPublicKey[F](
                                          request.accountPublicKeyBase16,
                                          request.accountPublicKey,
@@ -177,7 +178,7 @@ object GrpcCasperService {
                                                   request.pageToken
                                                 )
                                             )
-              accountPublicKeyBs = PublicKey(
+              accountHash = PublicKeyHash(
                 ByteString.copyFrom(
                   Base16.decode(accountPublicKeyBase16)
                 )
@@ -185,7 +186,7 @@ object GrpcCasperService {
               deploys <- DeployStorage[F]
                           .reader(request.view)
                           .getDeploysByAccount(
-                            accountPublicKeyBs,
+                            accountHash,
                             pageSize,
                             pageTokenParams.lastTimeStamp,
                             pageTokenParams.lastDeployHash,
