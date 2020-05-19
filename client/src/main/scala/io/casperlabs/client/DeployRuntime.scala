@@ -408,13 +408,15 @@ object DeployRuntime {
         deployConfig.paymentAmount.map(bigIntArg("amount", _)).toList
       )
 
+    val accountHash = Ed25519.publicKeyHash(from)
+
     consensus
       .Deploy()
       .withHeader(
         consensus.Deploy
           .Header()
           .withTimestamp(System.currentTimeMillis)
-          .withAccountPublicKey(ByteString.copyFrom(from))
+          .withAccountHash(ByteString.copyFrom(accountHash))
           .withGasPrice(deployConfig.gasPrice)
           .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
           .withDependencies(deployConfig.dependencies)

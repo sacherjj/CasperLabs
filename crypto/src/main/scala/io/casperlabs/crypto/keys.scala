@@ -26,13 +26,15 @@ object Keys {
 
   sealed trait PrivateKeyTag
   type PrivateKey = Array[Byte] @@ PrivateKeyTag
-
   def PrivateKey(a: Array[Byte]): PrivateKey = a.asInstanceOf[PrivateKey]
 
   sealed trait SignatureTag
   type Signature = Array[Byte] @@ SignatureTag
-
   def Signature(a: Array[Byte]): Signature = a.asInstanceOf[Signature]
+
+  sealed trait PublicKeyHashTag
+  type PublicKeyHash = Array[Byte] @@ PublicKeyHashTag
+  def PublicKeyHash(a: Array[Byte]): PublicKeyHash = a.asInstanceOf[PublicKeyHash]
 
   sealed trait ParseError { self =>
     def errorMessage: String

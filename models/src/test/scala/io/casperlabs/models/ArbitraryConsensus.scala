@@ -66,17 +66,25 @@ trait ArbitraryConsensus {
   val genHash = genBytes(32)
   val genKey  = genBytes(32)
 
-  protected case class AccountKeys(privateKey: ByteString, publicKey: ByteString) {
+  protected case class AccountKeys(
+      privateKey: ByteString,
+      publicKey: ByteString,
+      publicKeyHash: ByteString
+  ) {
     def sign(data: ByteString): Signature = {
       val sig = Ed25519.sign(data.toByteArray, PrivateKey(privateKey.toByteArray))
-      Signature("ed25519", ByteString.copyFrom(sig))
+      Signature(Ed25519.name, ByteString.copyFrom(sig))
     }
   }
 
   protected val genAccountKeys: Gen[AccountKeys] =
     Gen.delay(Gen.const(Ed25519.newKeyPair match {
       case (privateKey, publicKey) =>
-        AccountKeys(ByteString.copyFrom(privateKey), ByteString.copyFrom(publicKey))
+        AccountKeys(
+          privateKey = ByteString.copyFrom(privateKey),
+          publicKey = ByteString.copyFrom(publicKey),
+          publicKeyHash = ByteString.copyFrom(Ed25519.publicKeyHash(publicKey))
+        )
     }))
 
   // Override these before generating values if you want more or less random account keys.
@@ -191,7 +199,7 @@ trait ArbitraryConsensus {
       bodyHash = protoHash(body)
       header = Deploy
         .Header()
-        .withAccountPublicKey(accountKeys.publicKey)
+        .withAccountHash(accountKeys.publicKeyHash)
         .withTimestamp(timestamp)
         .withGasPrice(gasPrice)
         .withBodyHash(bodyHash)
@@ -206,7 +214,7 @@ trait ArbitraryConsensus {
         .withApprovals(
           List(
             Approval()
-              .withApproverPublicKey(header.accountPublicKey)
+              .withApproverPublicKey(accountKeys.publicKey)
               .withSignature(signature)
           )
         )

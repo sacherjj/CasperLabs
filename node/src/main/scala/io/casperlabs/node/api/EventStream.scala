@@ -75,6 +75,7 @@ object EventStream {
         import Event.Value._
 
         val accountFilter: ByteString => Boolean =
+          // TODO (NDSC-58): Rename fields in the API.
           request.getDeployFilter.accountPublicKeys.toSet match {
             case keys if keys.nonEmpty => keys.contains
             case _                     => _ => true
@@ -87,7 +88,7 @@ object EventStream {
           }
 
         def deployFilter(d: Deploy) =
-          accountFilter(d.getHeader.accountPublicKey) && deployHashFilter(d.deployHash)
+          accountFilter(d.getHeader.accountHash) && deployHashFilter(d.deployHash)
 
         event => {
           event.value match {

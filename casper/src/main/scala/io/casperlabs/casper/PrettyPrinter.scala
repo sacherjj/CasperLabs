@@ -138,5 +138,5 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
     s"Deployment threshold ${at.deploymentThreshold}, Key management threshold: ${at.keyManagementThreshold}"
 
   def buildString(d: consensus.Deploy): String =
-    s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)})"
+    s"Deploy ${buildStringNoLimit(d.deployHash)} (account ${buildStringNoLimit(d.getHeader.accountHash)})"
 }
