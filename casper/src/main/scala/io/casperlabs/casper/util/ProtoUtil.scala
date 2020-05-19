@@ -14,7 +14,7 @@ import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.DeployImplicits._
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.Keys.PrivateKey
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
@@ -31,7 +31,7 @@ import io.casperlabs.models.Message.{asJRank, asMainRank, JRank, MainRank}
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.duration._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 import io.casperlabs.storage.dag.DagLookup
 import io.casperlabs.shared.Sorting._
 import io.casperlabs.shared.ByteStringPrettyPrinter._
@@ -613,14 +613,26 @@ object ProtoUtil {
     for {
       session <- toPayload(d.getBody.session)
       payment <- toPayload(d.getBody.payment)
+      keyHashes <- d.approvals.toList.map { approval =>
+                    approval.getSignature.sigAlgorithm match {
+                      case SignatureAlgorithm(alg) =>
+                        val key  = PublicKey(approval.approverPublicKey.toByteArray)
+                        val hash = alg.publicKeyHash(key)
+                        Success(ByteString.copyFrom(hash))
+
+                      case unknown =>
+                        Failure(
+                          new IllegalArgumentException(s"Unknown signature algorithm: $unknown")
+                        )
+                    }
+                  }.sequence
     } yield {
       ipc.DeployItem(
         address = d.getHeader.accountHash,
         session = session,
         payment = payment,
         gasPrice = GAS_PRICE,
-        // TODO (NDSC-57): Send hashes instead of keys.
-        authorizationKeys = d.approvals.map(_.approverPublicKey),
+        authorizationKeys = keyHashes,
         deployHash = d.deployHash
       )
     }
