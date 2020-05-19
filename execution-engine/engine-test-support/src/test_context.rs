@@ -20,79 +20,75 @@ pub struct TestContext {
 }
 
 impl TestContext {
+    fn maybe_get_balance_for_purse(&self, purse_address: Option<URef>) -> Option<Motes> {
+        match purse_address {
+            None => None,
+            Some(purse_address) => {
+                let purse_balance = self.get_balance(purse_address.addr());
+                Some(Motes::new(purse_balance))
+            }
+        }
+    }
     /// Runs the supplied [`Session`], asserting successful execution of the contained deploy
     ///
     /// if Session.expect_success (default) will panic if failure.  (Allows cases where failure is
     /// expected) if Session.check_transfer_success is given, will verify transfer balances
     /// including gas used. if Session.commit (default) will commit resulting transforms.
     pub fn run(&mut self, session: Session) -> &mut Self {
-        // Pre run caching of balances if needed
-        let (maybe_source_initial_balance, maybe_target_initial_balance) = {
-            match &session.check_transfer_success {
-                None => (None, None),
-                Some(session_transfer_info) => {
-                    let source_initial_balance =
-                        Motes::new(self.get_balance(session_transfer_info.source_purse.addr()));
-
-                    let maybe_target_initial_balance: Option<Motes> = {
-                        match session_transfer_info.target_purse {
-                            None => None,
-                            Some(target_purse) => {
-                                let target_initial_balance = self.get_balance(target_purse.addr());
-                                Some(Motes::new(target_initial_balance))
-                            }
-                        }
-                    };
-                    (Some(source_initial_balance), maybe_target_initial_balance)
-                }
-            }
-        };
-
-        let builder = self.inner.exec(session.inner);
-        if session.expect_success {
-            let builder = builder.expect_success();
-        }
-        if session.commit {
-            let builder = builder.commit();
-        }
-
-        // Post run assertions if needed
-        let _ = match &session.check_transfer_success {
-            None => (),
+        match session.check_transfer_success {
             Some(session_transfer_info) => {
-                if let Some(target_purse) = session_transfer_info.target_purse {
-                    let target_ending_balance = {
-                        let target_ending_balance = (&self).get_balance(target_purse.addr());
-                        Motes::new(target_ending_balance)
-                    };
+                let source_initial_balance = self
+                    .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
+                    .expect("source purse balance");
+                let maybe_target_initial_balance =
+                    self.maybe_get_balance_for_purse(session_transfer_info.maybe_target_purse);
 
-                    assert_eq!(
-                        maybe_target_initial_balance.expect("target initial balance")
-                            + session_transfer_info.transfer_amount,
-                        target_ending_balance,
-                        "incorrect target balance"
-                    );
-                };
+                let builder = self.inner.exec(session.inner);
+                if session.expect_success {
+                    builder.expect_success();
+                }
+                if session.commit {
+                    builder.commit();
+                }
 
-                let source_ending_balance = {
-                    let source_ending_balance =
-                        self.get_balance(session_transfer_info.source_purse.addr());
-                    Motes::new(source_ending_balance)
-                };
+                let gas_cost = builder.last_exec_gas_cost();
+                match maybe_target_initial_balance {
+                    None => (),
+                    Some(target_initial_balance) => {
+                        let target_ending_balance = self
+                            .maybe_get_balance_for_purse(session_transfer_info.maybe_target_purse)
+                            .expect("target ending balance");
 
-                let gas_cost = {
-                    let gas_cost = builder.last_exec_gas_cost();
-                    gas_cost
-                };
+                        assert_eq!(
+                            target_initial_balance + session_transfer_info.transfer_amount,
+                            target_ending_balance,
+                            "incorrect target balance"
+                        )
+                    }
+                }
+
+                let source_ending_balance = self
+                    .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
+                    .expect("source ending balance");
                 assert_eq!(
-                    maybe_source_initial_balance.expect("source initial balance")
+                    source_initial_balance
                         - session_transfer_info.transfer_amount
                         - Motes::from_gas(gas_cost, CONV_RATE).expect("motes from gas"),
                     source_ending_balance,
                     "incorrect source balance"
                 );
             }
-        };
+            None => {
+                let builder = self.inner.exec(session.inner);
+                if session.expect_success {
+                    builder.expect_success();
+                }
+                if session.commit {
+                    builder.commit();
+                }
+            }
+        }
+
         self
     }
 

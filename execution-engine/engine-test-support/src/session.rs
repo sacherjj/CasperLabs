@@ -11,11 +11,30 @@ use crate::{
 };
 
 /// Transfer Information for validating a transfer including gas usage from source
-/// If target_purse is omitted, only removal from source purse is checked.
 pub struct SessionTransferInfo {
     pub(crate) source_purse: URef,
-    pub(crate) target_purse: Option<URef>,
+    pub(crate) maybe_target_purse: Option<URef>,
     pub(crate) transfer_amount: Motes,
+}
+
+impl SessionTransferInfo {
+    /// Constructs a new `SessionTransferInfo` containing information for validating a transfer
+    /// when `test_context.run()` occurs.
+    ///
+    /// Assertion will be made that `source_purse` is debited `transfer_amount` with gas costs
+    /// handled. If given, assertion will be made that `maybe_target_purse` is credited
+    /// `transfer_amount`
+    pub fn new(
+        source_purse: URef,
+        maybe_target_purse: Option<URef>,
+        transfer_amount: Motes,
+    ) -> Self {
+        SessionTransferInfo {
+            source_purse,
+            maybe_target_purse,
+            transfer_amount,
+        }
+    }
 }
 
 /// A single session, i.e. a single request to execute a single deploy within the test context.
