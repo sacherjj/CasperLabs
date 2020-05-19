@@ -200,7 +200,7 @@ fn should_fail_when_sending_too_much_from_purse_to_account() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (account_1_key, U512::max_value()),
+        runtime_args! { "target" => account_1_key, "amount" => U512::max_value() },
     )
     .build();
 

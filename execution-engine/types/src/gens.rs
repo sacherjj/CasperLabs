@@ -2,7 +2,7 @@
 //! [`Proptest`](https://crates.io/crates/proptest).
 #![allow(missing_docs)]
 
-use alloc::{collections::BTreeMap, string::String, vec};
+use alloc::{boxed::Box, collections::BTreeMap, string::String, vec};
 
 use proptest::{
     array, bits,

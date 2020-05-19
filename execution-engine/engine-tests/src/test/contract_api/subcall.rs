@@ -8,7 +8,11 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{contracts::CONTRACT_INITIAL_VERSION, RuntimeArgs, U512};
+use types::{contracts::CONTRACT_INITIAL_VERSION, runtime_args, RuntimeArgs, U512};
+
+const ARG_TARGET: &str = "target_contract";
+const ARG_GAS_AMOUNT: &str = "gas_amount";
+const ARG_METHOD_NAME: &str = "method_name";
 
 #[ignore]
 #[test]
@@ -18,30 +22,36 @@ fn should_charge_gas_for_subcall() {
     const DO_SOMETHING: &str = "do-something";
     const NO_SUBCALL: &str = "no-subcall";
 
-    let do_nothing_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAME, (DO_NOTHING,)).build();
+    let do_nothing_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_NAME,
+        runtime_args! { ARG_TARGET => DO_NOTHING },
+    )
+    .build();
 
-    let do_something_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAME, (DO_SOMETHING,))
-            .build();
+    let do_something_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_NAME,
+        runtime_args! { ARG_TARGET => DO_SOMETHING },
+    )
+    .build();
 
-    let no_subcall_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_NAME, (NO_SUBCALL,)).build();
+    let no_subcall_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_NAME,
+        runtime_args! { ARG_TARGET => NO_SUBCALL },
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
-    builder
-        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
-        .exec(do_nothing_request)
-        .expect_success()
-        .commit()
-        .exec(do_something_request)
-        .expect_success()
-        .commit()
-        .exec(no_subcall_request)
-        .expect_success()
-        .commit()
-        .finish();
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
+    builder.exec(do_nothing_request).expect_success().commit();
+
+    builder.exec(do_something_request).expect_success().commit();
+
+    builder.exec(no_subcall_request).expect_success().commit();
 
     let do_nothing_cost = builder.exec_costs(0)[0];
 
@@ -86,44 +96,60 @@ fn should_add_all_gas_for_subcall() {
     let add_zero_gas_from_session_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_NAME,
-        (0, ADD_GAS_FROM_SESSION),
+        runtime_args! {
+            ARG_GAS_AMOUNT => 0,
+            ARG_METHOD_NAME => ADD_GAS_FROM_SESSION,
+        },
     )
     .build();
 
     let add_some_gas_from_session_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_NAME,
-        (gas_to_add_as_arg, ADD_GAS_FROM_SESSION),
+        runtime_args! {
+            ARG_GAS_AMOUNT => gas_to_add_as_arg,
+            ARG_METHOD_NAME => ADD_GAS_FROM_SESSION,
+        },
     )
     .build();
 
     let add_zero_gas_via_subcall_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_NAME,
-        (0, ADD_GAS_VIA_SUBCALL),
+        runtime_args! {
+            ARG_GAS_AMOUNT => 0,
+            ARG_METHOD_NAME => ADD_GAS_VIA_SUBCALL,
+        },
     )
     .build();
 
     let add_some_gas_via_subcall_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_NAME,
-        (gas_to_add_as_arg, ADD_GAS_VIA_SUBCALL),
+        runtime_args! {
+            ARG_GAS_AMOUNT => gas_to_add_as_arg,
+            ARG_METHOD_NAME => ADD_GAS_VIA_SUBCALL,
+        },
     )
     .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
     builder
-        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(add_zero_gas_from_session_request)
         .expect_success()
-        .commit()
+        .commit();
+    builder
         .exec(add_some_gas_from_session_request)
         .expect_success()
-        .commit()
+        .commit();
+    builder
         .exec(add_zero_gas_via_subcall_request)
         .expect_success()
-        .commit()
+        .commit();
+    builder
         .exec(add_some_gas_via_subcall_request)
         .expect_success()
         .commit()
@@ -152,7 +178,6 @@ fn should_add_all_gas_for_subcall() {
 #[ignore]
 #[test]
 fn expensive_subcall_should_cost_more() {
-    const CONTRACT_NAME: &str = "measure_gas_subcall.wasm";
     const DO_NOTHING: &str = "do_nothing_stored.wasm";
     const EXPENSIVE_CALCULATION: &str = "expensive_calculation.wasm";
     const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
@@ -160,19 +185,27 @@ fn expensive_subcall_should_cost_more() {
     const ENTRY_FUNCTION_NAME: &str = "delegate";
 
     let store_do_nothing_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, DO_NOTHING, ("hash",)).build();
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, DO_NOTHING, RuntimeArgs::default())
+            .build();
 
-    let store_calculation_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, EXPENSIVE_CALCULATION, ()).build();
+    let store_calculation_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        EXPENSIVE_CALCULATION,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
     // store the contracts first
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
     builder
-        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
         .exec(store_do_nothing_request)
         .expect_success()
-        .commit()
+        .commit();
+
+    builder
         .exec(store_calculation_request)
         .expect_success()
         .commit()
@@ -200,21 +233,30 @@ fn expensive_subcall_should_cost_more() {
     )
     .build();
 
-    let call_expensive_calculation_request = ExecuteRequestBuilder::standard(
+    // let call_expensive_calculation_request = ExecuteRequestBuilder::standard(
+    //     DEFAULT_ACCOUNT_ADDR,
+    //     CONTRACT_NAME,
+    //     runtime_args! { ARG_TARGET => expensive_calculation_contract_hash },
+    // )
+    // .build();
+
+    let call_expensive_calculation_request = ExecuteRequestBuilder::contract_call_by_hash(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_NAME,
-        (expensive_calculation_contract_hash,),
+        expensive_calculation_contract_hash,
+        "calculate",
+        RuntimeArgs::default(),
     )
     .build();
 
     builder
         .exec(call_do_nothing_request)
         .expect_success()
-        .commit()
+        .commit();
+
+    builder
         .exec(call_expensive_calculation_request)
         .expect_success()
-        .commit()
-        .finish();
+        .commit();
 
     let do_nothing_cost = builder.exec_costs(2)[0];
 

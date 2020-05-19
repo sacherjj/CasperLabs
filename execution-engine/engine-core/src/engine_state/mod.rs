@@ -792,7 +792,9 @@ where
                     entry_point: EntryPoint::default(),
                 })
             }
-            ExecutableDeployItem::StoredContractByHash { hash, .. } => {
+            ExecutableDeployItem::StoredContractByHash {
+                hash, entry_point, ..
+            } => {
                 let hash_len = hash.len();
                 if hash_len != KEY_HASH_LENGTH {
                     return Err(error::Error::InvalidHashLength {
@@ -811,10 +813,12 @@ where
                 Ok(GetModuleResult::Session {
                     module,
                     contract_package: ContractPackage::default(),
-                    entry_point: EntryPoint::default(),
+                    entry_point: EntryPoint::default_with_name(entry_point),
                 })
             }
-            ExecutableDeployItem::StoredContractByName { name, .. } => {
+            ExecutableDeployItem::StoredContractByName {
+                name, entry_point, ..
+            } => {
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
                     error::Error::Exec(execution::Error::NamedKeyNotFound(name.to_string()))
                 })?;
@@ -833,7 +837,7 @@ where
                 Ok(GetModuleResult::Session {
                     module,
                     contract_package: ContractPackage::default(),
-                    entry_point: EntryPoint::default(),
+                    entry_point: EntryPoint::default_with_name(entry_point),
                 })
             }
             ExecutableDeployItem::StoredVersionedContractByName {

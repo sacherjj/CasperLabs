@@ -13,7 +13,7 @@ pub enum Code {
     /// A [`URef`] to a stored contract.
     URef(URefAddr),
     /// A hash providing the location of a stored contract.
-    Hash(Hash),
+    Hash(Hash, String),
 }
 
 // Note: can't just `impl<T: AsRef<Path>> From<T> for Code` because the compiler complains about

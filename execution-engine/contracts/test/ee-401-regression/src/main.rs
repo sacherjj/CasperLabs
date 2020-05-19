@@ -2,6 +2,7 @@
 #![no_main]
 #![allow(unused_imports)]
 
+#[macro_use]
 extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String};
@@ -12,7 +13,7 @@ use contract::{
 };
 use types::{
     contracts::Parameters, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType,
-    EntryPoints, URef,
+    EntryPoints, Parameter, URef,
 };
 
 #[no_mangle]
@@ -30,7 +31,7 @@ pub extern "C" fn call() {
 
         let entry_point = EntryPoint::new(
             "hello_ext",
-            Parameters::default(),
+            Parameters::new(),
             CLType::URef,
             EntryPointAccess::Public,
             EntryPointType::Contract,

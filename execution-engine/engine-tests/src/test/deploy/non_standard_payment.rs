@@ -9,13 +9,18 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, bytesrepr::ToBytes, CLValue, Key, U512};
+use types::{
+    account::PublicKey, bytesrepr::ToBytes, runtime_args, CLValue, Key, RuntimeArgs, U512,
+};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 const TRANSFER_PURSE_TO_ACCOUNT_WASM: &str = "transfer_purse_to_account.wasm";
 const TRANSFER_MAIN_PURSE_TO_NEW_PURSE_WASM: &str = "transfer_main_purse_to_new_purse.wasm";
 const NAMED_PURSE_PAYMENT_WASM: &str = "named_purse_payment.wasm";
+const ARG_TARGET: &str = "target";
+const ARG_AMOUNT: &str = "amount";
+const ARG_PURSE_NAME: &str = "purse_name";
 
 #[ignore]
 #[test]
@@ -36,7 +41,10 @@ fn should_charge_non_main_purse() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM, // creates account_1
-                (account_1_public_key, account_1_funding_amount),
+                runtime_args! {
+                    ARG_TARGET => account_1_public_key,
+                    ARG_AMOUNT => account_1_funding_amount
+                },
             )
             .with_empty_payment_bytes((payment_purse_amount,))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -61,15 +69,15 @@ fn should_charge_non_main_purse() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
 
-    let transfer_result = builder
-        .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
-        .exec(setup_exec_request)
-        .expect_success()
-        .commit()
+    // let transfer_result =
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
+    builder.exec(setup_exec_request).expect_success().commit();
+    builder
         .exec(create_purse_exec_request)
         .expect_success()
-        .commit()
-        .finish();
+        .commit();
+    let transfer_result = builder.finish();
 
     // get account_1
     let account_1 = transfer_result
@@ -115,7 +123,10 @@ fn should_charge_non_main_purse() {
             .with_session_code(DO_NOTHING_WASM, ())
             .with_payment_code(
                 NAMED_PURSE_PAYMENT_WASM,
-                (TEST_PURSE_NAME, payment_purse_amount),
+                runtime_args! {
+                    ARG_PURSE_NAME => TEST_PURSE_NAME,
+                    ARG_AMOUNT => payment_purse_amount
+                },
             )
             .with_authorization_keys(&[account_1_public_key])
             .with_deploy_hash([3; 32])

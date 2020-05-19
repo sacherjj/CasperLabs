@@ -15,7 +15,7 @@ use engine_test_support::{
 };
 use types::{
     account::PublicKey,
-    contracts::{ContractVersion, CONTRACT_INITIAL_VERSION},
+    contracts::{ContractVersion, CONTRACT_INITIAL_VERSION, DEFAULT_ENTRY_POINT_NAME},
     runtime_args, Key, ProtocolVersion, RuntimeArgs, KEY_HASH_LENGTH, U512,
 };
 
@@ -415,7 +415,7 @@ fn should_exec_payment_and_session_stored_code() {
                 },
             )
             .with_stored_versioned_payment_contract_by_name(
-                STORED_PAYMENT_CONTRACT_NAME,
+                STORED_PAYMENT_CONTRACT_HASH_NAME,
                 CONTRACT_INITIAL_VERSION,
                 PAY,
                 runtime_args! {
@@ -653,11 +653,12 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_stored_session_named_key(
                     TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                    runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
+                    runtime_args! { "target" => account_1_public_key, "amount" => U512::from(transferred_amount) }
                 )
                 .with_stored_payment_hash(
                     stored_payment_contract_hash.to_vec(),
-                    (U512::from(payment_purse_amount),),
+                    DEFAULT_ENTRY_POINT_NAME,
+                    runtime_args! { "amount" => U512::from(payment_purse_amount) },
                 )
                 .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
                 .with_deploy_hash([3; 32])
@@ -910,7 +911,8 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
             .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
             .with_stored_payment_hash(
                 stored_payment_contract_hash.to_vec(),
-                (U512::from(payment_purse_amount),),
+                DEFAULT_ENTRY_POINT_NAME,
+                runtime_args! { "amount" => U512::from(payment_purse_amount) },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
@@ -1330,7 +1332,8 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
             )
             .with_stored_payment_hash(
                 test_payment_stored_hash.to_vec(),
-                (U512::from(payment_purse_amount),),
+                DEFAULT_ENTRY_POINT_NAME,
+                runtime_args! { "amount" => U512::from(payment_purse_amount) },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([3; 32])
