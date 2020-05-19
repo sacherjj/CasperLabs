@@ -278,9 +278,9 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           Field(
             "deploys",
             blockTypes.DeployInfosWithPageInfoType,
-            arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
+            arguments = blocks.arguments.AccountPublicKeyHashBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
             resolve = { c =>
-              val accountHashBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
+              val accountHashBase16 = c.arg(blocks.arguments.AccountPublicKeyHashBase16)
               val after             = c.arg(blocks.arguments.After)
               val first             = c.arg(blocks.arguments.First)
               val accountKeyEither = validateAccountPublicKeyHash[Either[Throwable, *]](
@@ -297,9 +297,9 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           Field(
             "account",
             OptionType(blockTypes.AccountType),
-            arguments = blocks.arguments.PublicKey :: Nil,
+            arguments = blocks.arguments.PublicKeyHash :: Nil,
             resolve = { c =>
-              val key = c.arg(blocks.arguments.PublicKey)
+              val key = c.arg(blocks.arguments.PublicKeyHash)
               key.tryBase64AndBase16Decode.map(ByteString.copyFrom)
             }
           ),

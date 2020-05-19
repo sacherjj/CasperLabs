@@ -177,18 +177,17 @@ class GraphQLBlockTypes(
     "AccountInfo",
     "Account related information",
     () =>
-      // TODO (NDSC-61): Remove public key fields, add hash.
       fields[Unit, AccountKey](
         Field(
-          "publicKeyBase16",
+          "accountHashBase16",
           StringType,
-          "Account's public key in Base16 encoding".some,
+          "Account's public key hash in Base16 encoding".some,
           resolve = c => c.value.toByteArray.base16Encode
         ),
         Field(
-          "publicKeyBase64",
+          "accountHashBase64",
           StringType,
-          "Account's public key in Base64 encoding".some,
+          "Account's public key hash in Base64 encoding".some,
           resolve = c => c.value.toByteArray.base64Encode
         ),
         Field(
