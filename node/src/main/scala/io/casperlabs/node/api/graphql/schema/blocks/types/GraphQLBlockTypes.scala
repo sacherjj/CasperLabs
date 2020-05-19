@@ -84,7 +84,7 @@ class GraphQLBlockTypes(
         "account",
         AccountType,
         "Account related information".some,
-        resolve = c => c.value.getHeader.accountPublicKey
+        resolve = c => c.value.getHeader.accountHash
       ),
       Field(
         "timestamp",
@@ -177,6 +177,7 @@ class GraphQLBlockTypes(
     "AccountInfo",
     "Account related information",
     () =>
+      // TODO (NDSC-61): Remove public key fields, add hash.
       fields[Unit, AccountKey](
         Field(
           "publicKeyBase16",

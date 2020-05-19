@@ -579,7 +579,7 @@ object ProtoUtil {
       .withPayment(Deploy.Code().withWasm(sessionCode))
     val h = Deploy
       .Header()
-      .withAccountPublicKey(ByteString.copyFrom(pk))
+      .withAccountHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk)))
       .withTimestamp(timestamp)
       .withBodyHash(protoHash(b))
       .withTtlMillis(ttl.toMillis.toInt)
@@ -615,10 +615,11 @@ object ProtoUtil {
       payment <- toPayload(d.getBody.payment)
     } yield {
       ipc.DeployItem(
-        address = d.getHeader.accountPublicKey,
+        address = d.getHeader.accountHash,
         session = session,
         payment = payment,
         gasPrice = GAS_PRICE,
+        // TODO (NDSC-57): Send hashes instead of keys.
         authorizationKeys = d.approvals.map(_.approverPublicKey),
         deployHash = d.deployHash
       )
