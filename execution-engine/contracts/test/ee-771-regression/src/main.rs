@@ -11,11 +11,11 @@ use contract::{
 };
 use types::{
     contracts::{NamedKeys, Parameters},
-    ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Key,
+    ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints,
     RuntimeArgs,
 };
 
-const CONTRACT_EXT: &str = "contract_ext";
+const ENTRY_POINT_NAME: &str = "contract_ext";
 const CONTRACT_KEY: &str = "contract";
 
 #[no_mangle]
@@ -57,7 +57,7 @@ fn store(named_keys: NamedKeys) -> ContractHash {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
-            "contract_ext",
+            ENTRY_POINT_NAME,
             Parameters::default(),
             CLType::Unit,
             EntryPointAccess::Public,

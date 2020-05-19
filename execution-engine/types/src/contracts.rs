@@ -111,12 +111,12 @@ impl ContractVersionKey {
     }
 
     /// Returns the major element of the protocol version this contract is compatible with.
-    pub fn protocol_version_major(&self) -> ProtocolVersionMajor {
+    pub fn protocol_version_major(self) -> ProtocolVersionMajor {
         self.0
     }
 
     /// Returns the contract version within the protocol major version.
-    pub fn contract_version(&self) -> ContractVersion {
+    pub fn contract_version(self) -> ContractVersion {
         self.1
     }
 }
@@ -233,13 +233,13 @@ impl ContractPackage {
     }
 
     /// Get the contract header for the given version (if present)
-    pub fn get_contract(&self, contract_version_key: &ContractVersionKey) -> Option<&ContractHash> {
-        self.versions.get(contract_version_key)
+    pub fn get_contract(&self, contract_version_key: ContractVersionKey) -> Option<&ContractHash> {
+        self.versions.get(&contract_version_key)
     }
 
     /// Checks if the given version is active
-    pub fn is_version_active(&self, contract_version_key: &ContractVersionKey) -> bool {
-        self.versions.contains_key(contract_version_key)
+    pub fn is_version_active(&self, contract_version_key: ContractVersionKey) -> bool {
+        self.versions.contains_key(&contract_version_key)
     }
 
     /// Modify the collection of active versions to include the given one.
@@ -255,17 +255,17 @@ impl ContractPackage {
     }
 
     /// Checks if the given version exists and is available for use
-    pub fn is_contract_version_in_use(&self, contract_version_key: &ContractVersionKey) -> bool {
-        self.versions.contains_key(contract_version_key)
-            && !self.disabled_versions.contains(contract_version_key)
+    pub fn is_contract_version_in_use(&self, contract_version_key: ContractVersionKey) -> bool {
+        self.versions.contains_key(&contract_version_key)
+            && !self.disabled_versions.contains(&contract_version_key)
     }
 
     /// Remove the given version from active versions, putting it into removed versions.
     pub fn disable_contract_version(
         &mut self,
-        contract_version_key: &ContractVersionKey,
+        contract_version_key: ContractVersionKey,
     ) -> Result<(), Error> {
-        if !self.versions.contains_key(contract_version_key) {
+        if !self.versions.contains_key(&contract_version_key) {
             return Err(Error::VersionNotFound);
         }
         // idempotent; do not error if already removed
@@ -426,10 +426,7 @@ impl EntryPoints {
 
     /// Takes all entry points.
     pub fn take_entry_points(self) -> Vec<EntryPoint> {
-        self.0
-            .into_iter()
-            .map(|(_name, value)| value.into())
-            .collect()
+        self.0.into_iter().map(|(_name, value)| value).collect()
     }
 }
 

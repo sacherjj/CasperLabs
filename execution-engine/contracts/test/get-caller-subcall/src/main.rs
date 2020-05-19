@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-#[macro_use]
 extern crate alloc;
 
 use alloc::{string::ToString, vec::Vec};

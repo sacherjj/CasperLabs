@@ -6,17 +6,8 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::{runtime, storage};
 
-// use alloc::{collections::BTreeMap, string::String};
-
-// use contract::{
-//     contract_api::{runtime, storage},
-//     unwrap_or_revert::UnwrapOrRevert,
-// };
 use types::{
     runtime_args, ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess, EntryPointType,
     EntryPoints, Parameter, RuntimeArgs,
@@ -49,7 +40,7 @@ pub extern "C" fn add_gas() {
 }
 
 fn store() -> ContractHash {
-    let mut entry_points = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
         let entry_point = EntryPoint::new(
             SUBCALL_NAME,

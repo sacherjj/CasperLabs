@@ -26,7 +26,7 @@ pub extern "C" fn hello_ext() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mut entry_points = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
@@ -41,7 +41,7 @@ pub extern "C" fn call() {
 
         entry_points
     };
-    let mut contract_hash = storage::new_contract(entry_points, None, None, None);
+    let contract_hash = storage::new_contract(entry_points, None, None, None);
     // let contract_pointer: ContractRef = storage::store_function_at_hash("hello_ext", named_keys);
     runtime::put_key("hello_ext", contract_hash.into());
 }

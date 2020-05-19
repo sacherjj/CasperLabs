@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String};
+use alloc::string::String;
 
 use contract::{
     contract_api::{runtime, storage},
@@ -36,7 +36,7 @@ pub extern "C" fn noop_ext() {
 }
 
 fn store() -> ContractHash {
-    let mut entry_points = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point_1 = EntryPoint::new(

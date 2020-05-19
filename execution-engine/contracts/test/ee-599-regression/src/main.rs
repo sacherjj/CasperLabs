@@ -125,7 +125,7 @@ fn delegate() -> Result<(), ApiError> {
             // Install the contract with associated owner-related keys
             // let contract_ref = storage::store_function_at_hash(TRANSFER_FUNDS_EXT, known_keys);
 
-            let mut entry_points = {
+            let entry_points = {
                 let mut entry_points = EntryPoints::new();
 
                 let entry_point_1 = EntryPoint::new(
@@ -171,8 +171,7 @@ fn delegate() -> Result<(), ApiError> {
                 entry_points
             };
 
-            let mut contract_hash =
-                storage::new_contract(entry_points, Some(known_keys), None, None);
+            let contract_hash = storage::new_contract(entry_points, Some(known_keys), None, None);
             runtime::put_key(TRANSFER_FUNDS_KEY, contract_hash.into());
             // For easy access in outside world here `donation` purse is also attached
             // to the account

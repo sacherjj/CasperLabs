@@ -3,17 +3,14 @@
 
 extern crate alloc;
 
-use alloc::{format, string::ToString, vec};
+use alloc::{string::ToString, vec};
 
 use alloc::boxed::Box;
-use contract::{
-    contract_api::{account, runtime, storage, system},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::storage;
 
 use types::{
     contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
-    ApiError, CLType, Key, URef,
+    CLType,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "transfer";
@@ -21,9 +18,6 @@ const HASH_KEY_NAME: &str = "transfer_purse_to_account";
 const ACCESS_KEY_NAME: &str = "transfer_purse_to_account_access";
 const ARG_0_NAME: &str = "target_account_addr";
 const ARG_1_NAME: &str = "amount";
-
-const TRANSFER_RESULT_UREF_NAME: &str = "transfer_result";
-const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
 
 #[no_mangle]
 pub extern "C" fn transfer() {

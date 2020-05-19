@@ -656,7 +656,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                     runtime_args! { "target" => account_1_public_key, "amount" => U512::from(transferred_amount) }
                 )
                 .with_stored_payment_hash(
-                    stored_payment_contract_hash.to_vec(),
+                    stored_payment_contract_hash,
                     DEFAULT_ENTRY_POINT_NAME,
                     runtime_args! { "amount" => U512::from(payment_purse_amount) },
                 )
@@ -910,7 +910,7 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
             .with_stored_payment_hash(
-                stored_payment_contract_hash.to_vec(),
+                stored_payment_contract_hash,
                 DEFAULT_ENTRY_POINT_NAME,
                 runtime_args! { "amount" => U512::from(payment_purse_amount) },
             )
@@ -1331,7 +1331,7 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
                 RuntimeArgs::new(),
             )
             .with_stored_payment_hash(
-                test_payment_stored_hash.to_vec(),
+                test_payment_stored_hash,
                 DEFAULT_ENTRY_POINT_NAME,
                 runtime_args! { "amount" => U512::from(payment_purse_amount) },
             )

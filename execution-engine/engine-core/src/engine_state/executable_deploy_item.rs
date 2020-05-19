@@ -1,7 +1,7 @@
 use types::{
     bytesrepr,
     contracts::{ContractVersion, DEFAULT_ENTRY_POINT_NAME},
-    HashAddr, RuntimeArgs,
+    ContractHash, ContractPackageHash, RuntimeArgs,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -12,7 +12,7 @@ pub enum ExecutableDeployItem {
         args: Vec<u8>,
     },
     StoredContractByHash {
-        hash: Vec<u8>,
+        hash: ContractHash,
         entry_point: String,
         args: Vec<u8>,
     },
@@ -28,9 +28,9 @@ pub enum ExecutableDeployItem {
         args: Vec<u8>,
     },
     StoredVersionedContractByHash {
-        hash: HashAddr,           // named key storing contract metadata hash
-        version: ContractVersion, // finds active version
-        entry_point: String,      // finds header by entry point name
+        hash: ContractPackageHash, // named key storing contract metadata hash
+        version: ContractVersion,  // finds active version
+        entry_point: String,       // finds header by entry point name
         args: Vec<u8>,
     },
 }

@@ -803,7 +803,7 @@ where
                     });
                 }
                 let mut contract_hash = [0u8; KEY_HASH_LENGTH];
-                contract_hash.copy_from_slice(&hash);
+                contract_hash.copy_from_slice(hash);
                 let module = self.get_module_from_contract_hash(
                     tracking_copy,
                     contract_hash,
@@ -859,12 +859,12 @@ where
                 let contract_version_key =
                     ContractVersionKey::new(protocol_version.value().major, *version);
 
-                if !contract_package.is_contract_version_in_use(&contract_version_key) {
+                if !contract_package.is_contract_version_in_use(contract_version_key) {
                     return Err(error::Error::Exec(execution::Error::InvalidContractVersion));
                 }
 
                 let contract_hash = *contract_package
-                    .get_contract(&contract_version_key)
+                    .get_contract(contract_version_key)
                     .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
 
                 let contract = tracking_copy
@@ -912,12 +912,12 @@ where
                 let contract_version_key =
                     ContractVersionKey::new(protocol_version.value().major, *version);
 
-                if !contract_package.is_contract_version_in_use(&contract_version_key) {
+                if !contract_package.is_contract_version_in_use(contract_version_key) {
                     return Err(error::Error::Exec(execution::Error::InvalidContractVersion));
                 }
 
                 let contract_hash = *contract_package
-                    .get_contract(&contract_version_key)
+                    .get_contract(contract_version_key)
                     .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
 
                 let contract = tracking_copy

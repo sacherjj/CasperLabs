@@ -1,7 +1,5 @@
 #![no_std]
 #![no_main]
-#[allow(unused_imports)]
-use contract;
 
 use core::convert::Into;
 
@@ -11,7 +9,7 @@ use contract::{
 };
 use types::{
     contracts::Parameters, AccessRights, CLType, CLValue, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Key, URef,
+    EntryPointType, EntryPoints, URef,
 };
 
 const DATA: &str = "data";
@@ -27,7 +25,7 @@ pub extern "C" fn create() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mut entry_points = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
@@ -42,6 +40,6 @@ pub extern "C" fn call() {
 
         entry_points
     };
-    let mut contract_hash = storage::new_contract(entry_points, None, None, None);
+    let contract_hash = storage::new_contract(entry_points, None, None, None);
     runtime::put_key(CONTRACT_NAME, contract_hash.into());
 }

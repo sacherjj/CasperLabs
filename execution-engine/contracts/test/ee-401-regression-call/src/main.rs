@@ -9,7 +9,7 @@ use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{contracts::DEFAULT_ENTRY_POINT_NAME, ApiError, ContractHash, RuntimeArgs, URef};
+use types::{ApiError, ContractHash, RuntimeArgs, URef};
 
 #[no_mangle]
 pub extern "C" fn call() {

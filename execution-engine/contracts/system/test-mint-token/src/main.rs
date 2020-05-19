@@ -25,20 +25,20 @@ const ARG_BALANCE: &str = "balance";
 pub extern "C" fn call() {
     let mint: ContractHash = system::get_mint();
 
-    let source = get_purse(mint.clone(), 100);
-    let target = get_purse(mint.clone(), 300);
+    let source = get_purse(mint, 100);
+    let target = get_purse(mint, 300);
 
     assert!(
-        transfer(mint.clone(), source, target, U512::from(70)) == "Success!",
+        transfer(mint, source, target, U512::from(70)) == "Success!",
         "transfer should succeed"
     );
 
     assert!(
-        balance(mint.clone(), source).unwrap() == U512::from(30),
+        balance(mint, source).unwrap() == U512::from(30),
         "source purse balance incorrect"
     );
     assert!(
-        balance(mint.clone(), target).unwrap() == U512::from(370),
+        balance(mint, target).unwrap() == U512::from(370),
         "target balance incorrect"
     );
 }
@@ -53,7 +53,7 @@ fn get_purse(mint: ContractHash, amount: u64) -> URef {
         RuntimeArgs::Named(args)
     };
 
-    runtime::call_contract::<URef>(mint.clone(), ARG_CREATE, runtime_args)
+    runtime::call_contract::<URef>(mint, ARG_CREATE, runtime_args)
 }
 
 fn transfer(mint: ContractHash, source: URef, target: URef, amount: U512) -> String {
@@ -86,5 +86,5 @@ fn balance(mint: ContractHash, purse: URef) -> Option<U512> {
         )];
         RuntimeArgs::Named(args)
     };
-    runtime::call_contract::<Option<U512>>(mint.clone(), ARG_BALANCE, runtime_args)
+    runtime::call_contract::<Option<U512>>(mint, ARG_BALANCE, runtime_args)
 }

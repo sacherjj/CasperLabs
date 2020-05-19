@@ -49,6 +49,6 @@ pub extern "C" fn call() {
     let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
 
     let contract_hash = system::get_proof_of_stake();
-    bond(contract_hash.clone(), amount, account::get_main_purse());
+    bond(contract_hash, amount, account::get_main_purse());
     unbond(contract_hash, Some(amount + 1));
 }

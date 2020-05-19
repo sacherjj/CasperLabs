@@ -4,29 +4,17 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String};
-
-use contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::{runtime, storage};
 use types::{
-    account::PublicKey, contracts::Parameters, ApiError, CLType, CLTyped, ContractHash, EntryPoint,
-    EntryPointAccess, EntryPointType, EntryPoints, Key, Parameter,
+    account::PublicKey, CLType, CLTyped, ContractHash, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Parameter,
 };
 
 const CONTRACT_NAME: &str = "transfer_to_account";
-const DESTINATION_HASH: &str = "hash";
-const DESTINATION_UREF: &str = "uref";
 const FUNCTION_NAME: &str = "transfer";
 
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";
-
-#[repr(u16)]
-enum Error {
-    UnknownDestination = 1,
-}
 
 #[no_mangle]
 pub extern "C" fn transfer() {
@@ -34,7 +22,7 @@ pub extern "C" fn transfer() {
 }
 
 fn store() -> ContractHash {
-    let mut entry_points = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(

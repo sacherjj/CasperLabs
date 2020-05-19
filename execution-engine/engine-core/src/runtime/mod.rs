@@ -1996,7 +1996,7 @@ where
         //
         // Get contract entry point hash
         let contract_hash = contract_package
-            .get_contract(&contract_version_key)
+            .get_contract(contract_version_key)
             .cloned()
             .ok_or_else(|| Error::InvalidContractVersion)?;
 

@@ -145,7 +145,7 @@ pub fn cl_type_arb() -> impl Strategy<Value = CLType> {
                 Box::new(cl_type1),
                 Box::new(cl_type2)
             ])),
-            (element.clone(), element.clone(), element.clone()).prop_map(
+            (element.clone(), element.clone(), element).prop_map(
                 |(cl_type1, cl_type2, cl_type3)| CLType::Tuple3([
                     Box::new(cl_type1),
                     Box::new(cl_type2),
@@ -260,19 +260,13 @@ pub fn entry_point_arb() -> impl Strategy<Value = EntryPoint> {
     )
         .prop_map(
             |(name, parameters, entry_point_type, entry_point_access, ret)| {
-                EntryPoint::new(
-                    String::from(name),
-                    parameters,
-                    ret,
-                    entry_point_access,
-                    entry_point_type,
-                )
+                EntryPoint::new(name, parameters, ret, entry_point_access, entry_point_type)
             },
         )
 }
 
 pub fn entry_points_arb() -> impl Strategy<Value = EntryPoints> {
-    vec(entry_point_arb(), 1..10).prop_map(|values| EntryPoints::from(values))
+    vec(entry_point_arb(), 1..10).prop_map(EntryPoints::from)
 }
 
 pub fn contract_arb() -> impl Strategy<Value = Contract> {

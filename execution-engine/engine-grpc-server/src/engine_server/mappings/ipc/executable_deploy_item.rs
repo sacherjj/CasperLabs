@@ -18,8 +18,10 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
                 }
             }
             DeployPayload_oneof_payload::stored_contract_hash(pb_stored_contract_hash) => {
+                let mut contract_hash = [0u8; 32];
+                contract_hash.copy_from_slice(&pb_stored_contract_hash.hash);
                 ExecutableDeployItem::StoredContractByHash {
-                    hash: pb_stored_contract_hash.hash,
+                    hash: contract_hash,
                     entry_point: pb_stored_contract_hash.entry_point_name,
                     args: pb_stored_contract_hash.args,
                 }
@@ -77,7 +79,7 @@ impl From<ExecutableDeployItem> for DeployPayload {
                 args,
             } => {
                 let inner = result.mut_stored_contract_hash();
-                inner.set_hash(hash);
+                inner.set_hash(hash.to_vec());
                 inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }

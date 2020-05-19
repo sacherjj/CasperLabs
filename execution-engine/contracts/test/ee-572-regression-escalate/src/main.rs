@@ -2,7 +2,7 @@
 #![no_main]
 
 use contract::contract_api::{runtime, storage};
-use types::{contracts::DEFAULT_ENTRY_POINT_NAME, AccessRights, ContractHash, RuntimeArgs, URef};
+use types::{AccessRights, ContractHash, RuntimeArgs, URef};
 
 const REPLACEMENT_DATA: &str = "bawitdaba";
 

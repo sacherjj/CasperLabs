@@ -1,8 +1,8 @@
 #![no_std]
 #![no_main]
 
-use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{ApiError, Phase};
+use contract::contract_api::runtime;
+use types::Phase;
 
 const ARG_PHASE: &str = "phase";
 

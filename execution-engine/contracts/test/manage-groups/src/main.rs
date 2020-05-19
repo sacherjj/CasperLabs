@@ -146,7 +146,7 @@ fn create_entry_points_1() -> EntryPoints {
 
     let entry_point_name = EXTEND_GROUP_UREFS.to_string();
     let extend_group_urefs = EntryPoint::new(
-        entry_point_name.clone(),
+        entry_point_name,
         vec![
             Parameter::new(GROUP_NAME_ARG, CLType::String),
             Parameter::new(TOTAL_NEW_UREFS_ARG, CLType::U64),
@@ -159,7 +159,7 @@ fn create_entry_points_1() -> EntryPoints {
 
     let entry_point_name = REMOVE_GROUP_UREFS.to_string();
     let remove_group_urefs = EntryPoint::new(
-        entry_point_name.clone(),
+        entry_point_name,
         vec![
             Parameter::new(GROUP_NAME_ARG, CLType::String),
             Parameter::new(UREFS_ARG, CLType::List(Box::new(CLType::URef))),

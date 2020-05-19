@@ -4,7 +4,7 @@ use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, U512};
+use types::{account::PublicKey, U512};
 
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";

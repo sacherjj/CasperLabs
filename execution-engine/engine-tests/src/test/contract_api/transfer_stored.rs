@@ -7,13 +7,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{
-    account::PublicKey, contracts::DEFAULT_ENTRY_POINT_NAME, runtime_args, RuntimeArgs, U512,
-};
+use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT_NAME: &str = "transfer_to_account";
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
-const STORE_AT_HASH: &str = "hash";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 #[ignore]
@@ -61,7 +58,7 @@ fn should_transfer_to_account_stored() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_hash(
-                contract_hash.to_vec(),
+                contract_hash,
                 "transfer",
                 runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => transferred_amount },
             )

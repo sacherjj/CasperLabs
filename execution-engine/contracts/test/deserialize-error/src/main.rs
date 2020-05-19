@@ -32,7 +32,7 @@ pub extern "C" fn do_nothing() {
 
 // Attacker copied to_ptr from `alloc_utils` as it was private
 fn to_ptr<T: ToBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
-    let bytes = t.into_bytes().expect("Unable to serialize data");
+    let bytes = t.into_bytes().unwrap_or_revert();
     let ptr = bytes.as_ptr();
     let size = bytes.len();
     (ptr, size, bytes)
@@ -53,27 +53,20 @@ mod malicious_ffi {
     }
 }
 
-fn my_to_ptr<T: ToBytes>(t: T) -> (*const u8, usize, Vec<u8>) {
-    let bytes = t.into_bytes().unwrap_or_revert();
-    let ptr = bytes.as_ptr();
-    let size = bytes.len();
-    (ptr, size, bytes)
-}
-
 // This is half-baked runtime::call_contract with changed `extra_urefs`
 // parameter with a desired payload that's supposed to bring the node down.
 pub fn my_call_contract(
     contract_hash: ContractHash,
-    entry_point_name: &str,
+    _entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> usize {
-    let (contract_hash_ptr, contract_hash_size, _bytes1) = my_to_ptr(contract_hash);
+    let (contract_hash_ptr, contract_hash_size, _bytes1) = to_ptr(contract_hash);
 
-    let mut malicious_string = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+    let malicious_string = vec![255, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-    let (runtime_args_ptr, runtime_args_size, _bytes2) = my_to_ptr(runtime_args);
+    let (runtime_args_ptr, runtime_args_size, _bytes2) = to_ptr(runtime_args);
 
-    let bytes_written = {
+    {
         let mut bytes_written = 0usize;
         let ret = unsafe {
             malicious_ffi::call_contract(
@@ -88,14 +81,12 @@ pub fn my_call_contract(
         };
         api_error::result_from(ret).unwrap_or_revert();
         bytes_written
-    };
-
-    bytes_written
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let mut entry_points = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
@@ -110,7 +101,7 @@ pub extern "C" fn call() {
 
         entry_points
     };
-    let mut contract_hash = storage::new_contract(entry_points, None, None, None);
+    let contract_hash = storage::new_contract(entry_points, None, None, None);
 
     my_call_contract(contract_hash, "do_nothing", RuntimeArgs::default());
 }

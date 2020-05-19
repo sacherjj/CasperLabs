@@ -12,10 +12,7 @@ use engine_test_support::{
 use types::{account::PublicKey, runtime_args, ApiError, RuntimeArgs, U512};
 
 const ARG_AMOUNT: &str = "amount";
-const ARG_PURSE: &str = "purse";
 const ARG_ENTRY_POINT: &str = "entry_point";
-const ARG_BOND: &str = "bond";
-const ARG_UNBOND: &str = "unbond";
 const ARG_ACCOUNT_PK: &str = "account_public_key";
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";

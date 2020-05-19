@@ -33,7 +33,7 @@ impl SessionBuilder {
                 di_builder.with_stored_session_uref_addr(uref.to_vec(), session_args)
             }
             Code::Hash(hash, entry_point) => {
-                di_builder.with_stored_session_hash(hash.to_vec(), &entry_point, session_args)
+                di_builder.with_stored_session_hash(hash, &entry_point, session_args)
             }
         };
         Self {
@@ -58,7 +58,7 @@ impl SessionBuilder {
                 .with_stored_payment_uref_addr(uref.to_vec(), args),
             Code::Hash(hash, entry_point) => {
                 self.di_builder
-                    .with_stored_payment_hash(hash.to_vec(), &entry_point, args)
+                    .with_stored_payment_hash(hash, &entry_point, args)
             }
         };
         self

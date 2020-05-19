@@ -29,10 +29,7 @@ const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";
 const TEST_UNBOND: &str = "unbond";
 
 const ARG_AMOUNT: &str = "amount";
-const ARG_PURSE: &str = "purse";
 const ARG_ENTRY_POINT: &str = "entry_point";
-const ARG_BOND: &str = "bond";
-const ARG_UNBOND: &str = "unbond";
 const ARG_ACCOUNT_PK: &str = "account_public_key";
 
 fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {

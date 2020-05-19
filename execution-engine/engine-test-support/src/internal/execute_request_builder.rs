@@ -5,7 +5,8 @@ use rand::Rng;
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::{
-    account::PublicKey, contracts::ContractVersion, runtime_args, ProtocolVersion, RuntimeArgs,
+    account::PublicKey, contracts::ContractVersion, runtime_args, ContractHash, ProtocolVersion,
+    RuntimeArgs,
 };
 
 use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
@@ -70,7 +71,7 @@ impl ExecuteRequestBuilder {
 
     pub fn contract_call_by_hash(
         sender: PublicKey,
-        contract_hash: [u8; 32],
+        contract_hash: ContractHash,
         entry_point: &str,
         args: impl ArgsParser,
     ) -> Self {
@@ -79,7 +80,7 @@ impl ExecuteRequestBuilder {
 
         let deploy = DeployItemBuilder::new()
             .with_address(sender)
-            .with_stored_session_hash(contract_hash.to_vec(), entry_point, args)
+            .with_stored_session_hash(contract_hash, entry_point, args)
             .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
             .with_authorization_keys(&[sender])
             .with_deploy_hash(deploy_hash)

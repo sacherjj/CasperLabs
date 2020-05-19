@@ -25,7 +25,6 @@ const ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 pub const ARG_AMOUNT: &str = "amount";
 pub const ARG_AMOUNT_SPENT: &str = "amount_spent";
 pub const ARG_REFUND_FLAG: &str = "refund";
-pub const ARG_PURSE: &str = "purse";
 pub const ARG_ACCOUNT_KEY: &str = "account";
 pub const ARG_TARGET: &str = "target";
 

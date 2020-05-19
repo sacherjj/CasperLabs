@@ -9,7 +9,7 @@ use types::{
     account::PublicKey,
     bytesrepr::ToBytes,
     contracts::{ContractVersion, DEFAULT_ENTRY_POINT_NAME},
-    HashAddr, RuntimeArgs, URef,
+    ContractHash, HashAddr, RuntimeArgs, URef,
 };
 
 use crate::internal::utils;
@@ -56,7 +56,7 @@ impl DeployItemBuilder {
 
     pub fn with_stored_payment_hash(
         mut self,
-        hash: Vec<u8>,
+        hash: ContractHash,
         entry_point: &str,
         args: impl ArgsParser,
     ) -> Self {
@@ -105,7 +105,7 @@ impl DeployItemBuilder {
 
     pub fn with_stored_session_hash(
         mut self,
-        hash: Vec<u8>,
+        hash: ContractHash,
         entry_point: &str,
         args: impl ArgsParser,
     ) -> Self {
@@ -130,10 +130,10 @@ impl DeployItemBuilder {
         todo!("with_stored_session_uref")
     }
 
-    pub fn with_stored_session_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_stored_session_named_key(mut self, name: &str, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByName {
-            name: uref_name.to_owned(),
+            name: name.to_owned(),
             entry_point: DEFAULT_ENTRY_POINT_NAME.to_owned(),
             args,
         });

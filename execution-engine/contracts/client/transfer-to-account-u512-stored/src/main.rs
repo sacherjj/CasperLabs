@@ -3,27 +3,21 @@
 
 #[macro_use]
 extern crate alloc;
+use alloc::string::ToString;
 
-use alloc::{collections::BTreeMap, string::String};
-
-use contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::{runtime, storage};
 use types::{
     account::PublicKey, CLType, CLTyped, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Key, Parameter,
+    EntryPointType, EntryPoints, Parameter,
 };
 
-const DESTINATION_HASH: &str = "hash";
-const DESTINATION_UREF: &str = "uref";
-const PAY_FUNCTION_NAME: &str = "pay";
-const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
-
 const CONTRACT_NAME: &str = "transfer_to_account";
-const FUNCTION_NAME: &str = "transfer";
+const ENTRY_POINT_NAME: &str = "transfer";
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";
+
+const HASH_KEY_NAME: &str = "transfer_to_account_U512";
+const ACCESS_KEY_NAME: &str = "transfer_to_account_U512_access";
 
 #[no_mangle]
 pub extern "C" fn transfer() {
@@ -31,11 +25,11 @@ pub extern "C" fn transfer() {
 }
 
 fn store() -> ContractHash {
-    let mut entry_points = {
+    let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
-            FUNCTION_NAME,
+            ENTRY_POINT_NAME,
             vec![
                 Parameter::new(ARG_TARGET, PublicKey::cl_type()),
                 Parameter::new(ARG_AMOUNT, CLType::U512),
@@ -49,7 +43,12 @@ fn store() -> ContractHash {
 
         entry_points
     };
-    storage::new_contract(entry_points, None, None, None)
+    storage::new_contract(
+        entry_points,
+        None,
+        Some(HASH_KEY_NAME.to_string()),
+        Some(ACCESS_KEY_NAME.to_string()),
+    )
 }
 
 #[no_mangle]

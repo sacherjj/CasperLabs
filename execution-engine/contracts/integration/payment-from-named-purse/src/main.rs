@@ -48,7 +48,7 @@ pub extern "C" fn call() {
 
     // set refund purse to source purse
     {
-        let contract_hash = pos_contract_hash.clone();
+        let contract_hash = pos_contract_hash;
         let runtime_args = {
             let args = vec![NamedArg::new(
                 ARG_PURSE.to_string(),

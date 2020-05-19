@@ -60,7 +60,7 @@ pub extern "C" fn call() {
 
         entry_points
     };
-    let mut contract_hash = storage::new_contract(entry_points, None, None, None);
+    let contract_hash = storage::new_contract(entry_points, None, None, None);
 
     if flag == "pass1" {
         // Two calls should forward the internal RNG. This pass is a baseline.
