@@ -3,7 +3,9 @@ use num_traits::identities::Zero;
 use engine_core::engine_state::{
     genesis::{GenesisAccount, GenesisConfig},
     run_genesis_request::RunGenesisRequest,
+    CONV_RATE,
 };
+
 use engine_shared::motes::Motes;
 use types::{AccessRights, Key, URef, U512};
 
@@ -18,14 +20,79 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    /// Runs the supplied [`Session`], asserting successful execution of the contained deploy and
-    /// subsequent commit of the resulting transforms.
+    /// Runs the supplied [`Session`], asserting successful execution of the contained deploy
+    ///
+    /// if Session.expect_success (default) will panic if failure.  (Allows cases where failure is
+    /// expected) if Session.check_transfer_success is given, will verify transfer balances
+    /// including gas used. if Session.commit (default) will commit resulting transforms.
     pub fn run(&mut self, session: Session) -> &mut Self {
-        self.inner
-            .exec(session.inner)
-            .expect_success()
-            .commit()
-            .expect_success();
+        // Pre run caching of balances if needed
+        let (maybe_source_initial_balance, maybe_target_initial_balance) = {
+            match &session.check_transfer_success {
+                None => (None, None),
+                Some(session_transfer_info) => {
+                    let source_initial_balance =
+                        Motes::new(self.get_balance(session_transfer_info.source_purse.addr()));
+
+                    let maybe_target_initial_balance: Option<Motes> = {
+                        match session_transfer_info.target_purse {
+                            None => None,
+                            Some(target_purse) => {
+                                let target_initial_balance = self.get_balance(target_purse.addr());
+                                Some(Motes::new(target_initial_balance))
+                            }
+                        }
+                    };
+                    (Some(source_initial_balance), maybe_target_initial_balance)
+                }
+            }
+        };
+
+        let builder = self.inner.exec(session.inner);
+        if session.expect_success {
+            let builder = builder.expect_success();
+        }
+        if session.commit {
+            let builder = builder.commit();
+        }
+
+        // Post run assertions if needed
+        let _ = match &session.check_transfer_success {
+            None => (),
+            Some(session_transfer_info) => {
+                if let Some(target_purse) = session_transfer_info.target_purse {
+                    let target_ending_balance = {
+                        let target_ending_balance = (&self).get_balance(target_purse.addr());
+                        Motes::new(target_ending_balance)
+                    };
+
+                    assert_eq!(
+                        maybe_target_initial_balance.expect("target initial balance")
+                            + session_transfer_info.transfer_amount,
+                        target_ending_balance,
+                        "incorrect target balance"
+                    );
+                };
+
+                let source_ending_balance = {
+                    let source_ending_balance =
+                        self.get_balance(session_transfer_info.source_purse.addr());
+                    Motes::new(source_ending_balance)
+                };
+
+                let gas_cost = {
+                    let gas_cost = builder.last_exec_gas_cost();
+                    gas_cost
+                };
+                assert_eq!(
+                    maybe_source_initial_balance.expect("source initial balance")
+                        - session_transfer_info.transfer_amount
+                        - Motes::from_gas(gas_cost, CONV_RATE).expect("motes from gas"),
+                    source_ending_balance,
+                    "incorrect source balance"
+                );
+            }
+        };
         self
     }
 
@@ -48,35 +115,12 @@ impl TestContext {
         self.inner.get_purse_balance(purse)
     }
 
-    fn gas_rate(&self) -> U512 {
-        // TODO: WHERE CAN I PULL THE MAGIC 10 FROM...
-        U512::from(10u64)
-    }
-
-    /// Gets the execution cost of a session run given by index.
-    ///
-    /// Returns value in Motes
-    pub fn exec_cost(&self, index: usize) -> U512 {
-        self.inner.exec_costs(index)[0].value() * self.gas_rate()
-    }
-
-    /// Gets the execution cost of the last session run
-    ///
-    /// Returns value in Motes
-    pub fn get_last_exec_cost(&self) -> Option<U512> {
-        match self.inner.get_last_exec_costs() {
+    /// Gets the main purse Uref from an account
+    pub fn get_main_purse_address(&self, account_key: PublicKey) -> Option<URef> {
+        match self.inner.get_account(account_key) {
             None => None,
-            Some(exec_costs) => Some(exec_costs[0].value() * self.gas_rate()),
+            Some(account) => Some(account.main_purse()),
         }
-    }
-
-    /// Gets the balance of the account's main purse
-    pub fn get_main_purse_balance(&self, account_key: PublicKey) -> U512 {
-        let account = self
-            .inner
-            .get_account(account_key)
-            .expect("No account found for account_key.");
-        self.get_balance(account.main_purse().addr())
     }
 }
 

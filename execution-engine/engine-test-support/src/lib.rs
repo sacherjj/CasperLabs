@@ -73,7 +73,7 @@ mod value;
 
 pub use code::Code;
 pub use error::{Error, Result};
-pub use session::{Session, SessionBuilder};
+pub use session::{Session, SessionBuilder, SessionTransferInfo};
 pub use test_context::{TestContext, TestContextBuilder};
 pub use types::account::PublicKey;
 pub use value::Value;

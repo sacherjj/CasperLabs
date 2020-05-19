@@ -2,22 +2,37 @@ use rand::Rng;
 
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::execute_request::ExecuteRequest;
-use types::ProtocolVersion;
+use engine_shared::motes::Motes;
+use types::{ProtocolVersion, URef};
 
 use crate::{
     internal::{DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT},
     Code, PublicKey,
 };
 
+/// Transfer Information for validating a transfer including gas usage from source
+/// If target_purse is omitted, only removal from source purse is checked.
+pub struct SessionTransferInfo {
+    pub(crate) source_purse: URef,
+    pub(crate) target_purse: Option<URef>,
+    pub(crate) transfer_amount: Motes,
+}
+
 /// A single session, i.e. a single request to execute a single deploy within the test context.
 pub struct Session {
     pub(crate) inner: ExecuteRequest,
+    pub(crate) expect_success: bool,
+    pub(crate) check_transfer_success: Option<SessionTransferInfo>,
+    pub(crate) commit: bool,
 }
 
 /// Builder for a [`Session`].
 pub struct SessionBuilder {
     er_builder: ExecuteRequestBuilder,
     di_builder: DeployItemBuilder,
+    expect_failure: bool,
+    check_transfer_success: Option<SessionTransferInfo>,
+    without_commit: bool,
 }
 
 impl SessionBuilder {
@@ -34,9 +49,15 @@ impl SessionBuilder {
             }
             Code::Hash(hash) => di_builder.with_stored_session_hash(hash.to_vec(), session_args),
         };
+        let expect_failure = false;
+        let check_transfer_success = None;
+        let without_commit = false;
         Self {
             er_builder: Default::default(),
             di_builder,
+            expect_failure,
+            check_transfer_success,
+            without_commit,
         }
     }
 
@@ -79,6 +100,27 @@ impl SessionBuilder {
         self
     }
 
+    /// Will disable the expect_success call during Text_Context.run() method when expected to fail.
+    pub fn without_expect_success(mut self) -> Self {
+        self.expect_failure = true;
+        self
+    }
+
+    /// Provide SessionTransferInfo to validate transfer including gas used from source account
+    pub fn with_check_transfer_success(
+        mut self,
+        session_transfer_info: SessionTransferInfo,
+    ) -> Self {
+        self.check_transfer_success = Some(session_transfer_info);
+        self
+    }
+
+    /// Do not perform commit within the ['TestContext'].['run'] method.
+    pub fn without_commit(mut self) -> Self {
+        self.without_commit = true;
+        self
+    }
+
     /// Builds the [`Session`].
     pub fn build(self) -> Session {
         let mut rng = rand::thread_rng();
@@ -88,6 +130,9 @@ impl SessionBuilder {
             .build();
         Session {
             inner: execute_request,
+            expect_success: !self.expect_failure,
+            check_transfer_success: self.check_transfer_success,
+            commit: !self.without_commit,
         }
     }
 }

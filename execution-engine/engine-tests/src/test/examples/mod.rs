@@ -17,4 +17,4 @@ pub mod vesting;
 pub mod tic_tac_toe;
 
 #[cfg(test)]
-pub mod exec_cost;
+pub mod check_transfer_success;

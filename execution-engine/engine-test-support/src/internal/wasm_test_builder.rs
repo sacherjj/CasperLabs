@@ -508,6 +508,11 @@ where
         self
     }
 
+    pub fn expect_transfer_success(&mut self) -> &mut Self {
+        // TODO: Make me work
+        self
+    }
+
     pub fn is_error(&self) -> bool {
         let exec_response = self
             .exec_responses
@@ -652,13 +657,13 @@ where
         utils::get_exec_costs(exec_response)
     }
 
-    pub fn get_last_exec_costs(&self) -> Option<Vec<Gas>> {
-        let count = self.get_exec_responses_count();
-        if count == 0 {
-            None
-        } else {
-            Some(self.exec_costs(count - 1))
-        }
+    pub fn last_exec_gas_cost(&self) -> Gas {
+        let exec_response = self
+            .exec_responses
+            .last()
+            .expect("Expected to be called after run()");
+        let exec_result = exec_response.get(0).expect("should have result");
+        exec_result.cost()
     }
 
     pub fn exec_error_message(&self, index: usize) -> Option<String> {
