@@ -5,6 +5,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.PublicKeyHash
 import io.casperlabs.models.ArbitraryConsensus
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen, Shrink}
@@ -204,7 +205,7 @@ trait DeployStorageSpec
         val discarded = sample(arbDeploy.arbitrary)
         val wrongAccount =
           processed
-            .withHeader(processed.getHeader.withAccountPublicKey(sample(genHash)))
+            .withHeader(processed.getHeader.withAccountHash(sample(genHash)))
             .withDeployHash(sample(genHash))
         for {
           //given
@@ -213,7 +214,7 @@ trait DeployStorageSpec
           _ <- writer.addAsDiscarded(discarded)
           _ <- writer.addAsFinalized(finalized)
           //when
-          p <- reader.readProcessedByAccount(processed.getHeader.accountPublicKey)
+          p <- reader.readProcessedByAccount(PublicKeyHash(processed.getHeader.accountHash))
           //should
         } yield {
           p shouldBe List(processed)
@@ -466,8 +467,8 @@ trait DeployStorageSpec
   private def chooseHash(deploys: List[Deploy]): ByteString =
     deploys(Random.nextInt(deploys.size)).deployHash
 
-  private def chooseAccount(deploys: List[Deploy]): ByteString =
-    deploys(Random.nextInt(deploys.size)).getHeader.accountPublicKey
+  private def chooseAccount(deploys: List[Deploy]): PublicKeyHash =
+    PublicKeyHash(deploys(Random.nextInt(deploys.size)).getHeader.accountHash)
 
   private implicit class DeployStorageWriterOps(writer: DeployStorageWriter[Task]) {
     def addAsPending(d: Deploy): Task[Unit]   = writer.addAsPending(List(d))
