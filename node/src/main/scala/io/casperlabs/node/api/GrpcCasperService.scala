@@ -20,7 +20,7 @@ import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.Utils.{
-  validateAccountPublicKey,
+  validateAccountPublicKeyHash,
   validateBlockHashPrefix,
   validateDeployHash
 }
@@ -165,12 +165,11 @@ object GrpcCasperService {
         ): Task[ListDeployInfosResponse] =
           TaskLike[F].apply {
             for {
-              // TODO (NDSC-58): Fix field names.
-              accountPublicKeyBase16 <- validateAccountPublicKey[F](
-                                         request.accountPublicKeyBase16,
-                                         request.accountPublicKey,
-                                         adaptToInvalidArgument
-                                       )
+              accountHashBase16 <- validateAccountPublicKeyHash[F](
+                                    request.accountHashBase16,
+                                    request.accountHash,
+                                    adaptToInvalidArgument
+                                  )
               (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
                                               DeployInfoPagination
                                                 .parsePageToken(
@@ -180,7 +179,7 @@ object GrpcCasperService {
                                             )
               accountHash = PublicKeyHash(
                 ByteString.copyFrom(
-                  Base16.decode(accountPublicKeyBase16)
+                  Base16.decode(accountHashBase16)
                 )
               )
               deploys <- DeployStorage[F]
