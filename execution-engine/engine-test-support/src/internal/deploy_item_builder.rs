@@ -54,11 +54,16 @@ impl DeployItemBuilder {
         self.with_payment_bytes(module_bytes, args)
     }
 
-    pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
+    pub fn with_stored_payment_hash(
+        mut self,
+        hash: Vec<u8>,
+        entry_point: &str,
+        args: impl ArgsParser,
+    ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByHash {
             hash,
-            entry_point: DEFAULT_ENTRY_POINT_NAME.into(),
+            entry_point: entry_point.into(),
             args,
         });
         self
@@ -98,11 +103,16 @@ impl DeployItemBuilder {
         self.with_session_bytes(module_bytes, args)
     }
 
-    pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
+    pub fn with_stored_session_hash(
+        mut self,
+        hash: Vec<u8>,
+        entry_point: &str,
+        args: impl ArgsParser,
+    ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByHash {
             hash,
-            entry_point: DEFAULT_ENTRY_POINT_NAME.into(),
+            entry_point: entry_point.into(),
             args,
         });
         self

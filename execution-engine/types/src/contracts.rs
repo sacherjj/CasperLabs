@@ -311,7 +311,8 @@ impl ContractPackage {
         &self,
         protocol_version: ProtocolVersionMajor,
     ) -> ContractVersion {
-        self.versions
+        let current_version = self
+            .versions
             .keys()
             .filter_map(|&contract_version_key| {
                 if contract_version_key.protocol_version_major() == protocol_version {
@@ -321,8 +322,10 @@ impl ContractPackage {
                 }
             })
             .last()
-            .or(Some(CONTRACT_INITIAL_VERSION))
-            .unwrap()
+            .or(Some(0))
+            .unwrap();
+
+        current_version + 1
     }
 }
 
@@ -698,6 +701,14 @@ impl EntryPoint {
         }
     }
 
+    /// Create a default [`EntryPpint`] with specified name.
+    pub fn default_with_name<T: Into<String>>(name: T) -> Self {
+        EntryPoint {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+
     /// Get name.
     pub fn name(&self) -> &str {
         &self.name
@@ -896,6 +907,7 @@ impl FromBytes for Parameter {
 mod tests {
     use super::*;
     use crate::{AccessRights, URef};
+    use alloc::borrow::ToOwned;
 
     fn make_contract_package() -> ContractPackage {
         let mut contract_package = ContractPackage::new(URef::new([0; 32], AccessRights::NONE));
@@ -945,17 +957,27 @@ mod tests {
         let _named_keys = NamedKeys::new();
         let protocol_version = ProtocolVersion::V1_0_0;
 
-        // _contract = Contract::new(
-        //     contract_package_hash,
-        //     contract_wasm_hash,
-        //     named_keys,
-        //     entry_points,
-        //     protocol_version,
-        // );
-
         contract_package.insert_contract_version(protocol_version.value().major, contract_hash);
 
         contract_package
+    }
+
+    #[test]
+    fn next_contract_version() {
+        let major = 1;
+        let mut contract_package = ContractPackage::new(URef::new([0; 32], AccessRights::NONE));
+        assert_eq!(contract_package.next_contract_version_for(major), 1);
+
+        let next_version = contract_package.insert_contract_version(major, [123; 32]);
+        assert_eq!(next_version, ContractVersionKey::new(major, 1));
+        assert_eq!(contract_package.next_contract_version_for(major), 2);
+        let next_version_2 = contract_package.insert_contract_version(major, [124; 32]);
+        assert_eq!(next_version_2, ContractVersionKey::new(major, 2));
+
+        let major = 2;
+        assert_eq!(contract_package.next_contract_version_for(major), 1);
+        let next_version_3 = contract_package.insert_contract_version(major, [42; 32]);
+        assert_eq!(next_version_3, ContractVersionKey::new(major, 1));
     }
 
     #[test]

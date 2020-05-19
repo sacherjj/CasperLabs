@@ -7,6 +7,8 @@ use engine_test_support::{
 };
 use types::{runtime_args, Key, RuntimeArgs, URef};
 
+const EE_441_RNG_STATE: &str = "ee_441_rng_state.wasm";
+
 fn get_uref(key: Key) -> URef {
     match key {
         Key::URef(uref) => uref,
@@ -24,7 +26,12 @@ fn do_pass(pass: &str) -> (URef, URef) {
                 STANDARD_PAYMENT_CONTRACT,
                 runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
             )
-            .with_session_code("ee_441_rng_state.wasm", (pass.to_string(),))
+            .with_session_code(
+                EE_441_RNG_STATE,
+                runtime_args! {
+                    "flag" => pass,
+                },
+            )
             .with_deploy_hash([1u8; 32])
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .build();

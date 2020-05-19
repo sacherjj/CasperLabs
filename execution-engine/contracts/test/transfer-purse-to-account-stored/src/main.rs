@@ -27,22 +27,7 @@ const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
 
 #[no_mangle]
 pub extern "C" fn transfer() {
-    let source: URef = account::get_main_purse();
-    let destination = runtime::get_named_arg(ARG_0_NAME);
-    let amount = runtime::get_named_arg(ARG_1_NAME);
-
-    let transfer_result = system::transfer_from_purse_to_account(source, destination, amount);
-
-    let final_balance = system::get_balance(source).unwrap_or_revert_with(ApiError::User(103));
-
-    let result = format!("{:?}", transfer_result);
-
-    let result_uref: Key = storage::new_uref(result).into();
-    runtime::put_key(TRANSFER_RESULT_UREF_NAME, result_uref);
-    runtime::put_key(
-        MAIN_PURSE_FINAL_BALANCE_UREF_NAME,
-        storage::new_uref(final_balance).into(),
-    );
+    transfer_purse_to_account::delegate();
 }
 
 #[no_mangle]

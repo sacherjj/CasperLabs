@@ -8,6 +8,7 @@ use contract::{
 use types::{Phase, RuntimeArgs, URef, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
+const ARG_PHASE: &str = "phase";
 
 fn standard_payment(amount: U512) {
     let main_purse = account::get_main_purse();
@@ -22,7 +23,7 @@ fn standard_payment(amount: U512) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_phase: Phase = runtime::get_named_arg("phase");
+    let known_phase: Phase = runtime::get_named_arg(ARG_PHASE);
     let get_phase = runtime::get_phase();
     assert_eq!(
         get_phase, known_phase,

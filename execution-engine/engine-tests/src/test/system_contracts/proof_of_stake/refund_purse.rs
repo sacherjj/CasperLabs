@@ -5,7 +5,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, U512};
+use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
@@ -38,7 +38,10 @@ fn transfer(builder: &mut InMemoryWasmTestBuilder, public_key: PublicKey, amount
         ExecuteRequestBuilder::standard(
             DEFAULT_ACCOUNT_ADDR,
             CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-            (public_key, amount),
+            runtime_args! {
+                "target" => public_key,
+                "amount" => amount,
+            },
         )
         .build()
     };

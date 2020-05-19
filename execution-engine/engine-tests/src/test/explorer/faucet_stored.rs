@@ -5,7 +5,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, ApiError, U512};
+use types::{
+    account::PublicKey, contracts::DEFAULT_ENTRY_POINT_NAME, runtime_args, ApiError, RuntimeArgs,
+    U512,
+};
 
 const FAUCET: &str = "faucet";
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
@@ -51,7 +54,11 @@ fn should_get_funds_from_faucet_stored() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_hash(contract_hash.to_vec(), (NEW_ACCOUNT_ADDR, amount))
+            .with_stored_session_hash(
+                contract_hash.to_vec(),
+                DEFAULT_ENTRY_POINT_NAME,
+                runtime_args! { "target" => NEW_ACCOUNT_ADDR, "amount" => amount },
+            )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(10_000_000),),
@@ -99,7 +106,11 @@ fn should_fail_if_already_funded() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_hash(contract_hash.to_vec(), (NEW_ACCOUNT_ADDR, amount))
+            .with_stored_session_hash(
+                contract_hash.to_vec(),
+                DEFAULT_ENTRY_POINT_NAME,
+                runtime_args! { "target" => NEW_ACCOUNT_ADDR, "amount" => amount },
+            )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(10_000_000),),
@@ -117,7 +128,11 @@ fn should_fail_if_already_funded() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_stored_session_hash(contract_hash.to_vec(), (NEW_ACCOUNT_ADDR, amount))
+            .with_stored_session_hash(
+                contract_hash.to_vec(),
+                DEFAULT_ENTRY_POINT_NAME,
+                runtime_args! { "target" => NEW_ACCOUNT_ADDR, "amount" => amount },
+            )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
                 (U512::from(10_000_000),),

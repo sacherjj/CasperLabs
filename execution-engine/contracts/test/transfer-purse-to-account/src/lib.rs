@@ -1,5 +1,4 @@
 #![no_std]
-#![no_main]
 
 extern crate alloc;
 
@@ -17,8 +16,7 @@ const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";
 
-#[no_mangle]
-pub extern "C" fn call() {
+pub fn delegate() {
     let source: URef = account::get_main_purse();
     let target: PublicKey = runtime::get_named_arg(ARG_TARGET);
     let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
