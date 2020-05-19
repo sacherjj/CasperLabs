@@ -14,7 +14,7 @@ import io.casperlabs.models.SmartContractEngineError
 import io.casperlabs.node.api.BlockInfoPagination.BlockInfoPageTokenParams
 import io.casperlabs.node.api.DeployInfoPagination.DeployInfoPageTokenParams
 import io.casperlabs.node.api.Utils.{
-  validateAccountPublicKey,
+  validateAccountPublicKeyHash,
   validateBlockHashPrefix,
   validateDeployHash
 }
@@ -280,11 +280,11 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
             blockTypes.DeployInfosWithPageInfoType,
             arguments = blocks.arguments.AccountPublicKeyBase16 :: blocks.arguments.First :: blocks.arguments.After :: Nil,
             resolve = { c =>
-              val accountPublicKeyBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
-              val after                  = c.arg(blocks.arguments.After)
-              val first                  = c.arg(blocks.arguments.First)
-              val accountKeyEither = validateAccountPublicKey[Either[Throwable, *]](
-                accountPublicKeyBase16,
+              val accountHashBase16 = c.arg(blocks.arguments.AccountPublicKeyBase16)
+              val after             = c.arg(blocks.arguments.After)
+              val first             = c.arg(blocks.arguments.First)
+              val accountKeyEither = validateAccountPublicKeyHash[Either[Throwable, *]](
+                accountHashBase16,
                 ByteString.EMPTY
               ).map(s => ByteString.copyFrom(Base16.decode(s)))
               accountKeyEither

@@ -75,10 +75,9 @@ object EventStream {
         import Event.Value._
 
         val accountFilter: ByteString => Boolean =
-          // TODO (NDSC-58): Rename fields in the API.
-          request.getDeployFilter.accountPublicKeys.toSet match {
-            case keys if keys.nonEmpty => keys.contains
-            case _                     => _ => true
+          request.getDeployFilter.accountHashes.toSet match {
+            case hashes if hashes.nonEmpty => hashes.contains
+            case _                         => _ => true
           }
 
         val deployHashFilter: DeployHash => Boolean =
