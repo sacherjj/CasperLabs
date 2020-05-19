@@ -10,6 +10,7 @@
     not(feature = "no-unstable-features"),
     feature(min_specialization, try_reserve)
 )]
+#![feature(specialization, try_reserve)]
 #![doc(html_root_url = "https://docs.rs/casperlabs-types/0.5.0")]
 #![doc(
     html_favicon_url = "https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/images/CasperLabs_Logo_Favicon_RGB_50px.png",
