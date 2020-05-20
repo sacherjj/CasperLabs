@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.validation.Errors.ErrorMessageWrapper
 import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, PublicKeyHash}
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.metrics.Metrics
@@ -80,6 +80,9 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   val endTick   = Ticks(era.endTick)
   val start     = conf.toInstant(startTick)
   val end       = conf.toInstant(endTick)
+
+  private val bondedValidators: Set[PublicKeyHash] =
+    era.bonds.map(_.validatorPublicKeyHash.toByteArray).map(PublicKeyHash).toSet
 
   val bookingBoundaries =
     conf.criticalBoundaries(start, end, delayDuration = conf.bookingDuration)
@@ -525,7 +528,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
       ) >>
       check(
         "The validator is not bonded in the era.",
-        era.bonds.find(_.validatorPublicKey == message.validatorId).isEmpty
+        !bondedValidators(message.validatorPublicKeyHash)
       ) >> {
       message match {
         case b: Message.Block =>
@@ -785,7 +788,7 @@ object EraRuntime {
         // Whether the validator is bonded depends on the booking block. Only bonded validators
         // have to produce blocks and ballots in the era.
         maybeMessageProducer.filter { mp =>
-          era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
+          era.bonds.exists(b => b.validatorPublicKeyHash.toByteArray == mp.validatorPublicKeyHash)
         },
         semaphoreMap,
         isSynced,

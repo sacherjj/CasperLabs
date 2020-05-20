@@ -237,7 +237,7 @@ message Block {
 
 message Bond {
     reserved 2; // Original bond was uint64.
-    bytes validator_public_key = 1;
+    bytes validator_public_key_hash = 1;
     state.BigInt stake = 3;
 }
 

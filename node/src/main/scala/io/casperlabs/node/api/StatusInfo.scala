@@ -8,6 +8,7 @@ import org.http4s.HttpRoutes
 import java.time.Instant
 import doobie.util.transactor.Transactor
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, PublicKeyHash}
 import io.casperlabs.casper.consensus.{Block, Era}
 import io.casperlabs.casper.ValidatorIdentity
 import io.casperlabs.comm.discovery.NodeDiscovery
@@ -125,7 +126,7 @@ object StatusInfo {
         conf: Configuration,
         chainSpec: ChainSpec,
         genesis: Block,
-        maybeValidatorId: Option[ByteString],
+        maybeValidatorId: Option[ValidatorIdentity],
         getIsSynced: F[Boolean],
         readXa: Transactor[F]
     ): StateT[F, Boolean, CheckList] =
@@ -135,12 +136,16 @@ object StatusInfo {
         bootstrap              <- bootstrap[F](conf, genesis)
         initialSynchronization <- initialSynchronization[F](getIsSynced)
         lastFinalizedBlock     <- lastFinalizedBlock[F](chainSpec, genesis)
-        lastReceivedBlock      <- lastReceivedBlock[F](conf, chainSpec, maybeValidatorId)
-        lastCreatedBlock       <- lastCreatedBlock[F](chainSpec, maybeValidatorId)
-        activeEras             <- activeEras[F](conf)
-        bondedEras             <- bondedEras[F](conf, maybeValidatorId)
-        genesisEra             <- genesisEra[F](conf, genesis)
-        genesisBlock           <- genesisBlock[F](genesis)
+        lastReceivedBlock <- lastReceivedBlock[F](
+                              conf,
+                              chainSpec,
+                              maybeValidatorId.map(_.publicKey)
+                            )
+        lastCreatedBlock <- lastCreatedBlock[F](chainSpec, maybeValidatorId.map(_.publicKey))
+        activeEras       <- activeEras[F](conf)
+        bondedEras       <- bondedEras[F](conf, maybeValidatorId.map(_.publicKeyHash))
+        genesisEra       <- genesisEra[F](conf, genesis)
+        genesisBlock     <- genesisBlock[F](genesis)
         checklist = CheckList(
           database = database,
           peers = peers,
@@ -246,14 +251,14 @@ object StatusInfo {
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         chainSpec: ChainSpec,
-        maybeValidatorId: Option[ByteString]
+        maybeValidatorId: Option[PublicKey]
     ) = Check {
       for {
         dag      <- DagStorage[F].getRepresentation
         tips     <- dag.latestGlobal
         messages <- tips.latestMessages
         received = messages.values.flatten.toSet.filter { m =>
-          maybeValidatorId.fold(true)(_ != m.validatorId)
+          maybeValidatorId.fold(true)(_ != m.validatorId.toByteArray)
         }
         latest   = findLatest(received)
         isTooOld <- isTooOld(chainSpec, latest)
@@ -271,14 +276,14 @@ object StatusInfo {
     // Returning basic info so as not to reveal the validator identity through the block ID.
     def lastCreatedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         chainSpec: ChainSpec,
-        maybeValidatorId: Option[ByteString]
+        maybeValidatorId: Option[PublicKey]
     ) = Check {
       for {
         created <- maybeValidatorId.fold(Set.empty[Message].pure[F]) { id =>
                     for {
                       dag      <- DagStorage[F].getRepresentation
                       tips     <- dag.latestGlobal
-                      messages <- tips.latestMessage(id)
+                      messages <- tips.latestMessage(ByteString.copyFrom(id))
                     } yield messages
                   }
         latest   = findLatest(created)
@@ -334,19 +339,23 @@ object StatusInfo {
 
     def bondedEras[F[_]: Sync: Consensus](
         conf: Configuration,
-        maybeValidatorId: Option[ByteString]
+        maybeValidatorPublicKeyHash: Option[PublicKeyHash]
     ) = Check {
-      maybeValidatorId match {
+      maybeValidatorPublicKeyHash.map(ByteString.copyFrom) match {
         case _ if !conf.highway.enabled =>
           Check[ErasDetails](ok = true, message = "Not in highway mode.")
             .pure[F]
+
         case None =>
           Check[ErasDetails](ok = true, message = "Running in read-only mode")
             .pure[F]
+
         case Some(id) =>
           for {
             active <- Consensus[F].activeEras
-            bonded = active.filter(era => era.bonds.exists(_.validatorPublicKey == id))
+            bonded = active.filter(
+              era => era.bonds.exists(_.validatorPublicKeyHash == id)
+            )
           } yield {
             Check(
               ok = bonded.nonEmpty,
@@ -393,7 +402,7 @@ object StatusInfo {
       conf: Configuration,
       chainSpec: ChainSpec,
       genesis: Block,
-      maybeValidatorId: Option[ByteString],
+      maybeValidatorId: Option[ValidatorIdentity],
       getIsSynced: F[Boolean],
       readXa: Transactor[F]
   ) {

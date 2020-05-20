@@ -10,6 +10,7 @@ import io.casperlabs.casper.dag.EraObservedBehavior.{LocalDagView, MessageJPast}
 import io.casperlabs.casper.highway.MessageProducer
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
+import io.casperlabs.crypto.Keys.{PublicKeyBS, PublicKeyHash}
 import io.casperlabs.models.{Message, ObservedValidatorBehavior}
 import io.casperlabs.models.Message.asJRank
 import io.casperlabs.shared.Sorting.jRankOrdering
@@ -555,14 +556,14 @@ object DagOperations {
     import EraObservedBehavior._
 
     // Map a message's direct justifications to a map that represents its j-past-cone view.
-    val toEraMap: List[Message] => Map[EraId, Map[ByteString, Set[Message]]] =
-      _.groupBy(_.eraId).mapValues(_.groupBy(_.validatorId).mapValues(_.toSet))
+    val toEraMap: List[Message] => Map[EraId, Map[PublicKeyHash, Set[Message]]] =
+      _.groupBy(_.eraId).mapValues(_.groupBy(_.validatorPublicKeyHash).mapValues(_.toSet))
 
-    def empty(v: ByteString): (ByteString, Set[Message]) =
+    def empty(v: PublicKeyHash): (PublicKeyHash, Set[Message]) =
       (v, Set.empty[Message])
-    def honest(v: ByteString, m: Message): (ByteString, Set[Message]) =
+    def honest(v: PublicKeyHash, m: Message): (PublicKeyHash, Set[Message]) =
       (v, Set(m))
-    def equivocated(v: ByteString, msgs: Set[Message]): (ByteString, Set[Message]) =
+    def equivocated(v: PublicKeyHash, msgs: Set[Message]): (PublicKeyHash, Set[Message]) =
       (v, msgs)
 
     // A map from every observed era to a set of validators that produced a message in each of the eras.
@@ -575,94 +576,100 @@ object DagOperations {
     val observedKeyBlocks =
       erasObservedBehavior.keyBlockHashes.map(_.show).mkString("[", ", ", "]")
 
-    (baseMap |+| toEraMap(justifications.filterNot(_.isGenesisLike))).toList
-      .traverse {
-        case (era, validatorsLatestMessages) =>
-          validatorsLatestMessages.toList
-            .traverse {
-              case (validator, messages) =>
-                erasObservedBehavior.getStatus(era, validator) match {
-                  case None =>
-                    val msg = s"Message directly cites validator " +
-                      s"${validator.show} in an era ${era.show} " +
-                      s"but expected messages only from $observedKeyBlocks eras."
-                    MonadThrowable[F].raiseError[(ByteString, Set[Message])](
-                      new IllegalStateException(msg) with NoStackTrace
-                    )
-
-                  case Some(Empty) =>
-                    // We haven't seen any messages from that validator in this era.
-                    // There can't be any in the justifications either.
-                    empty(validator).pure[F]
-
-                  case Some(Honest(_)) =>
-                    if (messages.nonEmpty) {
-                      import io.casperlabs.shared.Sorting.jRankOrdering
-                      // Since we know that validator is honest we can pick the newest message.
-                      honest(validator, messages.maxBy(_.jRank)).pure[F]
-                    } else if (!usingIndirectJustifications) {
-                      // Since we aren't using indirect justifications, we can trust that the
-                      // creator of this block hasn't seen anything from this validator in this era.
-                      empty(validator).pure[F]
-                    } else {
-                      // There are no messages in the direct justifications
-                      // but we know that local DAG has seen messages from that validator.
-                      // We have to look for them in the indirect ones but it still might not be there
-                      // (because creator of the messages hasn't seen anything from that validator).
-                      DagOperations
-                        .swimlaneVFromJustifications[F](
-                          validator,
-                          validatorsLatestMessages.values.flatten.toList,
-                          dag
+    val observations: F[Map[EraId, Map[PublicKeyHash, Set[Message]]]] =
+      (baseMap |+| toEraMap(justifications.filterNot(_.isGenesisLike))).toList
+        .traverse {
+          case (era, validatorsLatestMessages) =>
+            validatorsLatestMessages.toList
+              .traverse {
+                case (validator, messages) =>
+                  val observation: F[(PublicKeyHash, Set[Message])] =
+                    erasObservedBehavior.getStatus(era, validator) match {
+                      case None =>
+                        val msg = s"Message directly cites validator " +
+                          s"${validator.show} in an era ${era.show} " +
+                          s"but expected messages only from $observedKeyBlocks eras."
+                        MonadThrowable[F].raiseError[(PublicKeyHash, Set[Message])](
+                          new IllegalStateException(msg) with NoStackTrace
                         )
-                        .takeWhile(_.eraId == era)
-                        .headOption
-                        .map(_.fold(empty(validator))(honest(validator, _)))
-                    }
 
-                  case Some(Equivocated(_, _)) =>
-                    if (messages.size > 1)
-                      // `messages` should be the latest messages by that validator in this era.
-                      // They are tips of his swimlane and evidences for equivocation.
-                      equivocated(validator, messages).pure[F]
-                    else {
-                      val startingPoints =
-                        validatorsLatestMessages.values.flatten.toList
+                      case Some(Empty) =>
+                        // We haven't seen any messages from that validator in this era.
+                        // There can't be any in the justifications either.
+                        empty(validator).pure[F]
 
-                      // Latest message by that validator in this era visible in the j-past-cone
-                      // of the message received.
-                      val jConeTips = DagOperations
-                        .swimlaneVFromJustifications[F](
-                          validator,
-                          startingPoints,
-                          dag
-                        )
-                        .takeWhile(_.eraId == era)
-                        .foldWhileLeft(EraObservedBehavior.unknown) {
-                          case (acc, msg) =>
-                            acc.validate(msg) match {
-                              case Undefined       => unknown.asLeft[ValidatorStatus]
-                              case h: Swimlane     => h.asLeft[ValidatorStatus]
-                              case e: Equivocation => e.asRight[ValidatorStatus]
-                            }
+                      case Some(Honest(msg)) =>
+                        if (messages.nonEmpty) {
+                          import io.casperlabs.shared.Sorting.jRankOrdering
+                          // Since we know that validator is honest we can pick the newest message.
+                          honest(validator, messages.maxBy(_.jRank)).pure[F]
+                        } else if (!usingIndirectJustifications) {
+                          // Since we aren't using indirect justifications, we can trust that the
+                          // creator of this block hasn't seen anything from this validator in this era.
+                          empty(validator).pure[F]
+                        } else {
+                          // There are no messages in the direct justifications
+                          // but we know that local DAG has seen messages from that validator.
+                          // We have to look for them in the indirect ones but it still might not be there
+                          // (because creator of the messages hasn't seen anything from that validator).
+                          DagOperations
+                            .swimlaneVFromJustifications[F](
+                              msg.validatorId,
+                              validatorsLatestMessages.values.flatten.toList,
+                              dag
+                            )
+                            .takeWhile(_.eraId == era)
+                            .headOption
+                            .map(_.fold(empty(validator))(honest(validator, _)))
                         }
 
-                      jConeTips.map {
-                        case Undefined =>
-                          // No message in the j-past-cone
-                          empty(validator)
-                        case Swimlane(tip, _) =>
-                          // ByteString is honest in the j-past-cone
-                          honest(validator, tip.m)
-                        case Equivocation(tips) =>
-                          equivocated(validator, tips.map(_.tip.m))
-                      }
+                      case Some(Equivocated(msg, _)) =>
+                        if (messages.size > 1)
+                          // `messages` should be the latest messages by that validator in this era.
+                          // They are tips of his swimlane and evidences for equivocation.
+                          equivocated(validator, messages).pure[F]
+                        else {
+                          val startingPoints =
+                            validatorsLatestMessages.values.flatten.toList
+
+                          // Latest message by that validator in this era visible in the j-past-cone
+                          // of the message received.
+                          val jConeTips = DagOperations
+                            .swimlaneVFromJustifications[F](
+                              msg.validatorId,
+                              startingPoints,
+                              dag
+                            )
+                            .takeWhile(_.eraId == era)
+                            .foldWhileLeft(EraObservedBehavior.unknown) {
+                              case (acc, msg) =>
+                                acc.validate(msg) match {
+                                  case Undefined       => unknown.asLeft[ValidatorStatus]
+                                  case h: Swimlane     => h.asLeft[ValidatorStatus]
+                                  case e: Equivocation => e.asRight[ValidatorStatus]
+                                }
+                            }
+
+                          jConeTips.map {
+                            case Undefined =>
+                              // No message in the j-past-cone
+                              empty(validator)
+                            case Swimlane(tip, _) =>
+                              // ByteString is honest in the j-past-cone
+                              honest(validator, tip.m)
+                            case Equivocation(tips) =>
+                              equivocated(validator, tips.map(_.tip.m))
+                          }
+                        }
                     }
-                }
-            }
-            .map(era -> _.toMap)
-      }
-      .map(_.toMap)
+
+                  observation
+              }
+              .map(era -> _.toMap)
+        }
+        .map(_.toMap)
+
+    observations
       .map { tips =>
         val nonEmptyTips = tips.mapValues(_.filterNot(_._2.isEmpty))
         EraObservedBehavior(nonEmptyTips).asInstanceOf[MessageJPast[Message]]
@@ -680,10 +687,18 @@ object DagOperations {
   def latestMessagesInEras[F[_]: Monad](
       dag: DagRepresentation[F],
       keyBlocks: List[Message]
-  ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
+  ): F[Map[ByteString, Map[PublicKeyHash, Set[Message]]]] =
     keyBlocks
       .sortBy(_.jRank)(jRankOrdering.reverse)
-      .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
+      .traverse { kb =>
+        for {
+          messagesByPublicKey <- dag.latestMessagesInEra(kb.messageHash)
+          messagesByPublisKeyHash = messagesByPublicKey.collect {
+            case (_, ms) if ms.nonEmpty =>
+              ms.head.validatorPublicKeyHash -> ms
+          }
+        } yield kb.messageHash -> messagesByPublisKeyHash
+      }
       .map(_.toMap)
 
   /**
@@ -694,7 +709,7 @@ object DagOperations {
     */
   def latestMessagesInErasUntil[F[_]: MonadThrowable: EraStorage: DagStorage](
       keyBlock: ByteString
-  ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
+  ): F[Map[ByteString, Map[PublicKeyHash, Set[Message]]]] =
     for {
       keyBlocks            <- MessageProducer.collectKeyBlocks[F](keyBlock)
       dag                  <- DagStorage[F].getRepresentation

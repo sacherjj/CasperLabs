@@ -248,7 +248,7 @@ trait DagRepresentation[F[_]] extends DagLookup[F] {
 }
 
 object DagRepresentation {
-  type Validator = ByteString
+  type Validator = ByteString // Public Key
 
   implicit class DagRepresentationRich[F[_]: Monad](
       dagRepresentation: DagRepresentation[F]

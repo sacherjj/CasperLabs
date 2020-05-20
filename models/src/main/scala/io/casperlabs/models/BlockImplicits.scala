@@ -29,7 +29,7 @@ object BlockImplicits {
     def mainRank: MainRank                   = asMainRank(block.getHeader.mainRank)
     def weightMap: Map[ByteString, Weight] =
       block.getHeader.getState.bonds
-        .map(b => (b.validatorPublicKey, Weight(b.stake)))
+        .map(b => (b.validatorPublicKeyHash, Weight(b.stake)))
         .toMap
 
     def getSummary: BlockSummary =
@@ -82,7 +82,7 @@ object BlockImplicits {
     def mainRank: MainRank                 = asMainRank(summary.getHeader.mainRank)
     def weightMap: Map[ByteString, Weight] =
       summary.getHeader.getState.bonds
-        .map(b => (b.validatorPublicKey, Weight(b.stake)))
+        .map(b => (b.validatorPublicKeyHash, Weight(b.stake)))
         .toMap
   }
 

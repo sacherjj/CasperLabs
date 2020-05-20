@@ -39,10 +39,11 @@ object ValidationImpl {
     new Validation[F] {
       override def neglectedInvalidBlock(
           block: Block,
+          dag: DagRepresentation[F],
           invalidBlockTracker: Set[BlockHash]
       ): F[Unit] =
         Metrics[F].timer("neglectedInvalidBlock")(
-          underlying.neglectedInvalidBlock(block, invalidBlockTracker)
+          underlying.neglectedInvalidBlock(block, dag, invalidBlockTracker)
         )
 
       override def parents(b: Block, dag: DagRepresentation[F])(
@@ -247,25 +248,35 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
     */
   override def neglectedInvalidBlock(
       block: Block,
+      dag: DagRepresentation[F],
       invalidBlockTracker: Set[BlockHash]
-  ): F[Unit] = {
-    val invalidJustifications = block.justifications.filter(
-      justification => invalidBlockTracker.contains(justification.latestBlockHash)
-    )
-    val neglectedInvalidJustification = invalidJustifications.exists { justification =>
-      val slashedValidatorBond =
-        bonds(block).find(_.validatorPublicKey == justification.validatorPublicKey)
-      slashedValidatorBond match {
-        case Some(bond) => Weight(bond.stake) > 0
-        case None       => false
+  ): F[Unit] =
+    for {
+      invalidJustifications <- block.justifications.toList
+                                .filter { justification =>
+                                  invalidBlockTracker.contains(justification.latestBlockHash)
+                                }
+                                .traverse { justification =>
+                                  dag.lookupUnsafe(justification.latestBlockHash)
+                                }
+
+      neglectedInvalidJustification = invalidJustifications.exists { justification =>
+        val slashedValidatorBond =
+          bonds(block).find(
+            _.validatorPublicKeyHash.toByteArray == justification.validatorPublicKeyHash
+          )
+        slashedValidatorBond match {
+          case Some(bond) => Weight(bond.stake) > 0
+          case None       => false
+        }
       }
-    }
-    if (neglectedInvalidJustification) {
-      reject[F](block, NeglectedInvalidBlock, "Neglected invalid justification.")
-    } else {
-      Applicative[F].unit
-    }
-  }
+
+      result <- if (neglectedInvalidJustification) {
+                 reject[F](block, NeglectedInvalidBlock, "Neglected invalid justification.")
+               } else {
+                 Applicative[F].unit
+               }
+    } yield result
 
   /** Validate just the BlockSummary, assuming we don't have the block yet, or all its dependencies.
     * We can check that all the fields are present, the signature is fine, etc.

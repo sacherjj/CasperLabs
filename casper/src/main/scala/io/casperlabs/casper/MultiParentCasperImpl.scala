@@ -353,8 +353,13 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
       // which are bonded validators in the chosen parent. This is safe because
       // any latest message not from a bonded validator will not change the
       // final fork-choice.
-      val bondedValidators = bonds(merged.parents.head).map(_.validatorPublicKey).toSet
-      val bondedLatestMsgs = latestMessages.filter { case (v, _) => bondedValidators.contains(v) }
+      val bondedValidators =
+        bonds(merged.parents.head).map(_.validatorPublicKeyHash.toByteArray).toSet
+      val bondedLatestMsgs = latestMessages.filter {
+        case (_, ms) =>
+          val hashes: Set[Array[Byte]] = ms.map(_.validatorPublicKeyHash)
+          bondedValidators.intersect(hashes).nonEmpty
+      }
       // TODO: Remove redundant justifications.
       val justifications = toJustification(latestMessages.values.flatten.toSeq)
       // Start numbering from 1 (validator's first block seqNum = 1)
@@ -651,6 +656,7 @@ object MultiParentCasperImpl {
           _ <- Validation[F]
                 .neglectedInvalidBlock(
                   block,
+                  dag,
                   casperState.invalidBlockTracker
                 )
           _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "message"}")

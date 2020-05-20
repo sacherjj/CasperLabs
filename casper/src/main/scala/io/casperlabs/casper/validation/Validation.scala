@@ -40,7 +40,11 @@ trait Validation[F[_]] {
     * If block contains an invalid justification block B and the creator of B is still bonded,
     * return a RejectableBlock. Otherwise return an IncludeableBlock.
     */
-  def neglectedInvalidBlock(block: Block, invalidBlockTracker: Set[BlockHash]): F[Unit]
+  def neglectedInvalidBlock(
+      block: Block,
+      dag: DagRepresentation[F],
+      invalidBlockTracker: Set[BlockHash]
+  ): F[Unit]
 
   /**
     * Checks that the parents of `b` were chosen correctly according to the
@@ -53,7 +57,7 @@ trait Validation[F[_]] {
     * avoid repeating work downstream.
     */
   def parents(
-      b: Block,
+      block: Block,
       dag: DagRepresentation[F]
   )(implicit bs: BlockStorage[F]): F[ExecEngineUtil.MergeResult[ExecEngineUtil.TransformMap, Block]]
 

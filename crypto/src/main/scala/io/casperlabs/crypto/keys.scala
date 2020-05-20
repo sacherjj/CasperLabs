@@ -2,6 +2,8 @@ package io.casperlabs.crypto
 import cats.syntax.either._
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.hash.Blake2b256
+import java.nio.charset.StandardCharsets
 import shapeless.tag.@@
 
 object Keys {
@@ -114,5 +116,16 @@ object Keys {
               ParseError.EmptyPublicKey.asParseError.asLeft[ParseResult]
           }
       }
+  }
+
+  /** Compute a unique hash from the algorithm name and a public key, used for accounts. */
+  val publicKeyHash: String => PublicKey => PublicKeyHash = {
+    val separator = Array[Byte](0)
+    (signatureAlgorithm: String) => {
+      val prefix = signatureAlgorithm.toUpperCase.getBytes(StandardCharsets.UTF_8) ++ separator
+      (publicKey: PublicKey) => {
+        PublicKeyHash(Blake2b256.hash(prefix ++ publicKey))
+      }
+    }
   }
 }

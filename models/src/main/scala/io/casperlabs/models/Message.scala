@@ -6,6 +6,7 @@ import io.casperlabs.casper.consensus.Block.MessageType.{BALLOT, BLOCK, Unrecogn
 import io.casperlabs.casper.consensus.Block.MessageRole
 import io.casperlabs.casper.consensus.{BlockSummary, Bond}
 import io.casperlabs.crypto.codec.Base16
+import io.casperlabs.crypto.Keys, Keys.{PublicKey, PublicKeyBS, PublicKeyHash}
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.catscontrib.MonadThrowable
 import cats.implicits._
@@ -25,7 +26,7 @@ import shapeless.tag
 sealed trait Message {
   type Id = ByteString
   val messageHash: Id
-  val validatorId: ByteString
+  val validatorId: PublicKeyBS
   val timestamp: Long
   val jRank: JRank
   val mainRank: MainRank
@@ -34,6 +35,9 @@ sealed trait Message {
   val validatorMsgSeqNum: Int
   val signature: consensus.Signature
   val roundId: Long
+
+  lazy val validatorPublicKeyHash: PublicKeyHash =
+    Keys.publicKeyHash(signature.sigAlgorithm)(PublicKey(validatorId.toByteArray))
 
   // Returns the `keyBlockHash`, but it was considered unintuitive after a while.
   val eraId: Id
@@ -65,7 +69,7 @@ object Message {
 
   case class Block private (
       messageHash: Message#Id,
-      validatorId: ByteString,
+      validatorId: PublicKeyBS,
       timestamp: Long,
       roundId: Long,
       eraId: Message#Id,
@@ -97,7 +101,7 @@ object Message {
 
   case class Ballot private (
       messageHash: Message#Id,
-      validatorId: ByteString,
+      validatorId: PublicKeyBS,
       timestamp: Long,
       roundId: Long,
       eraId: Message#Id,
@@ -123,7 +127,7 @@ object Message {
       val roundId            = header.roundId
       val keyBlockHash       = header.keyBlockHash
       val parentBlock        = header.parentHashes.headOption.getOrElse(ByteString.EMPTY)
-      val validatorId        = header.validatorPublicKey
+      val validatorId        = PublicKey(header.validatorPublicKey)
       val justifications     = header.justifications
       val jRank              = asJRank(header.jRank)
       val mainRank           = asMainRank(header.mainRank)

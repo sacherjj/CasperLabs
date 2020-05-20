@@ -8,7 +8,7 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator
 import io.casperlabs.casper.util.ProtoUtil
 import io.casperlabs.catscontrib.MonadThrowable
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, PublicKeyHash}
 import io.casperlabs.models.Message.Block
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.metrics.implicits._
@@ -105,26 +105,27 @@ object ForkChoice {
           dag: DagRepresentation[F],
           keyBlock: Message.Block,
           eraStartBlock: Block,
-          latestMessages: Map[DagRepresentation.Validator, Set[Message]],
-          equivocators: Set[ByteString]
-      ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
+          latestMessages: Map[PublicKeyHash, Set[Message]],
+          equivocators: Set[PublicKeyHash]
+      ): F[(Block, Map[PublicKeyHash, Set[Message]])] =
         for {
           weights <- EraStorage[F]
                       .getEraUnsafe(keyBlock.messageHash)
                       .map(_.bonds.map {
-                        case Bond(validator, stake) => validator -> Weight(stake)
+                        case Bond(validator, stake) => PublicKeyHash(validator) -> Weight(stake)
                       }.toMap)
-          honestValidators = weights.keys.toList.filterNot(equivocators(_))
+          honestValidators = weights.keys.toSet.filterNot(equivocators(_))
           latestHonestMessages = latestMessages.collect {
             // It may be the case that validator is honest in current era,
             // but equivocated in the past and we haven't yet forgiven him.
-            case (v, lms) if lms.size == 1 && honestValidators.contains(v) => v -> lms.head
+            case (v, lms) if lms.size == 1 && honestValidators.contains(v) =>
+              v -> lms.head
           }
           forkChoice <- MonadThrowable[F].tailRecM(eraStartBlock) { startBlock =>
                          for {
                            // Collect latest messages from honest validators that vote for the block.
-                           relevantMessages <- honestValidators
-                                                .foldLeftM(Map.empty[ByteString, Message]) {
+                           relevantMessages <- honestValidators.toList
+                                                .foldLeftM(Map.empty[PublicKeyHash, Message]) {
                                                   case (acc, v) =>
                                                     latestHonestMessages
                                                       .get(v)
@@ -192,11 +193,11 @@ object ForkChoice {
           dagView: EraObservedBehavior[Message]
       )(
           implicit dag: DagRepresentation[F]
-      ): F[(Block, Map[DagRepresentation.Validator, Set[Message]])] =
+      ): F[(Block, Map[PublicKeyHash, Set[Message]])] =
         keyBlocks
           .foldM(
             startBlock -> Map
-              .empty[DagRepresentation.Validator, Set[Message]]
+              .empty[PublicKeyHash, Set[Message]]
           ) {
             case ((startBlock, accLatestMessages), currKeyBlock) =>
               val eraLatestMessages = dagView

@@ -25,6 +25,9 @@ final case class ValidatorIdentity(
       signatureAlgorithm.name,
       ByteString.copyFrom(signatureAlgorithm.sign(data, privateKey))
     )
+
+  def publicKeyHash: Keys.PublicKeyHash =
+    signatureAlgorithm.publicKeyHash(publicKey)
 }
 
 object ValidatorIdentity {

@@ -13,7 +13,7 @@ import io.casperlabs.casper.consensus.Block.Justification
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, PublicKeyHash}
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.storage.BlockHash
@@ -36,6 +36,7 @@ import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
 import io.casperlabs.shared.Sorting._
 import scala.concurrent.duration._
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.crypto.Keys
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's
@@ -44,6 +45,7 @@ import io.casperlabs.casper.consensus.info.DeployInfo
   */
 trait MessageProducer[F[_]] {
   def validatorId: PublicKeyBS
+  def validatorPublicKeyHash: PublicKeyHash
 
   def ballot(
       keyBlockHash: BlockHash,
@@ -82,6 +84,9 @@ object MessageProducer {
     new MessageProducer[F] {
       override val validatorId =
         PublicKey(ByteString.copyFrom(validatorIdentity.publicKey))
+
+      override def validatorPublicKeyHash =
+        validatorIdentity.publicKeyHash
 
       override def hasPendingDeploys: F[Boolean] =
         DeployStorage[F].reader.countByBufferedState(DeployInfo.State.PENDING).map(_ > 0)
@@ -288,7 +293,9 @@ object MessageProducer {
         equivocators <- collectEquivocators[F](keyBlockHash)
         // TODO: There are no scores here for ordering secondary parents. Another reason for the fork choice to give these.
         secondaries = tips
-          .filterNot(m => equivocators(m.validatorId) || m.messageHash == mainParent.messageHash)
+          .filterNot(
+            m => equivocators(m.validatorPublicKeyHash) || m.messageHash == mainParent.messageHash
+          )
           .sortBy(_.messageHash)
       } yield secondaries
     }
@@ -306,7 +313,7 @@ object MessageProducer {
     */
   def collectEquivocators[F[_]: MonadThrowable: EraStorage: DagStorage](
       keyBlockHash: BlockHash
-  ): F[Set[ByteString]] =
+  ): F[Set[PublicKeyHash]] =
     for {
       dag               <- DagStorage[F].getRepresentation
       keyBlocks         <- collectKeyBlocks[F](keyBlockHash)

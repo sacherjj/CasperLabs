@@ -17,7 +17,7 @@ import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, u
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.crypto.Keys
-import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.Keys.PublicKeyHash
 import io.casperlabs.ipc
 import io.casperlabs.ipc.RunGenesisRequest
 import io.casperlabs.shared.Sorting._
@@ -55,17 +55,17 @@ object Genesis {
       // Sorted list of bonded validators.
       bonds = genesisConfig.getEeConfig.accounts
         .sortBy { x =>
-          x.publicKey -> x.getBondedAmount.value
+          x.accountHash -> x.getBondedAmount.value
         }
         .collect {
           case account if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
-            PublicKey(account.publicKey.toByteArray) -> account.bondedAmount
+            PublicKeyHash(account.accountHash.toByteArray) -> account.bondedAmount
         }
         .toSeq
         .map {
-          case (pk, stake) =>
-            val validator = ByteString.copyFrom(pk)
-            Bond(validator, stake)
+          case (hash, stake) =>
+            val validatorPublicKeyHash = ByteString.copyFrom(hash)
+            Bond(validatorPublicKeyHash, stake)
         }
 
       state = Block
