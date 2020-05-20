@@ -508,11 +508,6 @@ where
         self
     }
 
-    pub fn expect_transfer_success(&mut self) -> &mut Self {
-        // TODO: Make me work
-        self
-    }
-
     pub fn is_error(&self) -> bool {
         let exec_response = self
             .exec_responses
