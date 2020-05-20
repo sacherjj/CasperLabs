@@ -3,7 +3,7 @@ package io.casperlabs.casper.dag
 import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.models.ObservedValidatorBehavior.{Empty, Equivocated, Honest}
-import io.casperlabs.crypto.Keys.PublicKeyHash
+import io.casperlabs.crypto.Keys.PublicKeyHashBS
 import io.casperlabs.catscontrib.MonadThrowable
 import io.casperlabs.models.{BlockHash, EraId, Message, ObservedValidatorBehavior}
 import shapeless.tag.@@
@@ -12,33 +12,33 @@ import io.casperlabs.shared.ByteStringPrettyPrinter._
 import scala.util.control.NoStackTrace
 
 final class EraObservedBehavior[A] private (
-    val data: Map[EraId, Map[PublicKeyHash, ObservedValidatorBehavior[A]]]
+    val data: Map[EraId, Map[PublicKeyHashBS, ObservedValidatorBehavior[A]]]
 ) {
-  private lazy val equivocators: Map[EraId, Set[PublicKeyHash]] =
+  private lazy val equivocators: Map[EraId, Set[PublicKeyHashBS]] =
     data
       .collect {
         case (keyBlockHash, lms) if keyBlockHashes(keyBlockHash) =>
           keyBlockHash -> lms.filter(_._2.isEquivocated).keySet
       }
-  val erasValidators: Map[EraId, Set[PublicKeyHash]] = data.mapValues(_.keySet)
+  val erasValidators: Map[EraId, Set[PublicKeyHashBS]] = data.mapValues(_.keySet)
 
   // Returns set of equivocating validators that are visible in the j-past-cone
   // of the era.
   def equivocatorsVisibleInEras(
       keyBlockHashes: Set[EraId]
-  ): Set[PublicKeyHash] =
-    keyBlockHashes.foldLeft(Set.empty[PublicKeyHash])(_ ++ equivocators(_))
+  ): Set[PublicKeyHashBS] =
+    keyBlockHashes.foldLeft(Set.empty[PublicKeyHashBS])(_ ++ equivocators(_))
 
   def keyBlockHashes: Set[EraId] = data.keySet
 
-  def validatorsInEra(keyBlockHash: EraId): Set[PublicKeyHash] =
-    data.get(keyBlockHash).fold(Set.empty[PublicKeyHash])(_.keySet)
+  def validatorsInEra(keyBlockHash: EraId): Set[PublicKeyHashBS] =
+    data.get(keyBlockHash).fold(Set.empty[PublicKeyHashBS])(_.keySet)
 
   def latestMessagesInEra(
       keyBlockHash: EraId
-  ): Map[PublicKeyHash, Set[A]] =
+  ): Map[PublicKeyHashBS, Set[A]] =
     data.get(keyBlockHash) match {
-      case None => Map.empty[PublicKeyHash, Set[A]]
+      case None => Map.empty[PublicKeyHashBS, Set[A]]
       case Some(lms) =>
         lms.mapValues {
           case Empty               => Set.empty[A]
@@ -50,12 +50,12 @@ final class EraObservedBehavior[A] private (
   def filter(f: EraId => Boolean): EraObservedBehavior[A] =
     new EraObservedBehavior[A](data.filterKeys(f))
 
-  def getEra(keyBlockHash: EraId): Map[PublicKeyHash, ObservedValidatorBehavior[A]] =
+  def getEra(keyBlockHash: EraId): Map[PublicKeyHashBS, ObservedValidatorBehavior[A]] =
     data.getOrElse(keyBlockHash, Map.empty)
 
   def getStatus(
       keyBlockHash: EraId,
-      validator: PublicKeyHash
+      validator: PublicKeyHashBS
   ): Option[ObservedValidatorBehavior[A]] =
     data.get(keyBlockHash).flatMap(_.get(validator))
 }
@@ -65,7 +65,7 @@ object EraObservedBehavior {
   type LocalDagView[A] = EraObservedBehavior[A] @@ LocalView
   type MessageJPast[A] = EraObservedBehavior[A] @@ MessageView
 
-  def local(data: Map[EraId, Map[PublicKeyHash, Set[Message]]]): LocalDagView[Message] =
+  def local(data: Map[EraId, Map[PublicKeyHashBS, Set[Message]]]): LocalDagView[Message] =
     apply(data).asInstanceOf[LocalDagView[Message]]
 
   // An enum that describes validator's observed state.
@@ -144,7 +144,7 @@ object EraObservedBehavior {
   def unknown: ValidatorStatus = Undefined
 
   def apply(
-      data: Map[EraId, Map[PublicKeyHash, Set[Message]]]
+      data: Map[EraId, Map[PublicKeyHashBS, Set[Message]]]
   ): EraObservedBehavior[Message] =
     new EraObservedBehavior(data.mapValues(_.map {
       case (v, lms) =>

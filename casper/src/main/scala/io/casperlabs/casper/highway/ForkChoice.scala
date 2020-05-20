@@ -67,6 +67,8 @@ trait ForkChoice[F[_]] {
 }
 
 object ForkChoice {
+  import DagRepresentation.Validator
+
   case class Result(
       block: Message.Block,
       // The fork choice must take into account messages from the parent
@@ -76,9 +78,9 @@ object ForkChoice {
       // on top of the main parent can cite all these justifications.
       justifications: Set[Message]
   ) {
-    lazy val justificationsMap: Map[PublicKeyBS, Set[Message]] =
+    lazy val justificationsMap: Map[Validator, Set[Message]] =
       justifications.toSeq
-        .map(j => PublicKey(j.validatorId) -> j)
+        .map(j => j.validatorId -> j)
         .groupBy(_._1)
         .mapValues(_.map(_._2).toSet)
   }
@@ -105,9 +107,9 @@ object ForkChoice {
           dag: DagRepresentation[F],
           keyBlock: Message.Block,
           eraStartBlock: Block,
-          latestMessages: Map[PublicKeyHash, Set[Message]],
-          equivocators: Set[PublicKeyHash]
-      ): F[(Block, Map[PublicKeyHash, Set[Message]])] =
+          latestMessages: Map[Validator, Set[Message]],
+          equivocators: Set[Validator]
+      ): F[(Block, Map[Validator, Set[Message]])] =
         for {
           weights <- EraStorage[F]
                       .getEraUnsafe(keyBlock.messageHash)
@@ -125,7 +127,7 @@ object ForkChoice {
                          for {
                            // Collect latest messages from honest validators that vote for the block.
                            relevantMessages <- honestValidators.toList
-                                                .foldLeftM(Map.empty[PublicKeyHash, Message]) {
+                                                .foldLeftM(Map.empty[Validator, Message]) {
                                                   case (acc, v) =>
                                                     latestHonestMessages
                                                       .get(v)
@@ -193,11 +195,11 @@ object ForkChoice {
           dagView: EraObservedBehavior[Message]
       )(
           implicit dag: DagRepresentation[F]
-      ): F[(Block, Map[PublicKeyHash, Set[Message]])] =
+      ): F[(Block, Map[Validator, Set[Message]])] =
         keyBlocks
           .foldM(
             startBlock -> Map
-              .empty[PublicKeyHash, Set[Message]]
+              .empty[Validator, Set[Message]]
           ) {
             case ((startBlock, accLatestMessages), currKeyBlock) =>
               val eraLatestMessages = dagView

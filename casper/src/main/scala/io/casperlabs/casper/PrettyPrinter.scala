@@ -101,7 +101,7 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
       mainParent <- header.parentHashes.headOption
       postState  <- header.state
     } yield s"Block j-rank #${header.jRank} main-rank #${header.mainRank} (${buildString(b.blockHash)}) " +
-      s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
+      s"-- Sender ID ${buildString(header.validatorPublicKeyHash)} " +
       s"-- M Parent Hash ${buildString(mainParent)} " +
       s"-- Contents ${buildString(postState.postStateHash)}" +
       s"-- Chain Name ${limit(header.chainName, 10)}"

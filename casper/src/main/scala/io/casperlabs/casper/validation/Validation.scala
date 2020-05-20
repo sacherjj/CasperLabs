@@ -14,7 +14,7 @@ import io.casperlabs.casper.util.execengine.ExecEngineUtil.StateHash
 import io.casperlabs.casper.util.{CasperLabsProtocol, ProtoUtil}
 import io.casperlabs.casper.validation.Errors.DropErrorWrapper
 import io.casperlabs.casper.validation.Validation.BlockEffects
-import io.casperlabs.crypto.Keys.{PublicKey, Signature}
+import io.casperlabs.crypto.Keys, Keys.{PublicKey, Signature}
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.ipc
 import io.casperlabs.smartcontracts.ExecutionEngineService
@@ -465,7 +465,7 @@ object Validation {
         verify(
           b.blockHash.toByteArray,
           Signature(b.getSignature.sig.toByteArray),
-          PublicKey(b.validatorPublicKey.toByteArray)
+          PublicKey(b.getHeader.validatorPublicKeyTemp.toByteArray)
         )
       ) match {
         case Success(true) => true.pure[F]
@@ -610,7 +610,7 @@ object Validation {
                else
                  ignore[F](
                    block.blockHash,
-                   s"block creator ${PrettyPrinter.buildString(block.validatorPublicKey)} has 0 weight."
+                   s"block creator ${PrettyPrinter.buildString(block.validatorPublicKeyHash)} has 0 weight."
                  ).as(false)
     } yield result
 
@@ -691,7 +691,7 @@ object Validation {
       isHighway: Boolean
   ): F[Unit] = {
     val prevBlockHash = b.getHeader.validatorPrevBlockHash
-    val validatorId   = b.getHeader.validatorPublicKey
+    val validatorId   = Keys.PublicKeyHash(b.getHeader.validatorPublicKeyHash)
     if (prevBlockHash.isEmpty) {
       ().pure[F]
     } else {

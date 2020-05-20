@@ -263,7 +263,7 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
       neglectedInvalidJustification = invalidJustifications.exists { justification =>
         val slashedValidatorBond =
           bonds(block).find(
-            _.validatorPublicKeyHash.toByteArray == justification.validatorPublicKeyHash
+            _.validatorPublicKeyHash == justification.validatorId
           )
         slashedValidatorBond match {
           case Some(bond) => Weight(bond.stake) > 0

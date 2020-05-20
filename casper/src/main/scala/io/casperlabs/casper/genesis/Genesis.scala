@@ -10,7 +10,7 @@ import cats.{Applicative, MonadError}
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.storage.block.BlockStorage
-import io.casperlabs.casper.{CasperConf, PrettyPrinter}
+import io.casperlabs.casper.{CasperConf, PrettyPrinter, ValidatorIdentity}
 import io.casperlabs.casper.consensus._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.util.ProtoUtil.{blockHeader, deployDataToEEDeploy, unsignedBlockProto}
@@ -80,7 +80,7 @@ object Genesis {
 
       header = blockHeader(
         body,
-        creator = Keys.PublicKey(Array.emptyByteArray), // Genesis has no creator
+        creator = ValidatorIdentity.empty, // Genesis has no creator
         parentHashes = Nil,
         justifications = Nil,
         state = state,

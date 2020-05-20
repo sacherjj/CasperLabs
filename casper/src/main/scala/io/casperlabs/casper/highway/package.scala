@@ -7,7 +7,7 @@ import cats._
 import cats.data.WriterT
 import cats.effect.Clock
 import cats.implicits._
-import io.casperlabs.crypto.Keys.PublicKeyHash
+import io.casperlabs.crypto.Keys.PublicKeyHashBS
 import io.casperlabs.models.Message
 import io.casperlabs.storage.BlockHash
 import org.apache.commons.math3.util.ArithmeticUtils
@@ -84,7 +84,7 @@ package object highway {
       WriterT.tell[F, Vector[HighwayEvent]](events.toVector)
   }
 
-  type LeaderFunction = Ticks => PublicKeyHash
+  type LeaderFunction = Ticks => PublicKeyHashBS
 
   type ValidatedMessage = Message @@ ValidatedTag
   def Validated(m: Message) = m.asInstanceOf[ValidatedMessage]

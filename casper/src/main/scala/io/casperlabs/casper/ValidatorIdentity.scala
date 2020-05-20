@@ -26,11 +26,20 @@ final case class ValidatorIdentity(
       ByteString.copyFrom(signatureAlgorithm.sign(data, privateKey))
     )
 
-  def publicKeyHash: Keys.PublicKeyHash =
+  val publicKeyHash: Keys.PublicKeyHash =
     signatureAlgorithm.publicKeyHash(publicKey)
+
+  val publicKeyHashBS: Keys.PublicKeyHashBS =
+    Keys.PublicKeyHash(ByteString.copyFrom(publicKeyHash))
 }
 
 object ValidatorIdentity {
+  val empty = ValidatorIdentity(
+    Keys.PublicKey(Array.empty[Byte]),
+    Keys.PrivateKey(Array.empty[Byte]),
+    SignatureAlgorithm.Ed25519
+  )
+
   private def fileContent[F[_]: Sync](path: Path): F[String] =
     Resource
       .fromAutoCloseable(Sync[F].delay(Source.fromFile(path.toFile)))

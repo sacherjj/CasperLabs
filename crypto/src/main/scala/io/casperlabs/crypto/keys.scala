@@ -126,7 +126,9 @@ object Keys {
     (signatureAlgorithm: String) => {
       val prefix = signatureAlgorithm.toUpperCase.getBytes(StandardCharsets.UTF_8) ++ separator
       (publicKey: PublicKey) => {
-        PublicKeyHash(Blake2b256.hash(prefix ++ publicKey))
+        val hash =
+          if (publicKey.isEmpty) Array.empty[Byte] else Blake2b256.hash(prefix ++ publicKey)
+        PublicKeyHash(hash)
       }
     }
   }

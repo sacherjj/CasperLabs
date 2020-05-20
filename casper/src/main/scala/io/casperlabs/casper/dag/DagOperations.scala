@@ -31,6 +31,8 @@ import scala.util.control.NoStackTrace
 
 object DagOperations {
 
+  import DagRepresentation.Validator
+
   /** Some traversals take so long that tracking the visited nodes can fill the memory.
     * Key should reduce the data we are traversing to a small identifier.
     */
@@ -80,7 +82,7 @@ object DagOperations {
   /** Traverses j-past-cone of the block and returns messages by specified validator.
     */
   def swimlaneV[F[_]: MonadThrowable](
-      validator: ByteString,
+      validator: Validator,
       message: Message,
       dag: DagLookup[F]
   ): StreamT[F, Message] = {
@@ -556,14 +558,14 @@ object DagOperations {
     import EraObservedBehavior._
 
     // Map a message's direct justifications to a map that represents its j-past-cone view.
-    val toEraMap: List[Message] => Map[EraId, Map[PublicKeyHash, Set[Message]]] =
-      _.groupBy(_.eraId).mapValues(_.groupBy(_.validatorPublicKeyHash).mapValues(_.toSet))
+    val toEraMap: List[Message] => Map[EraId, Map[Validator, Set[Message]]] =
+      _.groupBy(_.eraId).mapValues(_.groupBy(_.validatorId).mapValues(_.toSet))
 
-    def empty(v: PublicKeyHash): (PublicKeyHash, Set[Message]) =
+    def empty(v: Validator): (Validator, Set[Message]) =
       (v, Set.empty[Message])
-    def honest(v: PublicKeyHash, m: Message): (PublicKeyHash, Set[Message]) =
+    def honest(v: Validator, m: Message): (Validator, Set[Message]) =
       (v, Set(m))
-    def equivocated(v: PublicKeyHash, msgs: Set[Message]): (PublicKeyHash, Set[Message]) =
+    def equivocated(v: Validator, msgs: Set[Message]): (Validator, Set[Message]) =
       (v, msgs)
 
     // A map from every observed era to a set of validators that produced a message in each of the eras.
@@ -576,20 +578,20 @@ object DagOperations {
     val observedKeyBlocks =
       erasObservedBehavior.keyBlockHashes.map(_.show).mkString("[", ", ", "]")
 
-    val observations: F[Map[EraId, Map[PublicKeyHash, Set[Message]]]] =
+    val observations: F[Map[EraId, Map[Validator, Set[Message]]]] =
       (baseMap |+| toEraMap(justifications.filterNot(_.isGenesisLike))).toList
         .traverse {
           case (era, validatorsLatestMessages) =>
             validatorsLatestMessages.toList
               .traverse {
                 case (validator, messages) =>
-                  val observation: F[(PublicKeyHash, Set[Message])] =
+                  val observation: F[(Validator, Set[Message])] =
                     erasObservedBehavior.getStatus(era, validator) match {
                       case None =>
                         val msg = s"Message directly cites validator " +
                           s"${validator.show} in an era ${era.show} " +
                           s"but expected messages only from $observedKeyBlocks eras."
-                        MonadThrowable[F].raiseError[(PublicKeyHash, Set[Message])](
+                        MonadThrowable[F].raiseError[(Validator, Set[Message])](
                           new IllegalStateException(msg) with NoStackTrace
                         )
 
@@ -598,7 +600,7 @@ object DagOperations {
                         // There can't be any in the justifications either.
                         empty(validator).pure[F]
 
-                      case Some(Honest(msg)) =>
+                      case Some(Honest(_)) =>
                         if (messages.nonEmpty) {
                           import io.casperlabs.shared.Sorting.jRankOrdering
                           // Since we know that validator is honest we can pick the newest message.
@@ -614,7 +616,7 @@ object DagOperations {
                           // (because creator of the messages hasn't seen anything from that validator).
                           DagOperations
                             .swimlaneVFromJustifications[F](
-                              msg.validatorId,
+                              validator,
                               validatorsLatestMessages.values.flatten.toList,
                               dag
                             )
@@ -623,7 +625,7 @@ object DagOperations {
                             .map(_.fold(empty(validator))(honest(validator, _)))
                         }
 
-                      case Some(Equivocated(msg, _)) =>
+                      case Some(Equivocated(_, _)) =>
                         if (messages.size > 1)
                           // `messages` should be the latest messages by that validator in this era.
                           // They are tips of his swimlane and evidences for equivocation.
@@ -636,7 +638,7 @@ object DagOperations {
                           // of the message received.
                           val jConeTips = DagOperations
                             .swimlaneVFromJustifications[F](
-                              msg.validatorId,
+                              validator,
                               startingPoints,
                               dag
                             )
@@ -687,17 +689,13 @@ object DagOperations {
   def latestMessagesInEras[F[_]: Monad](
       dag: DagRepresentation[F],
       keyBlocks: List[Message]
-  ): F[Map[ByteString, Map[PublicKeyHash, Set[Message]]]] =
+  ): F[Map[ByteString, Map[Validator, Set[Message]]]] =
     keyBlocks
       .sortBy(_.jRank)(jRankOrdering.reverse)
       .traverse { kb =>
         for {
-          messagesByPublicKey <- dag.latestMessagesInEra(kb.messageHash)
-          messagesByPublisKeyHash = messagesByPublicKey.collect {
-            case (_, ms) if ms.nonEmpty =>
-              ms.head.validatorPublicKeyHash -> ms
-          }
-        } yield kb.messageHash -> messagesByPublisKeyHash
+          messagesByValidator <- dag.latestMessagesInEra(kb.messageHash)
+        } yield kb.messageHash -> messagesByValidator
       }
       .map(_.toMap)
 
@@ -709,7 +707,7 @@ object DagOperations {
     */
   def latestMessagesInErasUntil[F[_]: MonadThrowable: EraStorage: DagStorage](
       keyBlock: ByteString
-  ): F[Map[ByteString, Map[PublicKeyHash, Set[Message]]]] =
+  ): F[Map[ByteString, Map[Validator, Set[Message]]]] =
     for {
       keyBlocks            <- MessageProducer.collectKeyBlocks[F](keyBlock)
       dag                  <- DagStorage[F].getRepresentation

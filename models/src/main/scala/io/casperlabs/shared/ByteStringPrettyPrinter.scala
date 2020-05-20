@@ -2,7 +2,7 @@ package io.casperlabs.shared
 
 import com.google.protobuf.ByteString
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.Keys.{PublicKeyBS, PublicKeyHash}
+import io.casperlabs.crypto.Keys.{PublicKeyBS, PublicKeyHashBS}
 import cats.Show
 
 trait ByteStringPrettyPrinter {
@@ -25,8 +25,8 @@ trait ByteStringPrettyPrinter {
   implicit val publicKeyBSShow: cats.Show[PublicKeyBS] =
     cats.Show.show[PublicKeyBS](byteStringShow.show(_))
 
-  implicit val publicKeyHashShow: cats.Show[PublicKeyHash] =
-    cats.Show.show[PublicKeyHash](Base16.encode)
+  implicit val publicKeyHashBSShow: cats.Show[PublicKeyHashBS] =
+    cats.Show.show[PublicKeyHashBS](buildStringNoLimit(_))
 }
 
 object ByteStringPrettyPrinter extends ByteStringPrettyPrinter

@@ -36,9 +36,6 @@ sealed trait Message {
   val signature: consensus.Signature
   val roundId: Long
 
-  // lazy val validatorPublicKeyHash: PublicKeyHash =
-  //   Keys.publicKeyHash(signature.sigAlgorithm)(PublicKey(validatorId.toByteArray))
-
   // Returns the `keyBlockHash`, but it was considered unintuitive after a while.
   val eraId: Id
 
@@ -92,8 +89,8 @@ object Message {
       if (blockSummary.getHeader.parentHashes.isEmpty) Seq.empty
       else blockSummary.getHeader.parentHashes.tail
 
-    lazy val weightMap: Map[ByteString, Weight] = blockSummary.getHeader.getState.bonds.map {
-      case Bond(validatorPk, stake) => validatorPk -> Weight(stake)
+    lazy val weightMap: Map[PublicKeyHashBS, Weight] = blockSummary.getHeader.getState.bonds.map {
+      case Bond(validatorPk, stake) => PublicKeyHash(validatorPk) -> Weight(stake)
     }.toMap
 
     def isBlock: Boolean = true

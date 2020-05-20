@@ -5,6 +5,7 @@ import io.casperlabs.casper.consensus.Block.{GlobalState, Justification}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.models.Message._
+import io.casperlabs.crypto.Keys.{PublicKeyHash, PublicKeyHashBS}
 
 object BlockImplicits {
   implicit class BlockOps(val block: Block) extends AnyVal {
@@ -13,23 +14,25 @@ object BlockImplicits {
         block.getHeader.validatorPublicKeyHash.isEmpty &&
         block.getSignature.sig.isEmpty
 
-    def parentHashes: Seq[ByteString]        = block.getHeader.parentHashes
-    def parents: Seq[ByteString]             = block.getHeader.parentHashes
-    def justifications: Seq[Justification]   = block.getHeader.justifications
-    def justificationHashes: Seq[ByteString] = block.getHeader.justifications.map(_.latestBlockHash)
-    def state: GlobalState                   = block.getHeader.getState
-    def bodyHash: ByteString                 = block.getHeader.bodyHash
-    def timestamp: Long                      = block.getHeader.timestamp
-    def protocolVersion: ProtocolVersion     = block.getHeader.getProtocolVersion
-    def deployCount: Int                     = block.getHeader.deployCount
-    def chainName: String                    = block.getHeader.chainName
-    def validatorBlockSeqNum: Int            = block.getHeader.validatorBlockSeqNum
-    def validatorPublicKeyHash: ByteString   = block.getHeader.validatorPublicKeyHash
-    def jRank: JRank                         = asJRank(block.getHeader.jRank)
-    def mainRank: MainRank                   = asMainRank(block.getHeader.mainRank)
-    def weightMap: Map[ByteString, Weight] =
+    def parentHashes: Seq[ByteString]      = block.getHeader.parentHashes
+    def parents: Seq[ByteString]           = block.getHeader.parentHashes
+    def justifications: Seq[Justification] = block.getHeader.justifications
+    def justificationHashes: Seq[ByteString] =
+      block.getHeader.justifications.map(_.latestBlockHash)
+    def state: GlobalState               = block.getHeader.getState
+    def bodyHash: ByteString             = block.getHeader.bodyHash
+    def timestamp: Long                  = block.getHeader.timestamp
+    def protocolVersion: ProtocolVersion = block.getHeader.getProtocolVersion
+    def deployCount: Int                 = block.getHeader.deployCount
+    def chainName: String                = block.getHeader.chainName
+    def validatorBlockSeqNum: Int        = block.getHeader.validatorBlockSeqNum
+    def validatorPublicKeyHash: PublicKeyHashBS =
+      PublicKeyHash(block.getHeader.validatorPublicKeyHash)
+    def jRank: JRank       = asJRank(block.getHeader.jRank)
+    def mainRank: MainRank = asMainRank(block.getHeader.mainRank)
+    def weightMap: Map[PublicKeyHashBS, Weight] =
       block.getHeader.getState.bonds
-        .map(b => (b.validatorPublicKeyHash, Weight(b.stake)))
+        .map(b => (PublicKeyHash(b.validatorPublicKeyHash), Weight(b.stake)))
         .toMap
 
     def getSummary: BlockSummary =
@@ -77,12 +80,13 @@ object BlockImplicits {
     def deployCount: Int                   = summary.getHeader.deployCount
     def chainName: String                  = summary.getHeader.chainName
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
-    def validatorPublicKeyHash: ByteString = summary.getHeader.validatorPublicKeyHash
-    def jRank: JRank                       = asJRank(summary.getHeader.jRank)
-    def mainRank: MainRank                 = asMainRank(summary.getHeader.mainRank)
-    def weightMap: Map[ByteString, Weight] =
+    def validatorPublicKeyHash: PublicKeyHashBS =
+      PublicKeyHash(summary.getHeader.validatorPublicKeyHash)
+    def jRank: JRank       = asJRank(summary.getHeader.jRank)
+    def mainRank: MainRank = asMainRank(summary.getHeader.mainRank)
+    def weightMap: Map[PublicKeyHashBS, Weight] =
       summary.getHeader.getState.bonds
-        .map(b => (b.validatorPublicKeyHash, Weight(b.stake)))
+        .map(b => (PublicKeyHash(b.validatorPublicKeyHash), Weight(b.stake)))
         .toMap
   }
 

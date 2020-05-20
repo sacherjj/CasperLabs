@@ -4,7 +4,7 @@ import cats._
 import cats.implicits._
 import cats.data.NonEmptyList
 import io.casperlabs.crypto.hash.Blake2b256
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyHash}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyHash, PublicKeyHashBS}
 import io.casperlabs.casper.consensus.{Bond, Era}
 import io.casperlabs.catscontrib.MonadThrowable
 import java.security.SecureRandom
@@ -51,7 +51,7 @@ object LeaderSequencer extends LeaderSequencer {
     * with a relative frequency based on their weight. */
   def apply(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): LeaderFunction = {
     // Make a list of (validator, from, to) triplets.
-    type ValidatorRange = (PublicKeyHash, BigInt, BigInt)
+    type ValidatorRange = (PublicKeyHashBS, BigInt, BigInt)
 
     val (validators, total) = {
       val acc = bonds
@@ -74,7 +74,7 @@ object LeaderSequencer extends LeaderSequencer {
     }
 
     // Given a target sum of bonds, find the validator with a total cumulative weight in that range.
-    def bisect(target: BigInt, i: Int = 0, j: Int = validators.size - 1): PublicKeyHash = {
+    def bisect(target: BigInt, i: Int = 0, j: Int = validators.size - 1): PublicKeyHashBS = {
       val k = (i + j) / 2
       val v = validators(k)
       // The first validator has the 0 inclusive, upper exclusive.
