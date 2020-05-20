@@ -330,6 +330,12 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       case Some(Status(candidate, _)) if candidate.blockHash != blockHash =>
         Left(InvalidArgument("The block hash doesn't match the candidate."))
 
+      case Some(Status(_, block))
+          if !block.getHeader.getState.bonds
+            .map(_.validatorPublicKeyHash)
+            .contains(approverAccountHash(approval)) =>
+        Left(InvalidArgument("The signatory is not one of the bonded validators."))
+
       case _
           if !backend.validateSignature(
             blockHash,
@@ -337,12 +343,6 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
             approval.getSignature
           ) =>
         Left(InvalidArgument("Could not validate signature."))
-
-      case Some(Status(_, block))
-          if !block.getHeader.getState.bonds
-            .map(_.validatorPublicKeyHash.toByteArray)
-            .contains(approverAccountHash(approval)) =>
-        Left(InvalidArgument("The signatory is not one of the bonded validators."))
 
       case _ =>
         // It's new.

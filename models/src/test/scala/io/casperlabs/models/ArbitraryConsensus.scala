@@ -78,6 +78,8 @@ trait ArbitraryConsensus {
       val sig = Ed25519.sign(data.toByteArray, PrivateKey(privateKey.toByteArray))
       Signature(Ed25519.name, ByteString.copyFrom(sig))
     }
+
+    val sigAlgorithm = Ed25519.name
   }
 
   protected val genAccountKeys: Gen[AccountKeys] =
@@ -94,7 +96,7 @@ trait ArbitraryConsensus {
   def numValidators: Int = 10
 
   protected lazy val randomAccounts   = sample(Gen.listOfN(numAccounts, genAccountKeys))
-  protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genKey))
+  protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genAccountKeys))
 
   implicit val arbProtocolVersion: Arbitrary[ProtocolVersion] = Arbitrary {
     for {
@@ -124,10 +126,10 @@ trait ArbitraryConsensus {
 
   implicit val arbBond: Arbitrary[Bond] = Arbitrary {
     for {
-      hash  <- genHash
-      stake <- arbitrary[Long]
+      validator <- Gen.oneOf(randomValidators)
+      stake     <- arbitrary[Long]
     } yield Bond()
-      .withValidatorPublicKeyHash(hash)
+      .withValidatorPublicKeyHash(validator.publicKeyHash)
       .withStake(state.BigInt(stake.toString, bitWidth = 512))
   }
 
@@ -142,7 +144,7 @@ trait ArbitraryConsensus {
     for {
       blockHash <- genHash
       validator <- Gen.oneOf(randomValidators)
-    } yield Block.Justification(validator, blockHash)
+    } yield Block.Justification(validator.publicKeyHash, blockHash)
   }
 
   implicit val arbBlockHeader: Arbitrary[Block.Header] = Arbitrary {
@@ -155,8 +157,7 @@ trait ArbitraryConsensus {
       bodyHash           <- genHash
       preStateHash       <- genHash
       postStateHash      <- genHash
-      validatorPublicKey <- Gen.oneOf(randomValidators)
-      validatorHash      = ByteString.copyFrom(Blake2b256.hash(validatorPublicKey.toByteArray))
+      validator          <- Gen.oneOf(randomValidators)
       protocolVersion    <- arbitrary[ProtocolVersion]
     } yield {
       Block
@@ -164,8 +165,8 @@ trait ArbitraryConsensus {
         .withParentHashes(parentHashes)
         .withState(Block.GlobalState(preStateHash, postStateHash, Seq.empty))
         .withDeployCount(deployCount)
-        .withValidatorPublicKeyTemp(validatorPublicKey)
-        .withValidatorPublicKeyHash(validatorHash)
+        .withValidatorPublicKeyTemp(validator.publicKey)
+        .withValidatorPublicKeyHash(validator.publicKeyHash)
         .withBodyHash(bodyHash)
         .withProtocolVersion(protocolVersion)
         .withJustifications(justifications)
