@@ -37,7 +37,9 @@ impl GameTest {
             .with_address(PLAYER_X)
             .with_authorization_keys(&[PLAYER_X])
             .build();
-        self.context.run(session);
+        self.context
+            .run(session)
+            .expect("test_context successful run");
         self
     }
 
@@ -48,7 +50,9 @@ impl GameTest {
             .with_address(PLAYER_X)
             .with_authorization_keys(&[PLAYER_X])
             .build();
-        self.context.run(session);
+        self.context
+            .run(session)
+            .expect("test_context successful run");
         self
     }
 
@@ -59,7 +63,9 @@ impl GameTest {
             .with_address(player)
             .with_authorization_keys(&[player])
             .build();
-        self.context.run(session);
+        self.context
+            .run(session)
+            .expect("test_context successful run");
         self
     }
 
@@ -70,7 +76,9 @@ impl GameTest {
             .with_address(player)
             .with_authorization_keys(&[player])
             .build();
-        self.context.run(session);
+        self.context
+            .run(session)
+            .expect("test_context successful run");
         self
     }
 

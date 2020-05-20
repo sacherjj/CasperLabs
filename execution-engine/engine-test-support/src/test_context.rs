@@ -29,12 +29,16 @@ impl TestContext {
             }
         }
     }
-    /// Runs the supplied [`Session`], asserting successful execution of the contained deploy
+    /// Runs the supplied [`Session`], return Result of executing the contained deploy
     ///
-    /// if Session.expect_success (default) will panic if failure.  (Allows cases where failure is
-    /// expected) if Session.check_transfer_success is given, will verify transfer balances
-    /// including gas used. if Session.commit (default) will commit resulting transforms.
-    pub fn run(&mut self, session: Session) -> &mut Self {
+    /// if Session.expect_success (default) will err if failure.  (Allows cases where failure is
+    /// expected)
+    ///
+    /// if Session.check_transfer_success is given, will verify transfer balances
+    /// including gas used.
+    ///
+    /// if Session.commit (default) will commit resulting transforms.
+    pub fn run(&mut self, session: Session) -> std::result::Result<(), Error> {
         match session.check_transfer_success {
             Some(session_transfer_info) => {
                 let source_initial_balance = self
@@ -58,25 +62,31 @@ impl TestContext {
                         let target_ending_balance = self
                             .maybe_get_balance_for_purse(session_transfer_info.maybe_target_purse)
                             .expect("target ending balance");
-
-                        assert_eq!(
-                            target_initial_balance + session_transfer_info.transfer_amount,
-                            target_ending_balance,
-                            "incorrect target balance"
-                        )
+                        let expected_target_ending_balance =
+                            target_initial_balance + session_transfer_info.transfer_amount;
+                        if expected_target_ending_balance != target_ending_balance {
+                            let error = format!(
+                                "source ending balance does not match. expected: {}  actual{}",
+                                expected_target_ending_balance, target_ending_balance
+                            );
+                            return Err(Error::from(error));
+                        }
                     }
                 }
 
                 let source_ending_balance = self
                     .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
                     .expect("source ending balance");
-                assert_eq!(
-                    source_initial_balance
-                        - session_transfer_info.transfer_amount
-                        - Motes::from_gas(gas_cost, CONV_RATE).expect("motes from gas"),
-                    source_ending_balance,
-                    "incorrect source balance"
-                );
+                let expected_source_ending_balance = source_initial_balance
+                    - session_transfer_info.transfer_amount
+                    - Motes::from_gas(gas_cost, CONV_RATE).expect("motes from gas");
+                if expected_source_ending_balance != source_ending_balance {
+                    let error = format!(
+                        "source ending balance does not match. expected: {}  actual{}",
+                        expected_source_ending_balance, source_ending_balance
+                    );
+                    return Err(Error::from(error));
+                }
             }
             None => {
                 let builder = self.inner.exec(session.inner);
@@ -88,8 +98,7 @@ impl TestContext {
                 }
             }
         }
-
-        self
+        Ok(())
     }
 
     /// Queries for a [`Value`] stored under the given `key` and `path`.
