@@ -37,7 +37,9 @@ object Keys {
   sealed trait PublicKeyHashTag
   type PublicKeyHash = Array[Byte] @@ PublicKeyHashTag
   def PublicKeyHash(a: Array[Byte]): PublicKeyHash = a.asInstanceOf[PublicKeyHash]
-  def PublicKeyHash(a: ByteString): PublicKeyHash  = PublicKeyHash(a)
+
+  type PublicKeyHashBS = ByteString @@ PublicKeyHashTag
+  def PublicKeyHash(a: ByteString): PublicKeyHashBS = a.asInstanceOf[PublicKeyHashBS]
 
   sealed trait ParseError { self =>
     def errorMessage: String

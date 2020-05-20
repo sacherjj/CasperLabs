@@ -10,7 +10,7 @@ object BlockImplicits {
   implicit class BlockOps(val block: Block) extends AnyVal {
     def isGenesisLike: Boolean =
       block.getHeader.parentHashes.isEmpty &&
-        block.getHeader.validatorPublicKey.isEmpty &&
+        block.getHeader.validatorPublicKeyHash.isEmpty &&
         block.getSignature.sig.isEmpty
 
     def parentHashes: Seq[ByteString]        = block.getHeader.parentHashes
@@ -24,7 +24,7 @@ object BlockImplicits {
     def deployCount: Int                     = block.getHeader.deployCount
     def chainName: String                    = block.getHeader.chainName
     def validatorBlockSeqNum: Int            = block.getHeader.validatorBlockSeqNum
-    def validatorPublicKey: ByteString       = block.getHeader.validatorPublicKey
+    def validatorPublicKeyHash: ByteString   = block.getHeader.validatorPublicKeyHash
     def jRank: JRank                         = asJRank(block.getHeader.jRank)
     def mainRank: MainRank                   = asMainRank(block.getHeader.mainRank)
     def weightMap: Map[ByteString, Weight] =
@@ -65,7 +65,7 @@ object BlockImplicits {
   implicit class BlockSummaryOps(val summary: BlockSummary) extends AnyVal {
     def isGenesisLike: Boolean =
       summary.getHeader.parentHashes.isEmpty &&
-        summary.getHeader.validatorPublicKey.isEmpty &&
+        summary.getHeader.validatorPublicKeyHash.isEmpty &&
         summary.getSignature.sig.isEmpty
     def parentHashes: Seq[ByteString]      = summary.getHeader.parentHashes
     def parents: Seq[ByteString]           = summary.getHeader.parentHashes
@@ -77,7 +77,7 @@ object BlockImplicits {
     def deployCount: Int                   = summary.getHeader.deployCount
     def chainName: String                  = summary.getHeader.chainName
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
-    def validatorPublicKey: ByteString     = summary.getHeader.validatorPublicKey
+    def validatorPublicKeyHash: ByteString = summary.getHeader.validatorPublicKeyHash
     def jRank: JRank                       = asJRank(summary.getHeader.jRank)
     def mainRank: MainRank                 = asMainRank(summary.getHeader.mainRank)
     def weightMap: Map[ByteString, Weight] =

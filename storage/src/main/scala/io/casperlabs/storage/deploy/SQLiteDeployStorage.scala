@@ -11,7 +11,7 @@ import io.casperlabs.casper.consensus.Block.ProcessedDeploy
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.casper.consensus.info.DeployInfo.ProcessingResult
 import io.casperlabs.casper.consensus.{Block, Deploy, DeploySummary}
-import io.casperlabs.crypto.Keys.PublicKeyHash
+import io.casperlabs.crypto.Keys.PublicKeyHashBS
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.metrics.Metrics.Source
 import io.casperlabs.shared.Time
@@ -339,10 +339,10 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         .to[List]
         .transact(readXa)
 
-    override def readProcessedByAccount(account: PublicKeyHash): F[List[Deploy]] =
+    override def readProcessedByAccount(account: PublicKeyHashBS): F[List[Deploy]] =
       readByAccountAndStatus(account, ProcessedStatusCode)
 
-    private def readByAccountAndStatus(account: PublicKeyHash, status: Int): F[List[Deploy]] =
+    private def readByAccountAndStatus(account: PublicKeyHashBS, status: Int): F[List[Deploy]] =
       (fr"SELECT summary, " ++ bodyCol() ++ fr"""
           FROM buffered_deploys
           WHERE account=$account AND status=$status""")
@@ -478,7 +478,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
       }
 
     override def getDeploysByAccount(
-        account: PublicKeyHash,
+        account: PublicKeyHashBS,
         limit: Int,
         lastTimeStamp: Long,
         lastDeployHash: DeployHash,
