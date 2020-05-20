@@ -158,9 +158,9 @@ const DeploysTable = observer(
               </td>
               <td className="text-center">
                 {deploy.getIsError() ? (
-                  <SuccessIcon/>
+                  <FailIcon/>
                 ) : (
-                    <FailIcon/>
+                    <SuccessIcon/>
                   )}
               </td>
               <td>{deploy.getErrorMessage()}</td>
