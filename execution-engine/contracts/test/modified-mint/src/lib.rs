@@ -1,69 +1,40 @@
 #![no_std]
 
+#[macro_use]
 extern crate alloc;
 
-use alloc::string::String;
+use alloc::{boxed::Box, collections::BTreeMap, string::String};
 
-use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
+use contract::{
+    contract_api::{runtime, storage},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 use mint::Mint;
-use mint_token::MintContract;
-use types::{system_contract_errors::mint::Error, ApiError, CLValue, URef, U512};
+use mint_token::{
+    MintContract, ARG_AMOUNT, ARG_SOURCE, ARG_TARGET, METHOD_BALANCE, METHOD_CREATE, METHOD_MINT,
+    METHOD_TRANSFER,
+};
+use types::{
+    contracts::NamedKeys, system_contract_errors::mint::Error, ApiError, CLType, CLValue,
+    EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter, URef, U512,
+};
 
 const VERSION: &str = "1.1.0";
+const HASH_KEY_NAME: &str = "mint_hash";
+const ACCESS_KEY_NAME: &str = "mint_access";
 
-pub fn delegate() {
-    let mut mint = MintContract;
-    let method_name: String = runtime::get_arg(0)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+fn install() {
+    let entry_points = mint_token::get_entry_points();
 
-    match method_name.as_str() {
-        // argument: U512
-        // return: Result<URef, mint::error::Error>
-        "mint" => {
-            let amount: U512 = runtime::get_arg(1)
-                .unwrap_or_revert_with(ApiError::MissingArgument)
-                .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let result: Result<URef, Error> = mint.mint(amount);
-            let ret = CLValue::from_t(result).unwrap_or_revert();
-            runtime::ret(ret)
-        }
+    let (contract_package_hash, access_uref) = storage::create_contract_package_at_hash();
+    runtime::put_key(HASH_KEY_NAME, contract_package_hash.into());
+    runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
-        "create" => {
-            let uref = mint
-                .mint(U512::zero())
-                .expect("Creating a zero balance purse should always be allowed.");
-            let ret = CLValue::from_t(uref).unwrap_or_revert();
-            runtime::ret(ret)
-        }
+    let named_keys = NamedKeys::new();
 
-        "balance" => {
-            let uref: URef = runtime::get_arg(1)
-                .unwrap_or_revert_with(ApiError::MissingArgument)
-                .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let balance: Option<U512> = mint.balance(uref).unwrap_or_revert();
-            let ret = CLValue::from_t(balance).unwrap_or_revert();
-            runtime::ret(ret)
-        }
+    let contract_key =
+        storage::add_contract_version(contract_package_hash, access_uref, entry_points, named_keys);
 
-        "transfer" => {
-            let source: URef = runtime::get_arg(1)
-                .unwrap_or_revert_with(ApiError::MissingArgument)
-                .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let target: URef = runtime::get_arg(2)
-                .unwrap_or_revert_with(ApiError::MissingArgument)
-                .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let amount: U512 = runtime::get_arg(3)
-                .unwrap_or_revert_with(ApiError::MissingArgument)
-                .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let result: Result<(), Error> = mint.transfer(source, target, amount);
-            let ret = CLValue::from_t(result).unwrap_or_revert();
-            runtime::ret(ret);
-        }
-        "version" => {
-            runtime::ret(CLValue::from_t(VERSION).unwrap_or_revert());
-        }
-
-        _ => panic!("Unknown method name!"),
-    }
+    let return_value = CLValue::from_t((contract_package_hash, contract_key)).unwrap_or_revert();
+    runtime::ret(return_value);
 }

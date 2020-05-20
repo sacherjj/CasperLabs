@@ -44,7 +44,6 @@ const ARG_VERSION: &str = "version";
 const ARG_NEW_PURSE_NAME: &str = "new_purse_name";
 const ARG_SEED: &str = "seed";
 
-
 /// Performs define and execution of versioned contracts, calling them directly from hash
 #[ignore]
 #[test]
@@ -156,7 +155,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
         .into_hash()
         .expect("should have into hash");
 
-        let stored_contract_package_hash = account_1
+    let stored_contract_package_hash = account_1
         .named_keys()
         .get(DO_NOTHING_HASH_KEY_NAME)
         .expect("should have key of do_nothing_hash")
@@ -458,30 +457,29 @@ fn should_support_extending_functionality() {
 #[test]
 fn should_maintain_named_keys_across_upgrade() {
     let mut builder = InMemoryWasmTestBuilder::default();
-    
+
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
-    
+
     // store contract
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
         };
-    
+
         builder.exec(exec_request).expect_success().commit();
     }
-    
+
     let account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
-    
+
     let stored_hash = account
         .named_keys()
         .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
         .expect("should have stored hash")
         .into_hash()
         .expect("should have hash");
-    
 
     let stored_package_hash = account
         .named_keys()
@@ -489,12 +487,11 @@ fn should_maintain_named_keys_across_upgrade() {
         .expect("should have stored package hash")
         .into_hash()
         .expect("should have hash");
-    
 
     // add several purse urefs to named_keys
     for index in 0..TOTAL_PURSES {
         let purse_name: &str = &format!("purse_{}", index);
-    
+
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
             ExecuteRequestBuilder::standard(
@@ -508,9 +505,9 @@ fn should_maintain_named_keys_across_upgrade() {
             )
             .build()
         };
-    
+
         builder.exec(exec_request).expect_success().commit();
-    
+
         // verify known uref actually exists prior to upgrade
         let contract = builder
             .get_contract(stored_hash)
@@ -520,26 +517,29 @@ fn should_maintain_named_keys_across_upgrade() {
             "purse uref should exist in contract's named_keys before upgrade"
         );
     }
-    
+
     // upgrade contract
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name,
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
                 runtime_args! {
                     ARG_CONTRACT_PACKAGE => stored_package_hash,
-                })
-                .build()
+                },
+            )
+            .build()
         };
-    
+
         builder.exec(exec_request).expect_success().commit();
     }
-    
+
     // verify all urefs still exist in named_keys after upgrade
     let contract = builder
         .get_contract(stored_hash)
         .expect("should have contract");
-    
+
     for index in 0..TOTAL_PURSES {
         let purse_name: &str = &format!("purse_{}", index);
         assert!(

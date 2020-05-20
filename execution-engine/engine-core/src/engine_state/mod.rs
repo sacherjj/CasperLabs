@@ -171,7 +171,7 @@ where
         let preprocessor = Preprocessor::new(wasm_costs);
 
         // Spec #3: Create "virtual system account" object.
-        let virtual_system_account = {
+        let mut virtual_system_account = {
             let named_keys = BTreeMap::new();
             let purse = URef::new(Default::default(), AccessRights::READ_ADD_WRITE);
             Account::create(SYSTEM_ACCOUNT_ADDR, named_keys, purse)
@@ -212,7 +212,7 @@ where
             let mint_installer_bytes = ee_config.mint_installer_bytes();
             let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
             let args = RuntimeArgs::new();
-            let mut named_keys = BTreeMap::new();
+            let mut named_keys = virtual_system_account.named_keys().clone();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let install_deploy_hash = genesis_config_hash.into();
             let hash_address_generator = Rc::clone(&hash_address_generator);
@@ -228,7 +228,7 @@ where
                 EntryPointType::Session,
             );
 
-            executor.exec_system(
+            let result = executor.exec_system(
                 mint_installer_module,
                 entry_point,
                 args,
@@ -247,7 +247,11 @@ where
                 phase,
                 protocol_data,
                 system_contract_cache,
-            )?
+            )?;
+
+            *virtual_system_account.named_keys_mut() = named_keys;
+
+            result
         };
         log::trace!("Mint hash: {:?}", mint_hash);
         // Spec #7: Execute pos installer wasm code, passing the initially bonded validators as an
@@ -287,7 +291,7 @@ where
                 );
                 RuntimeArgs::Named(vec![arg_mint_package_hash, arg_genesis_validators])
             };
-            let mut named_keys = BTreeMap::new();
+            let mut named_keys = virtual_system_account.named_keys().clone();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let entry_point = EntryPoint::new(
                 "install".to_string(),
@@ -297,7 +301,7 @@ where
                 EntryPointType::Session,
             );
 
-            executor.exec_system(
+            let result = executor.exec_system(
                 proof_of_stake_installer_module,
                 entry_point,
                 args,
@@ -316,7 +320,11 @@ where
                 phase,
                 partial_protocol_data,
                 system_contract_cache,
-            )?
+            )?;
+
+            *virtual_system_account.named_keys_mut() = named_keys;
+
+            result
         };
 
         log::trace!("PoS hash: {:?}", proof_of_stake_hash);
@@ -346,7 +354,7 @@ where
             let standard_payment_installer_module =
                 preprocessor.preprocess(standard_payment_installer_bytes)?;
             let args = RuntimeArgs::new();
-            let mut named_keys = BTreeMap::new();
+            let mut named_keys = virtual_system_account.named_keys().clone();
             let authorization_keys = BTreeSet::new();
             let install_deploy_hash = genesis_config_hash.into();
             let hash_address_generator = Rc::clone(&hash_address_generator);
@@ -361,7 +369,7 @@ where
                 EntryPointType::Session,
             );
 
-            executor.exec_system(
+            let result = executor.exec_system(
                 standard_payment_installer_module,
                 entry_point,
                 args,
@@ -380,7 +388,11 @@ where
                 phase,
                 protocol_data,
                 system_contract_cache,
-            )?
+            )?;
+
+            *virtual_system_account.named_keys_mut() = named_keys;
+
+            result
         };
 
         // Spec #2: Associate given CostTable with given ProtocolVersion.
@@ -406,14 +418,11 @@ where
         //   account (with the exception of its known keys)
         //
 
-        // Create known keys for chainspec accounts
-        let account_named_keys: BTreeMap<String, Key> = BTreeMap::new();
-
-        // Create known keys for system account
-        let system_account_named_keys: BTreeMap<String, Key> = BTreeMap::new();
-
         // Create accounts
         {
+            // Create known keys for chainspec accounts
+            let account_named_keys: BTreeMap<String, Key> = BTreeMap::new();
+
             // Collect chainspec accounts and their known keys with the genesis account and its
             // known keys
             let accounts = {
@@ -425,7 +434,7 @@ where
                     .collect();
                 let system_account =
                     GenesisAccount::new(SYSTEM_ACCOUNT_ADDR, Motes::zero(), Motes::zero());
-                ret.push((system_account, system_account_named_keys));
+                ret.push((system_account, virtual_system_account.named_keys().clone()));
                 ret
             };
 
@@ -620,7 +629,7 @@ where
                 };
 
                 // execute as system account
-                let system_account = {
+                let mut system_account = {
                     let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                     match tracking_copy.borrow_mut().read(correlation_id, &key) {
                         Ok(Some(StoredValue::Account(account))) => account,
@@ -629,7 +638,7 @@ where
                     }
                 };
 
-                let mut keys = BTreeMap::new();
+                let mut keys = system_account.named_keys().clone();
 
                 let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                 let authorization_keys = {
@@ -667,7 +676,8 @@ where
                 let executor = Executor::new(self.config);
 
                 let upgrade_entry_point = EntryPoint::default(); // TODO: implement
-                executor.exec_system(
+                println!("system account {:?}", system_account);
+                let result = executor.exec_system(
                     upgrade_installer_module,
                     upgrade_entry_point,
                     args,
@@ -682,11 +692,20 @@ where
                     uref_address_generator,
                     new_protocol_version,
                     correlation_id,
-                    tracking_copy,
+                    Rc::clone(&tracking_copy),
                     phase,
                     new_protocol_data,
                     system_contract_cache,
-                )?
+                )?;
+
+                *system_account.named_keys_mut() = keys;
+
+                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+                let value = StoredValue::Account(system_account);
+
+                tracking_copy.borrow_mut().write(key, value);
+
+                result
             }
         }
 

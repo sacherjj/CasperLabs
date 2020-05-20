@@ -1,5 +1,10 @@
 #![no_std]
 
+#[macro_use]
+extern crate alloc;
+
+use alloc::boxed::Box;
+
 use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
@@ -8,8 +13,10 @@ use mint::{Mint, RuntimeProvider, StorageProvider};
 use types::{
     account::PublicKey,
     bytesrepr::{FromBytes, ToBytes},
+    contracts::Parameters,
     system_contract_errors::mint::Error,
-    CLTyped, CLValue, Key, URef, U512,
+    CLType, CLTyped, CLValue, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Key,
+    Parameter, URef, U512,
 };
 
 pub const METHOD_MINT: &str = "mint";
@@ -98,4 +105,56 @@ pub fn transfer() {
     let result: Result<(), Error> = mint_contract.transfer(source, target, amount);
     let ret = CLValue::from_t(result).unwrap_or_revert();
     runtime::ret(ret);
+}
+
+pub fn get_entry_points() -> EntryPoints {
+    let mut entry_points = EntryPoints::new();
+
+    let entry_point = EntryPoint::new(
+        METHOD_MINT,
+        vec![Parameter::new(ARG_AMOUNT, CLType::U512)],
+        CLType::Result {
+            ok: Box::new(CLType::URef),
+            err: Box::new(CLType::U8),
+        },
+        EntryPointAccess::Public,
+        EntryPointType::Contract,
+    );
+    entry_points.add_entry_point(entry_point);
+
+    let entry_point = EntryPoint::new(
+        METHOD_CREATE,
+        Parameters::new(),
+        CLType::URef,
+        EntryPointAccess::Public,
+        EntryPointType::Contract,
+    );
+    entry_points.add_entry_point(entry_point);
+
+    let entry_point = EntryPoint::new(
+        METHOD_BALANCE,
+        vec![Parameter::new(ARG_PURSE, CLType::URef)],
+        CLType::Option(Box::new(CLType::U512)),
+        EntryPointAccess::Public,
+        EntryPointType::Contract,
+    );
+    entry_points.add_entry_point(entry_point);
+
+    let entry_point = EntryPoint::new(
+        METHOD_TRANSFER,
+        vec![
+            Parameter::new(ARG_SOURCE, CLType::URef),
+            Parameter::new(ARG_TARGET, CLType::URef),
+            Parameter::new(ARG_AMOUNT, CLType::U512),
+        ],
+        CLType::Result {
+            ok: Box::new(CLType::Unit),
+            err: Box::new(CLType::U8),
+        },
+        EntryPointAccess::Public,
+        EntryPointType::Contract,
+    );
+    entry_points.add_entry_point(entry_point);
+
+    entry_points
 }

@@ -42,57 +42,7 @@ pub extern "C" fn transfer() {
 
 #[no_mangle]
 pub extern "C" fn install() {
-    let entry_points = {
-        let mut entry_points = EntryPoints::new();
-
-        let entry_point = EntryPoint::new(
-            METHOD_MINT,
-            vec![Parameter::new(ARG_AMOUNT, CLType::U512)],
-            CLType::Result {
-                ok: Box::new(CLType::URef),
-                err: Box::new(CLType::U8),
-            },
-            EntryPointAccess::Public,
-            EntryPointType::Contract,
-        );
-        entry_points.add_entry_point(entry_point);
-
-        let entry_point = EntryPoint::new(
-            METHOD_CREATE,
-            vec![],
-            CLType::URef,
-            EntryPointAccess::Public,
-            EntryPointType::Contract,
-        );
-        entry_points.add_entry_point(entry_point);
-
-        let entry_point = EntryPoint::new(
-            METHOD_BALANCE,
-            vec![Parameter::new(ARG_PURSE, CLType::URef)],
-            CLType::Option(Box::new(CLType::U512)),
-            EntryPointAccess::Public,
-            EntryPointType::Contract,
-        );
-        entry_points.add_entry_point(entry_point);
-
-        let entry_point = EntryPoint::new(
-            METHOD_TRANSFER,
-            vec![
-                Parameter::new(ARG_SOURCE, CLType::URef),
-                Parameter::new(ARG_TARGET, CLType::URef),
-                Parameter::new(ARG_AMOUNT, CLType::U512),
-            ],
-            CLType::Result {
-                ok: Box::new(CLType::Unit),
-                err: Box::new(CLType::U8),
-            },
-            EntryPointAccess::Public,
-            EntryPointType::Contract,
-        );
-        entry_points.add_entry_point(entry_point);
-
-        entry_points
-    };
+    let entry_points = mint_token::get_entry_points();
 
     let (contract_package_hash, access_uref) = storage::create_contract_package_at_hash();
     runtime::put_key(HASH_KEY_NAME, contract_package_hash.into());
