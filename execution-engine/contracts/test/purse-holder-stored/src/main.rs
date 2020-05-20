@@ -13,13 +13,17 @@ use contract::{
 use types::{
     CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter,
 };
+pub const METHOD_ADD: &str = "add";
+pub const METHOD_REMOVE: &str = "remove";
+pub const METHOD_VERSION: &str = "version";
 
 const ENTRY_POINT_ADD: &str = "add_named_purse";
 const ENTRY_POINT_VERSION: &str = "version";
 const HASH_KEY_NAME: &str = "purse_holder";
 const ACCESS_KEY_NAME: &str = "purse_holder_access";
-const ARG_PURSE: &str = "purse";
+const ARG_PURSE: &str = "purse_name";
 const VERSION: &str = "1.0.0";
+const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
 
 #[no_mangle]
 pub extern "C" fn add_named_purse() {
@@ -57,12 +61,13 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    storage::new_contract(
+    let contract_hash = storage::new_contract(
         entry_points,
         None,
         Some(HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),
     );
 
+    runtime::put_key(PURSE_HOLDER_STORED_CONTRACT_NAME, contract_hash.into());
     runtime::put_key(ENTRY_POINT_VERSION, storage::new_uref(VERSION).into());
 }

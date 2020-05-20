@@ -9,7 +9,7 @@ use engine_test_support::{
 };
 use types::{
     contracts::{ContractVersion, CONTRACT_INITIAL_VERSION},
-    runtime_args, CLValue, RuntimeArgs, SemVer,
+    runtime_args, CLValue, ContractHash, ContractPackageHash, RuntimeArgs, SemVer,
 };
 
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
@@ -28,10 +28,22 @@ const LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME: &str = "local_state_stored_upgr
 const METHOD_ADD: &str = "add";
 const METHOD_REMOVE: &str = "remove";
 const METHOD_VERSION: &str = "version";
+const VERSION: &str = "version";
 const PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME: &str = "purse_holder_stored_caller";
 const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
 const PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME: &str = "purse_holder_stored_upgrader";
+const HASH_KEY_NAME: &str = "purse_holder";
 const TOTAL_PURSES: usize = 3;
+
+const PURSE_NAME: &str = "purse_name";
+const ENTRY_POINT_NAME: &str = "entry_point";
+const ENTRY_POINT_ADD: &str = "add_named_purse";
+const CONTRACT_PACKAGE_KEY: &str = "contract_package";
+const ARG_CONTRACT_PACKAGE: &str = "contract_package";
+const ARG_VERSION: &str = "version";
+const ARG_NEW_PURSE_NAME: &str = "new_purse_name";
+const ARG_SEED: &str = "seed";
+
 
 /// Performs define and execution of versioned contracts, calling them directly from hash
 #[ignore]
@@ -140,15 +152,26 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
     let stored_contract_hash = account_1
         .named_keys()
         .get(DO_NOTHING_HASH_KEY_NAME)
-        .expect("should have key of do_nothing_hash");
+        .expect("should have key of do_nothing_hash")
+        .into_hash()
+        .expect("should have into hash");
+
+        let stored_contract_package_hash = account_1
+        .named_keys()
+        .get(DO_NOTHING_HASH_KEY_NAME)
+        .expect("should have key of do_nothing_hash")
+        .into_hash()
+        .expect("should have hash");
 
     // TODO This does not seem to call properly
     // Calling initial stored version from contract metadata hash, should have no effects
     {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
-        // TODO update to pass SemVer once supported into contracts, instead of
-        // INITIAL_VERSION.major
-        let args = (*stored_contract_hash, INITIAL_VERSION, PURSE_1);
+        let args = runtime_args! {
+            ARG_CONTRACT_PACKAGE => stored_contract_hash,
+            ARG_VERSION => INITIAL_VERSION,
+            ARG_NEW_PURSE_NAME => PURSE_1,
+        };
         let exec_request =
             { ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args).build() };
 
@@ -177,15 +200,19 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
     let stored_contract_hash = account_1
         .named_keys()
         .get(DO_NOTHING_HASH_KEY_NAME)
-        .expect("should have key of do_nothing_hash");
+        .expect("should have key of do_nothing_hash")
+        .into_hash()
+        .expect("should have hash");
 
-    // TODO This does not seem to call properly
     // Calling upgraded stored version, expecting purse creation
     {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
-        // TODO update to pass SemVer once supported into contracts, instead of
-        // UPGRADED_VERSION
-        let args = (*stored_contract_hash, UPGRADED_VERSION, PURSE_1);
+        let args = runtime_args! {
+            ARG_CONTRACT_PACKAGE => stored_contract_hash,
+            ARG_VERSION => UPGRADED_VERSION,
+            ARG_NEW_PURSE_NAME => PURSE_1,
+        };
+
         let exec_request =
             { ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, args).build() };
 
@@ -224,16 +251,16 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
         .expect("should have account");
 
     assert!(
-        account.named_keys().contains_key(METHOD_VERSION),
+        account.named_keys().contains_key(VERSION),
         "version uref should exist on install"
     );
 
-    let stored_uref = account
+    let stored_package_hash: ContractPackageHash = account
         .named_keys()
-        .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
+        .get(HASH_KEY_NAME)
         .expect("should have stored uref")
-        .as_uref()
-        .expect("should have uref");
+        .into_hash()
+        .expect("should have hash");
 
     // verify version before upgrade
     let account = builder
@@ -242,7 +269,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     let version = *account
         .named_keys()
-        .get(METHOD_VERSION)
+        .get(VERSION)
         .expect("version uref should exist");
 
     let original_version = builder
@@ -259,8 +286,14 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
-                .build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    ARG_CONTRACT_PACKAGE => stored_package_hash,
+                },
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -273,7 +306,7 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 
     let version = *account
         .named_keys()
-        .get(METHOD_VERSION)
+        .get(VERSION)
         .expect("version key should exist");
 
     let upgraded_version = builder
@@ -290,184 +323,233 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
 #[ignore]
 #[test]
 fn should_support_extending_functionality() {
-    unimplemented!();
-    // let mut builder = InMemoryWasmTestBuilder::default();
-    //
-    // builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
-    //
-    // // store do-nothing-stored
-    // {
-    //     let exec_request = {
-    //         let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-    //         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
-    //     };
-    //
-    //     builder.exec(exec_request).expect_success().commit();
-    // }
-    //
-    // let account = builder
-    //     .get_account(DEFAULT_ACCOUNT_ADDR)
-    //     .expect("should have account");
-    //
-    // let stored_uref = account
-    //     .named_keys()
-    //     .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
-    //     .expect("should have stored uref")
-    //     .as_uref()
-    //     .expect("should have uref");
-    //
-    // // call stored contract and persist a known uref before upgrade
-    // {
-    //     let exec_request = {
-    //         let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
-    //         ExecuteRequestBuilder::standard(
-    //             DEFAULT_ACCOUNT_ADDR,
-    //             &contract_name,
-    //             (*stored_uref, METHOD_ADD, PURSE_1),
-    //         )
-    //         .build()
-    //     };
-    //
-    //     builder.exec(exec_request).expect_success().commit();
-    // }
-    //
-    // // verify known uref actually exists prior to upgrade
-    // let contract = builder
-    //     .get_contract(*stored_uref)
-    //     .expect("should have contract");
-    // assert!(
-    //     contract.named_keys().contains_key(PURSE_1),
-    //     "purse uref should exist in contract's named_keys before upgrade"
-    // );
-    //
-    // // upgrade contract
-    // {
-    //     let exec_request = {
-    //         let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
-    //         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name,
-    // (*stored_uref,))             .build()
-    //     };
-    //
-    //     builder.exec(exec_request).expect_success().commit();
-    // }
-    //
-    // // verify uref still exists in named_keys after upgrade:
-    // let contract = builder
-    //     .get_contract(*stored_uref)
-    //     .expect("should have contract");
-    //
-    // assert!(
-    //     contract.named_keys().contains_key(PURSE_1),
-    //     "PURSE_1 uref should still exist in contract's named_keys after upgrade"
-    // );
-    //
-    // // call new remove function
-    // {
-    //     let exec_request = {
-    //         let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
-    //         ExecuteRequestBuilder::standard(
-    //             DEFAULT_ACCOUNT_ADDR,
-    //             &contract_name,
-    //             (*stored_uref, METHOD_REMOVE, PURSE_1),
-    //         )
-    //         .build()
-    //     };
-    //
-    //     builder.exec(exec_request).expect_success().commit();
-    // }
-    //
-    // // verify known urefs no longer include removed purse
-    // let contract = builder
-    //     .get_contract(*stored_uref)
-    //     .expect("should have contract");
-    //
-    // assert!(
-    //     !contract.named_keys().contains_key(PURSE_1),
-    //     "PURSE_1 uref should no longer exist in contract's named_keys after remove"
-    // );
+    let mut builder = InMemoryWasmTestBuilder::default();
+
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+
+    // store do-nothing-stored
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+        };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+
+    let stored_package_hash = account
+        .named_keys()
+        .get(HASH_KEY_NAME)
+        .expect("should have stored uref")
+        .into_hash()
+        .expect("should have hash");
+
+    let stored_hash = account
+        .named_keys()
+        .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
+        .expect("should have stored uref")
+        .into_hash()
+        .expect("should have hash");
+
+    // call stored contract and persist a known uref before upgrade
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    HASH_KEY_NAME => stored_hash,
+                    ENTRY_POINT_NAME => ENTRY_POINT_ADD,
+                    PURSE_NAME => PURSE_1,
+                },
+            )
+            .build()
+        };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    // verify known uref actually exists prior to upgrade
+    let contract = builder
+        .get_contract(stored_hash)
+        .expect("should have contract");
+    assert!(
+        contract.named_keys().contains_key(PURSE_1),
+        "purse uref should exist in contract's named_keys before upgrade"
+    );
+
+    // upgrade contract
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    ARG_CONTRACT_PACKAGE => stored_package_hash,
+                },
+            )
+            .build()
+        };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    // verify uref still exists in named_keys after upgrade:
+    let contract = builder
+        .get_contract(stored_hash)
+        .expect("should have contract");
+
+    assert!(
+        contract.named_keys().contains_key(PURSE_1),
+        "PURSE_1 uref should still exist in contract's named_keys after upgrade"
+    );
+
+    // Get account again after upgrade to refresh named keys
+    let account_2 = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+    // Get contract again after upgrade
+
+    let stored_hash_2 = account_2
+        .named_keys()
+        .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
+        .expect("should have stored uref")
+        .into_hash()
+        .expect("should have hash");
+    assert_ne!(stored_hash, stored_hash_2);
+
+    // call new remove function
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    HASH_KEY_NAME => stored_hash_2,
+                    ENTRY_POINT_NAME => METHOD_REMOVE,
+                    PURSE_NAME => PURSE_1,
+                },
+            )
+            .build()
+        };
+
+        builder.exec(exec_request).expect_success().commit();
+    }
+
+    // verify known urefs no longer include removed purse
+    let contract = builder
+        .get_contract(stored_hash_2)
+        .expect("should have contract");
+
+    assert!(
+        !contract.named_keys().contains_key(PURSE_1),
+        "PURSE_1 uref should no longer exist in contract's named_keys after remove"
+    );
 }
 
 #[ignore]
 #[test]
 fn should_maintain_named_keys_across_upgrade() {
-    unimplemented!();
-    // let mut builder = InMemoryWasmTestBuilder::default();
-    //
-    // builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
-    //
-    // // store contract
-    // {
-    //     let exec_request = {
-    //         let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-    //         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
-    //     };
-    //
-    //     builder.exec(exec_request).expect_success().commit();
-    // }
-    //
-    // let account = builder
-    //     .get_account(DEFAULT_ACCOUNT_ADDR)
-    //     .expect("should have account");
-    //
-    // let stored_uref = account
-    //     .named_keys()
-    //     .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
-    //     .expect("should have stored uref")
-    //     .as_uref()
-    //     .expect("should have uref");
-    //
-    // // add several purse urefs to named_keys
-    // for index in 0..TOTAL_PURSES {
-    //     let purse_name: &str = &format!("purse_{}", index);
-    //
-    //     let exec_request = {
-    //         let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
-    //         ExecuteRequestBuilder::standard(
-    //             DEFAULT_ACCOUNT_ADDR,
-    //             &contract_name,
-    //             (*stored_uref, METHOD_ADD, purse_name),
-    //         )
-    //         .build()
-    //     };
-    //
-    //     builder.exec(exec_request).expect_success().commit();
-    //
-    //     // verify known uref actually exists prior to upgrade
-    //     let contract = builder
-    //         .get_contract(*stored_uref)
-    //         .expect("should have contract");
-    //     assert!(
-    //         contract.named_keys().contains_key(purse_name),
-    //         "purse uref should exist in contract's named_keys before upgrade"
-    //     );
-    // }
-    //
-    // // upgrade contract
-    // {
-    //     let exec_request = {
-    //         let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
-    //         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name,
-    // (*stored_uref,))             .build()
-    //     };
-    //
-    //     builder.exec(exec_request).expect_success().commit();
-    // }
-    //
-    // // verify all urefs still exist in named_keys after upgrade
-    // let contract = builder
-    //     .get_contract(*stored_uref)
-    //     .expect("should have contract");
-    //
-    // for index in 0..TOTAL_PURSES {
-    //     let purse_name: &str = &format!("purse_{}", index);
-    //     assert!(
-    //         contract.named_keys().contains_key(purse_name),
-    //         format!(
-    //             "{} uref should still exist in contract's named_keys after upgrade",
-    //             index
-    //         )
-    //     );
-    // }
+    let mut builder = InMemoryWasmTestBuilder::default();
+    
+    builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
+    
+    // store contract
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+        };
+    
+        builder.exec(exec_request).expect_success().commit();
+    }
+    
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+    
+    let stored_hash = account
+        .named_keys()
+        .get(PURSE_HOLDER_STORED_CONTRACT_NAME)
+        .expect("should have stored hash")
+        .into_hash()
+        .expect("should have hash");
+    
+
+    let stored_package_hash = account
+        .named_keys()
+        .get(HASH_KEY_NAME)
+        .expect("should have stored package hash")
+        .into_hash()
+        .expect("should have hash");
+    
+
+    // add several purse urefs to named_keys
+    for index in 0..TOTAL_PURSES {
+        let purse_name: &str = &format!("purse_{}", index);
+    
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    HASH_KEY_NAME => stored_hash,
+                    ENTRY_POINT_NAME => ENTRY_POINT_ADD,
+                    PURSE_NAME => purse_name,
+                },
+            )
+            .build()
+        };
+    
+        builder.exec(exec_request).expect_success().commit();
+    
+        // verify known uref actually exists prior to upgrade
+        let contract = builder
+            .get_contract(stored_hash)
+            .expect("should have contract");
+        assert!(
+            contract.named_keys().contains_key(purse_name),
+            "purse uref should exist in contract's named_keys before upgrade"
+        );
+    }
+    
+    // upgrade contract
+    {
+        let exec_request = {
+            let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME);
+            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name,
+                runtime_args! {
+                    ARG_CONTRACT_PACKAGE => stored_package_hash,
+                })
+                .build()
+        };
+    
+        builder.exec(exec_request).expect_success().commit();
+    }
+    
+    // verify all urefs still exist in named_keys after upgrade
+    let contract = builder
+        .get_contract(stored_hash)
+        .expect("should have contract");
+    
+    for index in 0..TOTAL_PURSES {
+        let purse_name: &str = &format!("purse_{}", index);
+        assert!(
+            contract.named_keys().contains_key(purse_name),
+            format!(
+                "{} uref should still exist in contract's named_keys after upgrade",
+                index
+            )
+        );
+    }
 }
 
 #[ignore]
@@ -491,19 +573,30 @@ fn should_maintain_local_state_across_upgrade() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
 
-    let stored_uref = account
+    let stored_hash = account
         .named_keys()
         .get(LOCAL_STATE_STORED_CONTRACT_NAME)
-        .expect("should have stored uref")
-        .as_uref()
-        .expect("should have uref");
-
+        .expect("should have stored hash")
+        .into_hash()
+        .expect("should have hash");
+    let stored_package_hash = account
+        .named_keys()
+        .get(CONTRACT_PACKAGE_KEY)
+        .expect("should have stored hash")
+        .into_hash()
+        .expect("should have hash");
     // call local_state_stored_contract (which will cause it to store some local state)
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CALLER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
-                .build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    ARG_SEED => stored_hash,
+                },
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -531,20 +624,45 @@ fn should_maintain_local_state_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_UPGRADER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
-                .build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    "contract_package" => stored_package_hash,
+                },
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
     }
+
+    // Refresh hashes after upgrade
+
+    let account = builder
+        .get_account(DEFAULT_ACCOUNT_ADDR)
+        .expect("should have account");
+
+    let stored_hash = account
+        .named_keys()
+        .get(LOCAL_STATE_STORED_CONTRACT_NAME)
+        .expect("should have stored hash")
+        .into_hash()
+        .expect("should have hash");
 
     // call upgraded local_state_stored_contract
     // (local state existence is checked in upgraded contract)
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CALLER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, (*stored_uref,))
-                .build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                runtime_args! {
+                    ARG_SEED => stored_hash,
+                },
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -571,6 +689,6 @@ fn should_maintain_local_state_across_upgrade() {
 
     assert!(
         write.starts_with(&original_local_state_value) && write.ends_with("upgraded!"),
-        "local state should include elements from the original version and the upgraded version"
+        "local state should include elements from the original version and the upgraded version: {}", write
     );
 }

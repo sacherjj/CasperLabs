@@ -1958,8 +1958,24 @@ where
             .cloned()
             .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
+        let context_key = match entry_point.entry_point_type() {
+            EntryPointType::Session
+                if self.context.entry_point_type() == EntryPointType::Contract =>
+            {
+                // Session code can't be called from Contract code for security reasons.
+                return Err(Error::InvalidContext);
+            }
+            EntryPointType::Session => {
+                assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
+                // Session code called from session reuses current base key
+                self.context.base_key()
+            }
+            EntryPointType::Contract => contract_hash.into(),
+        };
+
         self.execute_contract(
             key,
+            context_key,
             contract,
             args,
             entry_point,
@@ -2033,13 +2049,24 @@ where
             }
         }
 
-        // let contract_wasm = self
-        //     .context
-        //     .read_gs_direct(&contract.contract_wasm_key())?
-        //     .and_then(|sv| sv.as_contract().cloned())
-        //     .ok_or_else(|| Error::InvalidContractVersion)?;
+        let context_key = self.get_context_key_for_contract_call(contract_hash, &entry_point)?;
 
-        let context_key = match entry_point.entry_point_type() {
+        self.execute_contract(
+            context_key,
+            context_key,
+            contract,
+            args,
+            entry_point,
+            self.context.protocol_version(),
+        )
+    }
+
+    fn get_context_key_for_contract_call(
+        &self,
+        contract_hash: ContractHash,
+        entry_point: &EntryPoint,
+    ) -> Result<Key, Error> {
+        match entry_point.entry_point_type() {
             EntryPointType::Session
                 if self.context.entry_point_type() == EntryPointType::Contract =>
             {
@@ -2049,23 +2076,16 @@ where
             EntryPointType::Session => {
                 assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
                 // Session code called from session reuses current base key
-                self.context.base_key()
+                Ok(self.context.base_key())
             }
-            EntryPointType::Contract => contract_hash.into(),
-        };
-
-        self.execute_contract(
-            context_key,
-            contract,
-            args,
-            entry_point,
-            self.context.protocol_version(),
-        )
+            EntryPointType::Contract => Ok(contract_hash.into()),
+        }
     }
 
     fn execute_contract(
         &mut self,
         key: Key,
+        base_key: Key,
         contract: Contract,
         args: RuntimeArgs,
         entry_point: EntryPoint,
@@ -2168,7 +2188,7 @@ where
             args,
             self.context.authorization_keys().clone(),
             &self.context.account(),
-            key,
+            base_key,
             self.context.get_blocktime(),
             self.context.get_deployhash(),
             self.context.gas_limit(),

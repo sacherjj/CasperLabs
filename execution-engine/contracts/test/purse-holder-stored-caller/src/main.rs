@@ -10,7 +10,7 @@ use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{CLValue, ContractHash, NamedArg, RuntimeArgs};
+use types::{runtime_args, CLValue, ContractHash, NamedArg, RuntimeArgs};
 
 const METHOD_VERSION: &str = "version";
 const HASH_KEY_NAME: &str = "purse_holder";
@@ -32,15 +32,11 @@ pub extern "C" fn call() {
         _ => {
             let contract_hash: ContractHash = runtime::get_named_arg(HASH_KEY_NAME);
             let purse_name: String = runtime::get_named_arg(PURSE_NAME);
-            let runtime_args = {
-                let args = vec![NamedArg::new(
-                    PURSE_NAME.to_string(),
-                    CLValue::from_t(purse_name).unwrap_or_revert(),
-                )];
-                RuntimeArgs::Named(args)
-            };
 
-            runtime::call_contract::<()>(contract_hash, &entry_point_name, runtime_args);
+            let args = runtime_args! {
+                PURSE_NAME => purse_name,
+            };
+            runtime::call_contract::<()>(contract_hash, &entry_point_name, args);
         }
     };
 }
