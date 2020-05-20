@@ -183,20 +183,7 @@ pub struct ContractPackage {
 
 impl Default for ContractPackage {
     fn default() -> Self {
-        // Default impl used for temporary backwards compatibility
-        let mut versions = ContractVersions::new();
-
-        let key = ContractVersionKey::new(
-            ProtocolVersion::V1_0_0.value().major,
-            CONTRACT_INITIAL_VERSION,
-        );
-        versions.insert(key, [0; 32]);
-        ContractPackage {
-            access_key: URef::new([0; 32], AccessRights::NONE),
-            versions,
-            disabled_versions: BTreeSet::new(),
-            groups: BTreeMap::new(),
-        }
+        ContractPackage::default_for_protocol_version(ProtocolVersion::V1_0_0)
     }
 }
 
@@ -206,6 +193,21 @@ impl ContractPackage {
         ContractPackage {
             access_key,
             versions: BTreeMap::new(),
+            disabled_versions: BTreeSet::new(),
+            groups: BTreeMap::new(),
+        }
+    }
+
+    /// Creates default instance for given protocol
+    pub fn default_for_protocol_version(protocol_version: ProtocolVersion) -> Self {
+        // Default impl used for temporary backwards compatibility
+        let mut versions = ContractVersions::new();
+
+        let key = ContractVersionKey::new(protocol_version.value().major, CONTRACT_INITIAL_VERSION);
+        versions.insert(key, [0; 32]);
+        ContractPackage {
+            access_key: URef::new([0; 32], AccessRights::NONE),
+            versions,
             disabled_versions: BTreeSet::new(),
             groups: BTreeMap::new(),
         }

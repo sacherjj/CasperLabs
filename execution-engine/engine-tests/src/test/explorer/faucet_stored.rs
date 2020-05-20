@@ -60,7 +60,7 @@ fn should_get_funds_from_faucet_stored() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(10_000_000),),
+                runtime_args! { "amount" => U512::from(10_000_000) },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
@@ -114,7 +114,7 @@ fn should_fail_if_already_funded() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(10_000_000),),
+                runtime_args! { "amount" => U512::from(10_000_000) },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
@@ -137,7 +137,7 @@ fn should_fail_if_already_funded() {
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                (U512::from(10_000_000),),
+                runtime_args! { "amount" => U512::from(10_000_000) },
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])

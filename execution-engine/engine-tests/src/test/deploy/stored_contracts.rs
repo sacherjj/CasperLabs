@@ -1278,13 +1278,10 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
 
     // first, store payment contract for v2.0.0
 
-    let exec_request_1 = ExecuteRequestBuilder::standard(
-        DEFAULT_ACCOUNT_ADDR,
-        &format!("{}_stored.wasm", STORED_PAYMENT_CONTRACT_NAME),
-        (),
-    )
-    .with_protocol_version(new_protocol_version)
-    .build();
+    let exec_request_1 =
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, STORED_PAYMENT_CONTRACT_NAME, ())
+            .with_protocol_version(new_protocol_version)
+            .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
@@ -1295,10 +1292,9 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
     .build();
 
     // store both contracts
+    builder.exec(exec_request_1).expect_success().commit();
+
     let test_result = builder
-        .exec(exec_request_1)
-        .expect_success()
-        .commit()
         .exec(exec_request_2)
         .expect_success()
         .commit()

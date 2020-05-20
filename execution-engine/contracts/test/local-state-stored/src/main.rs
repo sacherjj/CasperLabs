@@ -2,30 +2,57 @@
 #![no_main]
 #![allow(unused_imports)]
 
+extern crate alloc;
+
+use alloc::string::ToString;
 use contract;
 
-pub extern "C" fn call() {}
-//
-// use contract::{
-//     contract_api::{runtime, storage},
-//     unwrap_or_revert::UnwrapOrRevert,
-// };
-// use types::ApiError;
-//
-// const ENTRY_FUNCTION_NAME: &str = "delegate";
-// const CONTRACT_NAME: &str = "local_state_stored";
-//
-// #[no_mangle]
-// pub extern "C" fn delegate() {
-//     local_state::delegate()
-// }
-//
-// #[no_mangle]
-// pub extern "C" fn call() {
-//     let key = storage::store_function(ENTRY_FUNCTION_NAME, Default::default())
-//         .into_uref()
-//         .unwrap_or_revert_with(ApiError::UnexpectedContractRefVariant)
-//         .into();
-//
-//     runtime::put_key(CONTRACT_NAME, key);
-// }
+use contract::{
+    contract_api::{runtime, storage},
+    unwrap_or_revert::UnwrapOrRevert,
+};
+use types::{
+    contracts::Parameters, ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints,
+};
+
+const ENTRY_FUNCTION_NAME: &str = "delegate";
+const CONTRACT_NAME: &str = "local_state_stored";
+const CONTRACT_PACKAGE_KEY: &str = "contract_package";
+const CONTRACT_ACCESS_KEY: &str = "access_key";
+
+#[no_mangle]
+pub extern "C" fn delegate() {
+    local_state::delegate()
+}
+
+fn store() -> ContractHash {
+    let entry_points = {
+        let mut entry_points = EntryPoints::new();
+
+        let entry_point = EntryPoint::new(
+            ENTRY_FUNCTION_NAME,
+            Parameters::new(),
+            CLType::Unit,
+            EntryPointAccess::Public,
+            EntryPointType::Session,
+        );
+
+        entry_points.add_entry_point(entry_point);
+
+        entry_points
+    };
+    storage::new_contract(
+        entry_points,
+        None,
+        Some(CONTRACT_PACKAGE_KEY.to_string()),
+        Some(CONTRACT_ACCESS_KEY.to_string()),
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn call() {
+    let contract_hash = store();
+
+    runtime::put_key(CONTRACT_NAME, contract_hash.into());
+}
