@@ -57,7 +57,7 @@ package object arguments {
   val PublicKey = Argument(
     "publicKey",
     StringType,
-    description = "Base-16 or Base-64 public key hash"
+    description = "Base-16 or Base-64 public key"
   )
 
   val AccountPublicKeyHashBase16 =

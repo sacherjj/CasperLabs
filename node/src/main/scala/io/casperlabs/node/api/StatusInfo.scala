@@ -136,16 +136,12 @@ object StatusInfo {
         bootstrap              <- bootstrap[F](conf, genesis)
         initialSynchronization <- initialSynchronization[F](getIsSynced)
         lastFinalizedBlock     <- lastFinalizedBlock[F](chainSpec, genesis)
-        lastReceivedBlock <- lastReceivedBlock[F](
-                              conf,
-                              chainSpec,
-                              maybeValidatorId.map(_.publicKey)
-                            )
-        lastCreatedBlock <- lastCreatedBlock[F](chainSpec, maybeValidatorId.map(_.publicKey))
-        activeEras       <- activeEras[F](conf)
-        bondedEras       <- bondedEras[F](conf, maybeValidatorId.map(_.publicKeyHash))
-        genesisEra       <- genesisEra[F](conf, genesis)
-        genesisBlock     <- genesisBlock[F](genesis)
+        lastReceivedBlock      <- lastReceivedBlock[F](conf, chainSpec, maybeValidatorId)
+        lastCreatedBlock       <- lastCreatedBlock[F](chainSpec, maybeValidatorId)
+        activeEras             <- activeEras[F](conf)
+        bondedEras             <- bondedEras[F](conf, maybeValidatorId)
+        genesisEra             <- genesisEra[F](conf, genesis)
+        genesisBlock           <- genesisBlock[F](genesis)
         checklist = CheckList(
           database = database,
           peers = peers,
@@ -251,14 +247,14 @@ object StatusInfo {
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         chainSpec: ChainSpec,
-        maybeValidatorId: Option[PublicKey]
+        maybeValidatorId: Option[ValidatorIdentity]
     ) = Check {
       for {
         dag      <- DagStorage[F].getRepresentation
         tips     <- dag.latestGlobal
         messages <- tips.latestMessages
         received = messages.values.flatten.toSet.filter { m =>
-          maybeValidatorId.fold(true)(_ != m.validatorId.toByteArray)
+          maybeValidatorId.fold(true)(_.publicKeyHashBS != m.validatorId)
         }
         latest   = findLatest(received)
         isTooOld <- isTooOld(chainSpec, latest)
@@ -276,14 +272,14 @@ object StatusInfo {
     // Returning basic info so as not to reveal the validator identity through the block ID.
     def lastCreatedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         chainSpec: ChainSpec,
-        maybeValidatorId: Option[PublicKey]
+        maybeValidatorId: Option[ValidatorIdentity]
     ) = Check {
       for {
         created <- maybeValidatorId.fold(Set.empty[Message].pure[F]) { id =>
                     for {
                       dag      <- DagStorage[F].getRepresentation
                       tips     <- dag.latestGlobal
-                      messages <- tips.latestMessage(ByteString.copyFrom(id))
+                      messages <- tips.latestMessage(id.publicKeyHashBS)
                     } yield messages
                   }
         latest   = findLatest(created)
@@ -339,9 +335,9 @@ object StatusInfo {
 
     def bondedEras[F[_]: Sync: Consensus](
         conf: Configuration,
-        maybeValidatorPublicKeyHash: Option[PublicKeyHash]
+        maybeValidatorId: Option[ValidatorIdentity]
     ) = Check {
-      maybeValidatorPublicKeyHash.map(ByteString.copyFrom) match {
+      maybeValidatorId match {
         case _ if !conf.highway.enabled =>
           Check[ErasDetails](ok = true, message = "Not in highway mode.")
             .pure[F]
@@ -354,7 +350,7 @@ object StatusInfo {
           for {
             active <- Consensus[F].activeEras
             bonded = active.filter(
-              era => era.bonds.exists(_.validatorPublicKeyHash == id)
+              era => era.bonds.exists(_.validatorPublicKeyHash == id.publicKeyHashBS)
             )
           } yield {
             Check(

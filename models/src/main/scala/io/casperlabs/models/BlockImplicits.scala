@@ -5,7 +5,7 @@ import io.casperlabs.casper.consensus.Block.{GlobalState, Justification}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Deploy}
 import io.casperlabs.models.Message._
-import io.casperlabs.crypto.Keys.{PublicKeyHash, PublicKeyHashBS}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, PublicKeyHash, PublicKeyHashBS}
 
 object BlockImplicits {
   implicit class BlockOps(val block: Block) extends AnyVal {
@@ -28,6 +28,8 @@ object BlockImplicits {
     def validatorBlockSeqNum: Int        = block.getHeader.validatorBlockSeqNum
     def validatorPublicKeyHash: PublicKeyHashBS =
       PublicKeyHash(block.getHeader.validatorPublicKeyHash)
+    def validatorPublicKeyTemp: PublicKeyBS =
+      PublicKey(block.getHeader.validatorPublicKeyTemp)
     def jRank: JRank       = asJRank(block.getHeader.jRank)
     def mainRank: MainRank = asMainRank(block.getHeader.mainRank)
     def weightMap: Map[PublicKeyHashBS, Weight] =
@@ -82,6 +84,8 @@ object BlockImplicits {
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
     def validatorPublicKeyHash: PublicKeyHashBS =
       PublicKeyHash(summary.getHeader.validatorPublicKeyHash)
+    def validatorPublicKeyTemp: PublicKeyBS =
+      PublicKey(summary.getHeader.validatorPublicKeyTemp)
     def jRank: JRank       = asJRank(summary.getHeader.jRank)
     def mainRank: MainRank = asMainRank(summary.getHeader.mainRank)
     def weightMap: Map[PublicKeyHashBS, Weight] =
