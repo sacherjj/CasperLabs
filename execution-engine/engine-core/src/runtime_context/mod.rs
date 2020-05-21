@@ -93,6 +93,9 @@ pub struct RuntimeContext<'a, R> {
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
+    // Key that is used for seeding local key seeds.
+    // For contracts it's using contract package hash, and account's public key otherwise
+    seed_key: Key,
     blocktime: BlockTime,
     deploy_hash: [u8; 32],
     gas_limit: Gas,
@@ -121,6 +124,7 @@ where
         authorization_keys: BTreeSet<PublicKey>,
         account: &'a Account,
         base_key: Key,
+        seed_key: Key,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
@@ -143,6 +147,7 @@ where
             blocktime,
             deploy_hash,
             base_key,
+            seed_key,
             gas_limit,
             gas_counter,
             hash_address_generator,
@@ -290,7 +295,7 @@ where
     }
 
     pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
-        self.base_key.into_seed()
+        self.seed_key.into_seed()
     }
 
     pub fn protocol_version(&self) -> ProtocolVersion {

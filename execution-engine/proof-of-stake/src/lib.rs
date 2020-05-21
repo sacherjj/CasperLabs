@@ -273,6 +273,7 @@ mod internal {
             Some(balance) => balance,
             None => return Err(Error::PaymentPurseBalanceNotFound),
         };
+
         if total < amount_spent {
             return Err(Error::InsufficientPaymentForAmountSpent);
         }

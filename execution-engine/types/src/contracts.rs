@@ -4,7 +4,7 @@ use crate::{
     alloc::string::ToString,
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
     uref::URef,
-    AccessRights, CLType, ContractHash, ContractPackageHash, ContractWasmHash, Key,
+    CLType, ContractHash, ContractPackageHash, ContractWasmHash, Key,
     ProtocolVersion, KEY_HASH_LENGTH,
 };
 use alloc::{
@@ -165,7 +165,7 @@ pub type ContractVersions = BTreeMap<ContractVersionKey, ContractHash>;
 pub type RemovedVersions = BTreeSet<ContractVersionKey>;
 
 /// Collection of different versions of the same contract.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ContractPackage {
     /// Key used to add or remove versions
     access_key: URef,
@@ -181,33 +181,12 @@ pub struct ContractPackage {
     groups: BTreeMap<Group, BTreeSet<URef>>,
 }
 
-impl Default for ContractPackage {
-    fn default() -> Self {
-        ContractPackage::default_for_protocol_version(ProtocolVersion::V1_0_0)
-    }
-}
-
 impl ContractPackage {
     /// Create new `ContractMetadata` (with no versions) from given access key.
     pub fn new(access_key: URef) -> Self {
         ContractPackage {
             access_key,
             versions: BTreeMap::new(),
-            disabled_versions: BTreeSet::new(),
-            groups: BTreeMap::new(),
-        }
-    }
-
-    /// Creates default instance for given protocol
-    pub fn default_for_protocol_version(protocol_version: ProtocolVersion) -> Self {
-        // Default impl used for temporary backwards compatibility
-        let mut versions = ContractVersions::new();
-
-        let key = ContractVersionKey::new(protocol_version.value().major, CONTRACT_INITIAL_VERSION);
-        versions.insert(key, [0; 32]);
-        ContractPackage {
-            access_key: URef::new([0; 32], AccessRights::NONE),
-            versions,
             disabled_versions: BTreeSet::new(),
             groups: BTreeMap::new(),
         }
@@ -328,6 +307,11 @@ impl ContractPackage {
             .unwrap();
 
         current_version + 1
+    }
+
+    /// Gets most recent contract version hash.
+    pub fn get_current_contract(&self) -> Option<&ContractHash> {
+        self.versions.values().next_back()
     }
 }
 
@@ -567,19 +551,6 @@ impl Contract {
     }
 }
 
-impl Default for Contract {
-    fn default() -> Self {
-        let entry_points = EntryPoints::default();
-        Contract {
-            contract_package_hash: [0; 32],
-            contract_wasm_hash: [0; 32],
-            named_keys: BTreeMap::new(),
-            entry_points,
-            protocol_version: ProtocolVersion::V1_0_0,
-        }
-    }
-}
-
 impl ToBytes for Contract {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut result = bytesrepr::allocate_buffer(self)?;
@@ -655,6 +626,12 @@ impl FromBytes for EntryPointType {
 
 /// Default name for an entry point
 pub const DEFAULT_ENTRY_POINT_NAME: &str = "call";
+
+/// Default name for an installer entry point
+pub const INSTALL_ENTRY_POINT_NAME: &str = "install";
+
+/// Default name for an upgrader entry point
+pub const UPGRADE_ENTRY_POINT_NAME: &str = "upgrade";
 
 /// Collection of entry point parameters.
 pub type Parameters = Vec<Parameter>;

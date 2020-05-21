@@ -46,7 +46,7 @@ fn should_charge_non_main_purse() {
                     ARG_AMOUNT => account_1_funding_amount
                 },
             )
-            .with_empty_payment_bytes((payment_purse_amount,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => payment_purse_amount})
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
@@ -61,7 +61,7 @@ fn should_charge_non_main_purse() {
                 TRANSFER_MAIN_PURSE_TO_NEW_PURSE_WASM, // creates test purse
                 (TEST_PURSE_NAME, account_1_purse_funding_amount),
             )
-            .with_empty_payment_bytes((payment_purse_amount,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => payment_purse_amount})
             .with_authorization_keys(&[account_1_public_key])
             .with_deploy_hash([2; 32])
             .build();
@@ -88,28 +88,7 @@ fn should_charge_non_main_purse() {
     let purse_key = account_1.named_keys()[TEST_PURSE_NAME];
     let purse = purse_key.into_uref().expect("should have uref");
 
-    let purse_starting_balance = {
-        let purse_bytes = purse
-            .addr()
-            .to_bytes()
-            .expect("should be able to serialize purse bytes");
-
-        let mint = builder.get_mint_contract_hash();
-        let balance_mapping_key = Key::local(mint, &purse_bytes);
-        let balance_uref = builder
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should find balance uref");
-
-        let balance: U512 = builder
-            .query(None, balance_uref, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should parse balance into a U512");
-
-        balance
-    };
+    let purse_starting_balance = builder.get_purse_balance(purse);
 
     assert_eq!(
         purse_starting_balance, account_1_purse_funding_amount,
@@ -153,28 +132,7 @@ fn should_charge_non_main_purse() {
 
     let expected_resting_balance = account_1_purse_funding_amount - motes.value();
 
-    let purse_final_balance = {
-        let purse_bytes = purse
-            .addr()
-            .to_bytes()
-            .expect("should be able to serialize purse bytes");
-
-        let mint = builder.get_mint_contract_hash();
-        let balance_mapping_key = Key::local(mint, &purse_bytes);
-        let balance_uref = builder
-            .query(None, balance_mapping_key, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should find balance uref");
-
-        let balance: U512 = builder
-            .query(None, balance_uref, &[])
-            .and_then(|v| CLValue::try_from(v).map_err(|error| format!("{:?}", error)))
-            .and_then(|cl_value| cl_value.into_t().map_err(|error| format!("{:?}", error)))
-            .expect("should parse balance into a U512");
-
-        balance
-    };
+    let purse_final_balance = builder.get_purse_balance(purse);
 
     assert_eq!(
         purse_final_balance, expected_resting_balance,

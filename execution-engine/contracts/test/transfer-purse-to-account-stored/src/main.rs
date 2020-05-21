@@ -6,7 +6,7 @@ extern crate alloc;
 use alloc::{string::ToString, vec};
 
 use alloc::boxed::Box;
-use contract::contract_api::storage;
+use contract::contract_api::{runtime, storage};
 
 use types::{
     contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
@@ -14,7 +14,8 @@ use types::{
 };
 
 const ENTRY_FUNCTION_NAME: &str = "transfer";
-const HASH_KEY_NAME: &str = "transfer_purse_to_account";
+const PACKAGE_HASH_KEY_NAME: &str = "transfer_purse_to_account";
+const HASH_KEY_NAME: &str = "transfer_purse_to_account_hash";
 const ACCESS_KEY_NAME: &str = "transfer_purse_to_account_access";
 const ARG_0_NAME: &str = "target_account_addr";
 const ARG_1_NAME: &str = "amount";
@@ -43,10 +44,11 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    storage::new_contract(
+    let contract_hash = storage::new_contract(
         entry_points,
         None,
-        Some(HASH_KEY_NAME.to_string()),
+        Some(PACKAGE_HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),
     );
+    runtime::put_key(HASH_KEY_NAME, contract_hash.into());
 }

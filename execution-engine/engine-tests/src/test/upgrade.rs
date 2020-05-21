@@ -16,6 +16,7 @@ const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
 const DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME: &str = "do_nothing_stored_upgrader";
 const DO_NOTHING_STORED_CALLER_CONTRACT_NAME: &str = "do_nothing_stored_caller";
 const ENTRY_FUNCTION_NAME: &str = "delegate";
+const DO_NOTHING_PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
 const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
 const INITIAL_VERSION: ContractVersion = CONTRACT_INITIAL_VERSION;
 const UPGRADED_VERSION: ContractVersion = INITIAL_VERSION + 1;
@@ -67,7 +68,7 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
         let exec_request = {
             ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
                 DEFAULT_ACCOUNT_ADDR,
-                DO_NOTHING_HASH_KEY_NAME,
+                DO_NOTHING_PACKAGE_HASH_KEY_NAME,
                 INITIAL_VERSION,
                 ENTRY_FUNCTION_NAME,
                 RuntimeArgs::new(),
@@ -105,7 +106,7 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
         let exec_request = {
             ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
                 DEFAULT_ACCOUNT_ADDR,
-                DO_NOTHING_HASH_KEY_NAME,
+                DO_NOTHING_PACKAGE_HASH_KEY_NAME,
                 UPGRADED_VERSION,
                 ENTRY_FUNCTION_NAME,
                 args,
@@ -157,7 +158,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
 
     let stored_contract_package_hash = account_1
         .named_keys()
-        .get(DO_NOTHING_HASH_KEY_NAME)
+        .get(DO_NOTHING_PACKAGE_HASH_KEY_NAME)
         .expect("should have key of do_nothing_hash")
         .into_hash()
         .expect("should have hash");
@@ -167,7 +168,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
     {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
         let args = runtime_args! {
-            ARG_CONTRACT_PACKAGE => stored_contract_hash,
+            ARG_CONTRACT_PACKAGE => stored_contract_package_hash,
             ARG_VERSION => INITIAL_VERSION,
             ARG_NEW_PURSE_NAME => PURSE_1,
         };
@@ -196,9 +197,9 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
         builder.exec(exec_request).expect_success().commit();
     }
 
-    let stored_contract_hash = account_1
+    let stored_contract_package_hash = account_1
         .named_keys()
-        .get(DO_NOTHING_HASH_KEY_NAME)
+        .get(DO_NOTHING_PACKAGE_HASH_KEY_NAME)
         .expect("should have key of do_nothing_hash")
         .into_hash()
         .expect("should have hash");
@@ -207,7 +208,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
     {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
         let args = runtime_args! {
-            ARG_CONTRACT_PACKAGE => stored_contract_hash,
+            ARG_CONTRACT_PACKAGE => stored_contract_package_hash,
             ARG_VERSION => UPGRADED_VERSION,
             ARG_NEW_PURSE_NAME => PURSE_1,
         };

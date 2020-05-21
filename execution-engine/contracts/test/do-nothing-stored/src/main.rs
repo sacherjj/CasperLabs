@@ -5,7 +5,7 @@ extern crate alloc;
 
 use alloc::{string::ToString, vec::Vec};
 
-use contract::contract_api::storage;
+use contract::contract_api::{runtime, storage};
 use types::{
     contracts::{EntryPoint, EntryPoints},
     CLType, EntryPointAccess, EntryPointType,
@@ -13,6 +13,7 @@ use types::{
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const HASH_KEY_NAME: &str = "do_nothing_hash";
+const PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
 const ACCESS_KEY_NAME: &str = "do_nothing_access";
 
 #[no_mangle]
@@ -33,10 +34,12 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    storage::new_contract(
+    let contract_hash = storage::new_contract(
         entry_points,
         None,
-        Some(HASH_KEY_NAME.to_string()),
+        Some(PACKAGE_HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),
     );
+
+    runtime::put_key(HASH_KEY_NAME, contract_hash.into());
 }

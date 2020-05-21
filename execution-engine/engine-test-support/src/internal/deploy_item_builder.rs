@@ -81,11 +81,11 @@ impl DeployItemBuilder {
         todo!("with_stored_payment_uref")
     }
 
-    pub fn with_stored_payment_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_stored_payment_named_key(mut self, uref_name: &str, entry_point_name: &str, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByName {
             name: uref_name.to_owned(),
-            entry_point: DEFAULT_ENTRY_POINT_NAME.into(),
+            entry_point: entry_point_name.into(),
             args,
         });
         self
@@ -130,11 +130,11 @@ impl DeployItemBuilder {
         todo!("with_stored_session_uref")
     }
 
-    pub fn with_stored_session_named_key(mut self, name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_stored_session_named_key(mut self, name: &str, entry_point: &str, args: impl ArgsParser) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByName {
             name: name.to_owned(),
-            entry_point: DEFAULT_ENTRY_POINT_NAME.to_owned(),
+            entry_point: entry_point.into(),
             args,
         });
         self
@@ -232,8 +232,14 @@ impl DeployItemBuilder {
                 .deploy_item
                 .address
                 .unwrap_or_else(|| PublicKey::ed25519_from([0u8; 32])),
-            session: self.deploy_item.session_code.unwrap(),
-            payment: self.deploy_item.payment_code.unwrap(),
+            session: self
+                .deploy_item
+                .session_code
+                .expect("should have session code"),
+            payment: self
+                .deploy_item
+                .payment_code
+                .expect("should have payment code"),
             gas_price: self.deploy_item.gas_price,
             authorization_keys: self.deploy_item.authorization_keys,
             deploy_hash: self.deploy_item.deploy_hash,

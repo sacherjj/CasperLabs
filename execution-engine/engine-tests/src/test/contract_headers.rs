@@ -32,7 +32,7 @@ fn should_calling_session_and_contract_has_correct_context() {
                 "session_code_test",
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -50,7 +50,7 @@ fn should_calling_session_and_contract_has_correct_context() {
                 "contract_code_test",
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -68,7 +68,7 @@ fn should_calling_session_and_contract_has_correct_context() {
                 "add_new_key_as_session",
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([4; 32])
             .build();

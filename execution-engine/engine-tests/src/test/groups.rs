@@ -27,6 +27,7 @@ const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_
 const UNCALLABLE_SESSION: &str = "uncallable_session";
 const UNCALLABLE_CONTRACT: &str = "uncallable_contract";
 const CALL_RESTRICTED_ENTRY_POINTS: &str = "call_restricted_entry_points";
+const ARG_AMOUNT: &str = "amount";
 
 lazy_static! {
     static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;
@@ -78,7 +79,7 @@ fn should_call_group_restricted_session() {
                 RESTRICTED_SESSION,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -138,7 +139,7 @@ fn should_call_group_restricted_session_caller() {
                 RESTRICTED_SESSION_CALLER,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -204,7 +205,7 @@ fn should_not_call_restricted_session_from_wrong_account() {
                 RESTRICTED_SESSION,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[ACCOUNT_1_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -282,7 +283,7 @@ fn should_not_call_restricted_session_caller_from_wrong_account() {
                 RESTRICTED_SESSION_CALLER,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[ACCOUNT_1_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -354,7 +355,7 @@ fn should_call_group_restricted_contract() {
                 RESTRICTED_CONTRACT,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -424,7 +425,7 @@ fn should_not_call_group_restricted_contract_from_wrong_account() {
                 RESTRICTED_CONTRACT,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[ACCOUNT_1_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -486,7 +487,7 @@ fn should_call_group_unrestricted_contract_caller() {
                 UNRESTRICTED_CONTRACT_CALLER,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -553,7 +554,7 @@ fn should_call_unrestricted_contract_caller_from_different_account() {
                 UNRESTRICTED_CONTRACT_CALLER,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[ACCOUNT_1_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -616,7 +617,7 @@ fn should_call_group_restricted_contract_as_session() {
                 RESTRICTED_CONTRACT_CALLER_AS_SESSION,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([4; 32])
             .build();
@@ -679,7 +680,7 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
                 RESTRICTED_CONTRACT_CALLER_AS_SESSION,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[ACCOUNT_1_ADDR])
             .with_deploy_hash([4; 32])
             .build();
@@ -744,7 +745,7 @@ fn should_not_call_uncallable_contract_from_deploy() {
                 UNCALLABLE_SESSION,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -774,7 +775,7 @@ fn should_not_call_uncallable_contract_from_deploy() {
                 CALL_RESTRICTED_ENTRY_POINTS,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([6; 32])
             .build();
@@ -830,7 +831,7 @@ fn should_not_call_uncallable_session_from_deploy() {
                 UNCALLABLE_CONTRACT,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -860,7 +861,7 @@ fn should_not_call_uncallable_session_from_deploy() {
                 CALL_RESTRICTED_ENTRY_POINTS,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([6; 32])
             .build();

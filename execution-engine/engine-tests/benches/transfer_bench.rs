@@ -13,7 +13,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, URef, U512};
+use types::{account::PublicKey, Key, URef, U512, runtime_args, RuntimeArgs};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";
@@ -187,7 +187,7 @@ fn transfer_to_purse_multiple_deploys(
     for i in 0..TRANSFER_BATCH_SIZE {
         let deploy = DeployItemBuilder::default()
             .with_address(TARGET_ADDR)
-            .with_empty_payment_bytes((U512::from(PER_RUN_FUNDING),))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_session_code(CONTRACT_TRANSFER_TO_PURSE, (purse, U512::one()))
             .with_authorization_keys(&[TARGET_ADDR])
             .with_deploy_hash(make_deploy_hash(i)) // deploy_hash

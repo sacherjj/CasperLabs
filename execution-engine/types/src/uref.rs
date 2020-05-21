@@ -18,7 +18,7 @@ pub const UREF_SERIALIZED_LENGTH: usize = UREF_ADDR_LENGTH + ACCESS_RIGHTS_SERIA
 /// the [`AccessRights`] of the reference.
 ///
 /// A `URef` can be used to index entities such as [`CLValue`](crate::CLValue)s, or smart contracts.
-#[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct URef([u8; UREF_ADDR_LENGTH], AccessRights);
 
 impl URef {

@@ -39,6 +39,7 @@ use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
     account::PublicKey,
     bytesrepr::{self, ToBytes},
+    contracts::{INSTALL_ENTRY_POINT_NAME, UPGRADE_ENTRY_POINT_NAME},
     runtime_args,
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
@@ -95,7 +96,10 @@ pub enum GetModuleResult {
         entry_point: EntryPoint,
     },
     Contract {
+        // Contract hash
         base_key: Key,
+        // ContractPackage hash
+        seed_key: Key,
         module: Module,
         contract: Contract,
         contract_package: ContractPackage,
@@ -165,7 +169,6 @@ where
         let gas_limit = Gas::new(std::u64::MAX.into());
         let phase = Phase::System;
 
-        let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
         let initial_root_hash = self.state.empty_root();
         let wasm_costs = ee_config.wasm_costs();
         let preprocessor = Preprocessor::new(wasm_costs);
@@ -212,7 +215,6 @@ where
             let mint_installer_bytes = ee_config.mint_installer_bytes();
             let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
             let args = RuntimeArgs::new();
-            let mut named_keys = virtual_system_account.named_keys().clone();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
             let install_deploy_hash = genesis_config_hash.into();
             let hash_address_generator = Rc::clone(&hash_address_generator);
@@ -220,21 +222,12 @@ where
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
             let protocol_data = ProtocolData::default();
-            let entry_point = EntryPoint::new(
-                "install".to_string(),
-                Vec::new(),
-                CLType::Unit,
-                EntryPointAccess::Public,
-                EntryPointType::Session,
-            );
 
             let result = executor.exec_system(
                 mint_installer_module,
-                entry_point,
+                INSTALL_ENTRY_POINT_NAME,
                 args,
-                &mut named_keys,
-                initial_base_key,
-                &virtual_system_account,
+                &mut virtual_system_account,
                 authorization_keys,
                 blocktime,
                 install_deploy_hash,
@@ -248,8 +241,6 @@ where
                 protocol_data,
                 system_contract_cache,
             )?;
-
-            *virtual_system_account.named_keys_mut() = named_keys;
 
             result
         };
@@ -291,23 +282,13 @@ where
                 );
                 RuntimeArgs::Named(vec![arg_mint_package_hash, arg_genesis_validators])
             };
-            let mut named_keys = virtual_system_account.named_keys().clone();
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
-            let entry_point = EntryPoint::new(
-                "install".to_string(),
-                Vec::new(),
-                CLType::Unit,
-                EntryPointAccess::Public,
-                EntryPointType::Session,
-            );
 
             let result = executor.exec_system(
                 proof_of_stake_installer_module,
-                entry_point,
+                INSTALL_ENTRY_POINT_NAME,
                 args,
-                &mut named_keys,
-                initial_base_key,
-                &virtual_system_account,
+                &mut virtual_system_account,
                 authorization_keys,
                 blocktime,
                 install_deploy_hash,
@@ -321,8 +302,6 @@ where
                 partial_protocol_data,
                 system_contract_cache,
             )?;
-
-            *virtual_system_account.named_keys_mut() = named_keys;
 
             result
         };
@@ -354,28 +333,18 @@ where
             let standard_payment_installer_module =
                 preprocessor.preprocess(standard_payment_installer_bytes)?;
             let args = RuntimeArgs::new();
-            let mut named_keys = virtual_system_account.named_keys().clone();
             let authorization_keys = BTreeSet::new();
             let install_deploy_hash = genesis_config_hash.into();
             let hash_address_generator = Rc::clone(&hash_address_generator);
             let uref_address_generator = Rc::clone(&uref_address_generator);
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
-            let entry_point = EntryPoint::new(
-                "install".to_string(),
-                Vec::new(),
-                CLType::Unit,
-                EntryPointAccess::Public,
-                EntryPointType::Session,
-            );
 
             let result = executor.exec_system(
                 standard_payment_installer_module,
-                entry_point,
+                INSTALL_ENTRY_POINT_NAME,
                 args,
-                &mut named_keys,
-                initial_base_key,
-                &virtual_system_account,
+                &mut virtual_system_account,
                 authorization_keys,
                 blocktime,
                 install_deploy_hash,
@@ -389,8 +358,6 @@ where
                 protocol_data,
                 system_contract_cache,
             )?;
-
-            *virtual_system_account.named_keys_mut() = named_keys;
 
             result
         };
@@ -465,6 +432,7 @@ where
                 let tracking_copy_write = Rc::clone(&tracking_copy);
                 let mut named_keys_exec = BTreeMap::new();
                 let base_key = mint_hash;
+                let seed_key = mint_package_hash;
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();
                 // NOTE: As Ed25519 keys are currently supported by chainspec, PublicKey::value
@@ -489,6 +457,7 @@ where
                         args.clone(),
                         &mut named_keys_exec,
                         base_key.into(),
+                        seed_key.into(),
                         &virtual_system_account,
                         authorization_keys,
                         blocktime,
@@ -588,7 +557,7 @@ where
         };
 
         // 3.1.2.2 persist wasm CostTable
-        let new_protocol_data = ProtocolData::new(
+        let mut new_protocol_data = ProtocolData::new(
             new_wasm_costs,
             current_protocol_data.mint(),
             current_protocol_data.proof_of_stake(),
@@ -638,8 +607,6 @@ where
                     }
                 };
 
-                let mut keys = system_account.named_keys().clone();
-
                 let initial_base_key = Key::Account(SYSTEM_ACCOUNT_ADDR);
                 let authorization_keys = {
                     let mut ret = BTreeSet::new();
@@ -675,14 +642,11 @@ where
 
                 let executor = Executor::new(self.config);
 
-                let upgrade_entry_point = EntryPoint::default(); // TODO: implement
-                executor.exec_system(
+                let result: BTreeMap<ContractHash, ContractHash> = executor.exec_system(
                     upgrade_installer_module,
-                    upgrade_entry_point,
+                    UPGRADE_ENTRY_POINT_NAME,
                     args,
-                    &mut keys,
-                    initial_base_key,
-                    &system_account,
+                    &mut system_account,
                     authorization_keys,
                     blocktime,
                     deploy_hash,
@@ -696,13 +660,28 @@ where
                     new_protocol_data,
                     system_contract_cache,
                 )?;
+                println!("upgraded hashes: {:?}", result);
 
-                *system_account.named_keys_mut() = keys;
+                if !new_protocol_data.update_from(result) {
+                    return Err(Error::InvalidUpgradeResult);
+                } else {
+                    println!("write new protocol data {:?}", new_protocol_data);
+                    self.state
+                        .put_protocol_data(new_protocol_version, &new_protocol_data)
+                        .map_err(Into::into)?;
+                }
+                // *system_account.named_keys_mut() = keys;
 
-                let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-                let value = StoredValue::Account(system_account);
+                // let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
+                // let value = StoredValue::Account(system_account);
 
-                tracking_copy.borrow_mut().write(key, value);
+                // tracking_copy.borrow_mut().write(key, value);
+
+                // Find package hashes updates
+
+                // let effects = tracking_copy.borrow().effect();
+                // effects.transforms.get(mint_package_hash).expect("mint package should be
+                // changed");
             }
         }
 
@@ -838,6 +817,12 @@ where
                 let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
                     error::Error::Exec(execution::Error::NamedKeyNotFound(name.to_string()))
                 })?;
+
+                println!(
+                    "get contract by name {} key {:?}",
+                    name, stored_contract_key
+                );
+
                 if let Key::URef(_) = stored_contract_key {
                     return Err(error::Error::InvalidKeyVariant(name.to_string()));
                 }
@@ -876,12 +861,18 @@ where
                     ContractVersionKey::new(protocol_version.value().major, *version);
 
                 if !contract_package.is_contract_version_in_use(contract_version_key) {
-                    return Err(error::Error::Exec(execution::Error::InvalidContractVersion));
+                    return Err(error::Error::Exec(
+                        execution::Error::InvalidContractVersion(contract_version_key),
+                    ));
                 }
 
                 let contract_hash = *contract_package
                     .get_contract(contract_version_key)
-                    .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
+                    .ok_or_else(|| {
+                        error::Error::Exec(execution::Error::InvalidContractVersion(
+                            contract_version_key,
+                        ))
+                    })?;
 
                 let contract = tracking_copy
                     .borrow_mut()
@@ -907,6 +898,7 @@ where
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_hash.into(),
+                        seed_key: contract_package_hash.into(),
                         contract: contract.to_owned(),
                         contract_package,
                         entry_point: method_entry_point.to_owned(),
@@ -929,12 +921,18 @@ where
                     ContractVersionKey::new(protocol_version.value().major, *version);
 
                 if !contract_package.is_contract_version_in_use(contract_version_key) {
-                    return Err(error::Error::Exec(execution::Error::InvalidContractVersion));
+                    return Err(error::Error::Exec(
+                        execution::Error::InvalidContractVersion(contract_version_key),
+                    ));
                 }
 
                 let contract_hash = *contract_package
                     .get_contract(contract_version_key)
-                    .ok_or_else(|| error::Error::Exec(execution::Error::InvalidContractVersion))?;
+                    .ok_or_else(|| {
+                        error::Error::Exec(execution::Error::InvalidContractVersion(
+                            contract_version_key,
+                        ))
+                    })?;
 
                 let contract = tracking_copy
                     .borrow_mut()
@@ -960,6 +958,7 @@ where
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_hash.into(),
+                        seed_key: contract_package_hash.into(),
                         contract: contract.to_owned(),
                         contract_package,
                         entry_point: method_entry_point.to_owned(),
@@ -980,9 +979,18 @@ where
             .borrow_mut()
             .get_contract(correlation_id, contract_hash)?;
 
+        println!(
+            "get_module_from_contract_hash: protocol version {:?} contract {:?}",
+            protocol_version,
+            contract.protocol_version()
+        );
         // A contract may only call a stored contract that has the same protocol major version
         // number.
         if !contract.is_compatible_protocol_version(*protocol_version) {
+            println!(
+                "incompatible 1 {:?} hash:{:?} {:?}",
+                protocol_version, contract_hash, contract
+            );
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,
                 actual: contract.protocol_version().value().major,
@@ -1010,12 +1018,15 @@ where
         blocktime: BlockTime,
         deploy_item: DeployItem,
     ) -> Result<ExecutionResult, RootNotFound> {
+        println!("deploy protocol version {:?}", protocol_version);
         // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
         let session = deploy_item.session;
         let payment = deploy_item.payment;
         let authorization_keys = deploy_item.authorization_keys;
         let deploy_hash = deploy_item.deploy_hash;
         let base_key = Key::Account(deploy_item.address);
+        let seed_key = base_key;
+
         // Create tracking copy (which functions as a deploy context)
         // validation_spec_2: prestate_hash check
         let tracking_copy = match self.tracking_copy(prestate_hash) {
@@ -1096,24 +1107,30 @@ where
             }
         };
 
+        println!("protocol data v{:?} {:?}", protocol_version, protocol_data);
+
         let max_payment_cost: Motes = Motes::new(U512::from(MAX_PAYMENT));
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
         let mint_hash = protocol_data.mint();
 
+        let mint_contract = match tracking_copy
+            .borrow_mut()
+            .get_contract(correlation_id, mint_hash)
+        {
+            Ok(contract) => contract,
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(error.into()));
+            }
+        };
+
+        println!("mint contract {:?} contract {:?}", mint_hash, mint_contract);
+
+        let mint_package_hash = mint_contract.contract_package_hash();
+
         // cache mint module
         if !self.system_contract_cache.has(mint_hash) {
-            let mint_contract = match tracking_copy
-                .borrow_mut()
-                .get_contract(correlation_id, mint_hash)
-            {
-                Ok(contract) => contract,
-                Err(error) => {
-                    return Ok(ExecutionResult::precondition_failure(error.into()));
-                }
-            };
-
             let mint_module = match tracking_copy.borrow_mut().get_system_module(
                 correlation_id,
                 mint_contract.contract_wasm_hash(),
@@ -1170,7 +1187,7 @@ where
             let account_key = Key::URef(account.main_purse());
             match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
-                mint_hash,
+                mint_package_hash,
                 account_key,
             ) {
                 Ok(key) => key,
@@ -1211,6 +1228,7 @@ where
         // [`ExecutionResultBuilder`] handles merging of multiple execution results
         let mut execution_result_builder = execution_result::ExecutionResultBuilder::new();
 
+        log::debug!("Before payment 1");
         // Execute provided payment code
         let payment_result = {
             // payment_code_spec_1: init pay environment w/ gas limit == (max_payment_cost /
@@ -1270,10 +1288,11 @@ where
 
             // payment_code_spec_2: execute payment code
             let phase = Phase::Payment;
-
+            log::debug!("Before payment 2");
             let (
                 payment_module,
                 payment_base_key,
+                payment_seed_key,
                 mut payment_named_keys,
                 payment_package,
                 payment_entry_point,
@@ -1285,6 +1304,7 @@ where
                 } => (
                     module,
                     base_key,
+                    seed_key,
                     account.named_keys().clone(),
                     contract_package,
                     entry_point,
@@ -1292,12 +1312,14 @@ where
                 GetModuleResult::Contract {
                     module,
                     base_key,
+                    seed_key,
                     contract,
                     contract_package,
                     entry_point,
                 } => (
                     module,
                     base_key,
+                    seed_key,
                     contract.named_keys().clone(),
                     contract_package,
                     entry_point,
@@ -1321,6 +1343,7 @@ where
                     payment_entry_point,
                     payment_args,
                     payment_base_key,
+                    payment_seed_key,
                     &account,
                     payment_named_keys,
                     authorization_keys.clone(),
@@ -1352,6 +1375,7 @@ where
                     payment_args,
                     &mut payment_named_keys,
                     payment_base_key,
+                    payment_seed_key,
                     &account,
                     authorization_keys.clone(),
                     blocktime,
@@ -1409,7 +1433,7 @@ where
 
             let purse_balance_key = match tracking_copy.borrow_mut().get_purse_balance_key(
                 correlation_id,
-                mint_hash,
+                mint_package_hash,
                 payment_purse_key,
             ) {
                 Ok(key) => key,
@@ -1429,6 +1453,7 @@ where
             }
         };
 
+        println!("payment purse balance {:?}", payment_purse_balance);
         if let Some(forced_transfer) = payment_result.check_forced_transfer(payment_purse_balance) {
             // Get rewards purse balance key
             // payment_code_spec_6: system contract validity
@@ -1445,7 +1470,7 @@ where
 
                 match tracking_copy.borrow_mut().get_purse_balance_key(
                     correlation_id,
-                    mint_hash,
+                    mint_package_hash,
                     rewards_purse_key,
                 ) {
                     Ok(key) => key,
@@ -1472,12 +1497,13 @@ where
 
         let post_payment_tc = tracking_copy.borrow();
         let session_tc = Rc::new(RefCell::new(post_payment_tc.fork()));
-
+        log::debug!("Before session 1");
         // session_code_spec_2: execute session code
 
         let (
             session_module,
             session_base_key,
+            session_seed_key,
             session_named_keys,
             session_package,
             session_entry_point,
@@ -1489,6 +1515,7 @@ where
             } => (
                 module,
                 base_key,
+                seed_key,
                 account.named_keys().clone(),
                 contract_package,
                 entry_point,
@@ -1496,12 +1523,14 @@ where
             GetModuleResult::Contract {
                 module,
                 base_key,
+                seed_key,
                 contract,
                 contract_package,
                 entry_point,
             } => (
                 module,
                 base_key,
+                seed_key,
                 contract.named_keys().clone(),
                 contract_package,
                 entry_point,
@@ -1516,6 +1545,7 @@ where
                 return Ok(ExecutionResult::precondition_failure(exec_err.into()));
             }
         };
+        log::debug!("Before session 2");
         let session_result = {
             // payment_code_spec_3_b_i: if (balance of PoS pay purse) >= (gas spent during
             // payment code execution) * conv_rate, yes session
@@ -1531,6 +1561,7 @@ where
                 session_entry_point,
                 session_args,
                 session_base_key,
+                session_seed_key,
                 &account,
                 session_named_keys,
                 authorization_keys.clone(),
@@ -1589,14 +1620,18 @@ where
             let mut proof_of_stake_keys = proof_of_stake_contract.named_keys().to_owned();
 
             let base_key = Key::from(proof_of_stake_hash);
+            let seed_key = Key::from(proof_of_stake_contract.contract_package_hash());
+
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
+            println!("proof of stake keys {:?}", proof_of_stake_keys);
             executor.exec_finalize(
                 proof_of_stake_module,
                 proof_of_stake_args,
                 &mut proof_of_stake_keys,
                 base_key,
+                seed_key,
                 &system_account,
                 authorization_keys,
                 blocktime,

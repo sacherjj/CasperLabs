@@ -212,6 +212,12 @@ impl From<URef> for Key {
     }
 }
 
+impl From<PublicKey> for Key {
+    fn from(public_key: PublicKey) -> Self {
+        Key::Account(public_key)
+    }
+}
+
 impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result = bytesrepr::unchecked_allocate_buffer(self);

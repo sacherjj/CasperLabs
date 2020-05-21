@@ -40,6 +40,8 @@ pub enum Error {
     Mint(mint::Error),
     #[fail(display = "Unsupported key type: {}", _0)]
     InvalidKeyVariant(String),
+    #[fail(display = "Invalid upgrade result value")]
+    InvalidUpgradeResult,
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {

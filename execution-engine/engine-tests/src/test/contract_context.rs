@@ -18,6 +18,7 @@ const ADD_NEW_KEY_AS_SESSION: &str = "add_new_key_as_session";
 const METADATA_HASH_ARG: &str = "metadata_hash";
 const NEW_KEY: &str = "new_key";
 const SESSION_CODE_CALLER_AS_CONTRACT: &str = "session_code_caller_as_contract";
+const ARG_AMOUNT: &str = "amount";
 
 #[ignore]
 #[test]
@@ -37,7 +38,7 @@ fn should_calling_session_and_contract_has_correct_context() {
                 SESSION_CODE_TEST,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -55,7 +56,7 @@ fn should_calling_session_and_contract_has_correct_context() {
                 CONTRACT_CODE_TEST,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -73,7 +74,7 @@ fn should_calling_session_and_contract_has_correct_context() {
                 ADD_NEW_KEY_AS_SESSION,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([4; 32])
             .build();
@@ -160,7 +161,7 @@ fn should_not_call_session_from_contract() {
                 SESSION_CODE_CALLER_AS_CONTRACT,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();

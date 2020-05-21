@@ -28,7 +28,7 @@ pub trait TrackingCopyExt<R> {
     fn get_purse_balance_key(
         &mut self,
         correlation_id: CorrelationId,
-        mint_contract: ContractHash,
+        mint_package_hash: ContractPackageHash,
         purse: Key,
     ) -> Result<Key, Self::Error>;
 
@@ -95,14 +95,14 @@ where
     fn get_purse_balance_key(
         &mut self,
         correlation_id: CorrelationId,
-        mint_contract: ContractHash,
+        mint_package_hash: ContractPackageHash,
         outer_key: Key,
     ) -> Result<Key, Self::Error> {
         let uref = outer_key
             .as_uref()
-            .ok_or_else(|| execution::Error::URefNotFound("public purse balance".to_string()))?;
+            .ok_or_else(|| execution::Error::URefNotFound("public purse balance 1".to_string()))?;
         let local_key_bytes = uref.addr().into_bytes()?;
-        let balance_mapping_key = Key::local(mint_contract, &local_key_bytes);
+        let balance_mapping_key = Key::local(mint_package_hash, &local_key_bytes);
         match self
             .read(correlation_id, &balance_mapping_key)
             .map_err(Into::into)?
@@ -114,7 +114,7 @@ where
                 Ok(cl_value.into_t()?)
             }
             None => Err(execution::Error::URefNotFound(
-                "public purse balance".to_string(),
+                "public purse balance 21".to_string(),
             )),
         }
     }
