@@ -111,6 +111,7 @@ fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; KEY_LOCAL_SEE
 fn mock_runtime_context<'a>(
     account: &'a Account,
     base_key: Key,
+    seed_key: Key,
     named_keys: &'a mut BTreeMap<String, Key>,
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     hash_address_generator: AddressGenerator,
@@ -126,6 +127,7 @@ fn mock_runtime_context<'a>(
         BTreeSet::from_iter(vec![PublicKey::ed25519_from([0; 32])]),
         &account,
         base_key,
+        seed_key,
         BlockTime::new(0),
         [1u8; 32],
         Gas::default(),
@@ -164,12 +166,14 @@ where
 {
     let deploy_hash = [1u8; 32];
     let (base_key, account) = mock_account(PublicKey::ed25519_from([0u8; 32]));
+    let seed_key = base_key;
     let mut named_keys = BTreeMap::new();
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
         &account,
         base_key,
+        seed_key,
         &mut named_keys,
         access_rights,
         hash_address_generator,
@@ -328,6 +332,7 @@ fn contract_key_addable_valid() {
 
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
+    let seed_key = random_contract_key(&mut rng);
     let contract = StoredValue::Contract(Contract::default());
 
     let tracking_copy = Rc::new(RefCell::new(mock_tracking_copy(
@@ -353,6 +358,7 @@ fn contract_key_addable_valid() {
         authorization_keys,
         &account,
         contract_key,
+        seed_key,
         BlockTime::new(0),
         DEPLOY_HASH,
         Gas::default(),
@@ -399,6 +405,7 @@ fn contract_key_addable_invalid() {
     let contract_key = random_contract_key(&mut rng);
 
     let other_contract_key = random_contract_key(&mut rng);
+    let other_contract_package_key = random_contract_key(&mut rng);
     let contract = StoredValue::Contract(Contract::default());
     let tracking_copy = Rc::new(RefCell::new(mock_tracking_copy(
         account_key,
@@ -423,6 +430,7 @@ fn contract_key_addable_invalid() {
         authorization_keys,
         &account,
         other_contract_key,
+        other_contract_package_key,
         BlockTime::new(0),
         DEPLOY_HASH,
         Gas::default(),
@@ -805,6 +813,7 @@ fn remove_uref_works() {
     let access_rights = HashMap::new();
     let deploy_hash = [1u8; 32];
     let (base_key, account) = mock_account(PublicKey::ed25519_from([0u8; 32]));
+    let seed_key = base_key;
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let mut uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_name = "Foo".to_owned();
@@ -813,6 +822,7 @@ fn remove_uref_works() {
     let mut runtime_context = mock_runtime_context(
         &account,
         base_key,
+        seed_key,
         &mut named_keys,
         access_rights,
         hash_address_generator,
@@ -840,12 +850,14 @@ fn validate_valid_purse_of_an_account() {
     let deploy_hash = [1u8; 32];
     let (base_key, account) =
         mock_account_with_purse(PublicKey::ed25519_from([0u8; 32]), mock_purse);
+    let seed_key = base_key;
     let mut named_keys = BTreeMap::new();
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
         &account,
         base_key,
+        seed_key,
         &mut named_keys,
         access_rights,
         hash_address_generator,

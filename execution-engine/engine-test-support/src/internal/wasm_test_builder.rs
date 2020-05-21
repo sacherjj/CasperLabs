@@ -605,10 +605,19 @@ where
 
     pub fn get_purse_balance(&self, purse: URef) -> U512 {
         let mint = self.get_mint_contract_hash();
+        let mint_contract_value = self
+            .query(None, mint.into(), &[])
+            .expect("should have mint contract value");
+        let mint_contract = mint_contract_value
+            .as_contract()
+            .expect("should have mint contract");
+        let mint_package_hash = mint_contract.contract_package_hash();
+
         let purse_addr = purse.addr();
-        let purse_bytes =
-            ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
-        let balance_mapping_key = Key::local(mint, &purse_bytes);
+        // let purse_bytes =
+        //     ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
+        // let balance_mapping_key = Key::local(mint_package_hash, &purse_bytes);
+        let balance_mapping_key = Key::Hash(purse_addr);
 
         let base_key = self
             .query(None, balance_mapping_key, &[])

@@ -18,8 +18,7 @@ const CONTRACT_ACCESS_KEY: &str = "access_key";
 
 #[no_mangle]
 pub extern "C" fn delegate() {
-    todo!("reimplement upgraded")
-    // local_state_stored_upgraded::delegate()
+    local_state_stored_upgraded::delegate()
 }
 
 fn upgrade(contract_package_hash: ContractPackageHash, access_key: URef) -> ContractHash {

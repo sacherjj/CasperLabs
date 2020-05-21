@@ -9,7 +9,7 @@ pub enum Code {
     /// The filesystem path of compiled Wasm code.
     Path(PathBuf),
     /// A named key providing the location of a stored contract.
-    NamedKey(String),
+    NamedKey(String, String),
     /// A [`URef`] to a stored contract.
     URef(URefAddr),
     /// A hash providing the location of a stored contract.

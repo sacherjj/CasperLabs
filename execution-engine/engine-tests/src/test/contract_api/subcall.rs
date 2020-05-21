@@ -181,6 +181,7 @@ fn expensive_subcall_should_cost_more() {
     const DO_NOTHING: &str = "do_nothing_stored.wasm";
     const EXPENSIVE_CALCULATION: &str = "expensive_calculation.wasm";
     const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
+    const DO_NOTHING_PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
     const EXPENSIVE_CALCULATION_KEY: &str = "expensive-calculation";
     const ENTRY_FUNCTION_NAME: &str = "delegate";
 
@@ -226,19 +227,12 @@ fn expensive_subcall_should_cost_more() {
 
     let call_do_nothing_request = ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
         DEFAULT_ACCOUNT_ADDR,
-        DO_NOTHING_HASH_KEY_NAME,
+        DO_NOTHING_PACKAGE_HASH_KEY_NAME,
         CONTRACT_INITIAL_VERSION,
         ENTRY_FUNCTION_NAME,
         RuntimeArgs::new(),
     )
     .build();
-
-    // let call_expensive_calculation_request = ExecuteRequestBuilder::standard(
-    //     DEFAULT_ACCOUNT_ADDR,
-    //     CONTRACT_NAME,
-    //     runtime_args! { ARG_TARGET => expensive_calculation_contract_hash },
-    // )
-    // .build();
 
     let call_expensive_calculation_request = ExecuteRequestBuilder::contract_call_by_hash(
         DEFAULT_ACCOUNT_ADDR,

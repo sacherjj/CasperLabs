@@ -2,12 +2,14 @@ use rand::Rng;
 
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::execute_request::ExecuteRequest;
-use types::ProtocolVersion;
+use types::{runtime_args, ProtocolVersion, RuntimeArgs};
 
 use crate::{
     internal::{DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT},
     Code, PublicKey,
 };
+
+const ARG_AMOUNT: &str = "amount";
 
 /// A single session, i.e. a single request to execute a single deploy within the test context.
 pub struct Session {
@@ -25,10 +27,10 @@ impl SessionBuilder {
     /// session args, and with default values for the account address, payment code args, gas price,
     /// authorization keys and protocol version.
     pub fn new(session_code: Code, session_args: impl ArgsParser) -> Self {
-        let di_builder = DeployItemBuilder::new().with_empty_payment_bytes((*DEFAULT_PAYMENT,));
+        let di_builder = DeployItemBuilder::new().with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT });
         let di_builder = match session_code {
             Code::Path(path) => di_builder.with_session_code(path, session_args),
-            Code::NamedKey(name) => di_builder.with_stored_session_named_key(&name, session_args),
+            Code::NamedKey(name, entry_point) => di_builder.with_stored_session_named_key(&name, &entry_point, session_args),
             Code::URef(uref) => {
                 di_builder.with_stored_session_uref_addr(uref.to_vec(), session_args)
             }
@@ -52,7 +54,7 @@ impl SessionBuilder {
     pub fn with_payment_code(mut self, code: Code, args: impl ArgsParser) -> Self {
         self.di_builder = match code {
             Code::Path(path) => self.di_builder.with_payment_code(path, args),
-            Code::NamedKey(name) => self.di_builder.with_stored_payment_named_key(&name, args),
+            Code::NamedKey(name, entry_point) => self.di_builder.with_stored_payment_named_key(&name, &entry_point, args),
             Code::URef(uref) => self
                 .di_builder
                 .with_stored_payment_uref_addr(uref.to_vec(), args),

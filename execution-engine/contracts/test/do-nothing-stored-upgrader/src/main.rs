@@ -16,7 +16,7 @@ use types::{
 };
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
-const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
+const DO_NOTHING_PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
 const DO_NOTHING_ACCESS_KEY_NAME: &str = "do_nothing_access";
 
 #[no_mangle]
@@ -42,7 +42,7 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    let do_nothing_hash = runtime::get_key(DO_NOTHING_HASH_KEY_NAME).unwrap_or_revert();
+    let do_nothing_package_hash = runtime::get_key(DO_NOTHING_PACKAGE_HASH_KEY_NAME).unwrap_or_revert();
 
     let do_nothing_uref = runtime::get_key(DO_NOTHING_ACCESS_KEY_NAME)
         .unwrap_or_revert()
@@ -50,7 +50,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert();
 
     let key = storage::add_contract_version(
-        do_nothing_hash.into_hash().unwrap(),
+        do_nothing_package_hash.into_hash().unwrap(),
         do_nothing_uref,
         entry_points,
         BTreeMap::new(),

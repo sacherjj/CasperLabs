@@ -11,6 +11,8 @@ use types::{
 
 use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
 
+const ARG_AMOUNT: &str = "amount";
+
 pub struct ExecuteRequestBuilder {
     execute_request: ExecuteRequest,
 }
@@ -60,7 +62,7 @@ impl ExecuteRequestBuilder {
             .with_address(public_key)
             .with_session_code(session_file, session_args)
             .with_empty_payment_bytes(runtime_args! {
-                "amount" => *DEFAULT_PAYMENT
+                ARG_AMOUNT => *DEFAULT_PAYMENT
             })
             .with_authorization_keys(&[public_key])
             .with_deploy_hash(deploy_hash)
@@ -81,7 +83,7 @@ impl ExecuteRequestBuilder {
         let deploy = DeployItemBuilder::new()
             .with_address(sender)
             .with_stored_session_hash(contract_hash, entry_point, args)
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[sender])
             .with_deploy_hash(deploy_hash)
             .build();
@@ -103,7 +105,7 @@ impl ExecuteRequestBuilder {
         let deploy = DeployItemBuilder::new()
             .with_address(sender)
             .with_stored_versioned_contract_by_name(hash_key_name, version, entry_point_name, args)
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[sender])
             .with_deploy_hash(deploy_hash)
             .build();

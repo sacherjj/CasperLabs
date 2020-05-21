@@ -1,4 +1,6 @@
+use crate::error::Error;
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SERIALIZED_LENGTH};
+use std::collections::BTreeMap;
 use types::{
     bytesrepr::{self, FromBytes, ToBytes},
     ContractHash, HashAddr, KEY_HASH_LENGTH,
@@ -104,6 +106,21 @@ impl ProtocolData {
             vec.push(self.standard_payment)
         }
         vec
+    }
+
+    pub fn update_from(&mut self, updates: BTreeMap<ContractHash, ContractHash>) -> bool {
+        for (old_hash, new_hash) in updates {
+            if old_hash == self.mint {
+                self.mint = new_hash;
+            } else if old_hash == self.proof_of_stake {
+                self.proof_of_stake = new_hash;
+            } else if old_hash == self.standard_payment {
+                self.standard_payment = new_hash;
+            } else {
+                return false;
+            }
+        }
+        true
     }
 }
 

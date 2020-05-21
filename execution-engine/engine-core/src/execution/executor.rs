@@ -12,8 +12,8 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, ContractPackage,
-    EntryPoint, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
+    account::PublicKey, bytesrepr::FromBytes, contracts::NamedKeys, BlockTime, CLTyped, CLValue,
+    ContractPackage, EntryPoint, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs,
 };
 
 use crate::{
@@ -87,6 +87,7 @@ impl Executor {
         entry_point: EntryPoint,
         args: RuntimeArgs,
         base_key: Key,
+        seed_key: Key,
         account: &Account,
         mut named_keys: BTreeMap<String, Key>,
         authorization_keys: BTreeSet<PublicKey>,
@@ -140,6 +141,7 @@ impl Executor {
             authorization_keys,
             &account,
             base_key,
+            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -231,6 +233,7 @@ impl Executor {
         args: RuntimeArgs,
         named_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
+        seed_key: Key,
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
@@ -280,6 +283,7 @@ impl Executor {
             authorization_keys,
             &account,
             base_key,
+            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -379,6 +383,7 @@ impl Executor {
         args: RuntimeArgs,
         named_keys: &'a mut BTreeMap<String, Key>,
         base_key: Key,
+        seed_key: Key,
         account: &'a Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
@@ -413,6 +418,7 @@ impl Executor {
             authorization_keys,
             account,
             base_key,
+            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -441,11 +447,9 @@ impl Executor {
     pub fn exec_system<R, T>(
         &self,
         module: Module,
-        entry_point: EntryPoint,
+        entry_point_name: &str,
         args: RuntimeArgs,
-        named_keys: &mut BTreeMap<String, Key>,
-        base_key: Key,
-        account: &Account,
+        account: &mut Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
@@ -464,12 +468,17 @@ impl Executor {
         R::Error: Into<Error>,
         T: FromBytes + CLTyped,
     {
+        let mut named_keys: NamedKeys = account.named_keys().clone();
+        let base_key = account.public_key().into();
+        let seed_key = account.public_key().into();
+
         let (instance, mut runtime) = self.create_runtime(
             module,
-            entry_point.entry_point_type(),
+            EntryPointType::Session,
             args,
-            named_keys,
+            &mut named_keys,
             base_key,
+            seed_key,
             account,
             authorization_keys,
             blocktime,
@@ -485,22 +494,23 @@ impl Executor {
             system_contract_cache,
         )?;
 
-        let error: wasmi::Error =
-            match instance.invoke_export(entry_point.name(), &[], &mut runtime) {
-                Err(error) => error,
-                Ok(_) => {
-                    // This duplicates the behavior of sub_call, but is admittedly rather
-                    // questionable.
-                    //
-                    // If `instance.invoke_export` returns `Ok` and the `host_buffer` is `None`, the
-                    // contract's execution succeeded but did not explicitly call `runtime::ret()`.
-                    // Treat as though the execution returned the unit type `()` as per Rust
-                    // functions which don't specify a return value.
-                    let result = runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?);
-                    let ret = result.into_t()?;
-                    return Ok(ret);
-                }
-            };
+        let error: wasmi::Error = match instance.invoke_export(entry_point_name, &[], &mut runtime)
+        {
+            Err(error) => error,
+            Ok(_) => {
+                // This duplicates the behavior of sub_call, but is admittedly rather
+                // questionable.
+                //
+                // If `instance.invoke_export` returns `Ok` and the `host_buffer` is `None`, the
+                // contract's execution succeeded but did not explicitly call `runtime::ret()`.
+                // Treat as though the execution returned the unit type `()` as per Rust
+                // functions which don't specify a return value.
+                let result = runtime.take_host_buffer().unwrap_or(CLValue::from_t(())?);
+                let ret = result.into_t()?;
+                *account.named_keys_mut() = named_keys;
+                return Ok(ret);
+            }
+        };
 
         let return_value: CLValue = match error
             .as_host_error()
@@ -515,6 +525,7 @@ impl Executor {
         };
 
         let ret = return_value.into_t()?;
+        *account.named_keys_mut() = named_keys;
         Ok(ret)
     }
 }

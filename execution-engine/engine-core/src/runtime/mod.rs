@@ -97,7 +97,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
         Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
         Key::Hash(_) => None,
-        Key::Local { .. } => None,
+        // Key::Local { .. } => None,
     }
 }
 
@@ -1734,6 +1734,10 @@ where
         let authorization_keys = self.context.authorization_keys().to_owned();
         let account = self.context.account();
         let base_key = self.protocol_data().mint().into();
+        let seed_key = {
+            let contract: Contract = self.context.read_gs_typed(&base_key)?;
+            contract.contract_package_hash().into()
+        };
         let blocktime = self.context.get_blocktime();
         let deploy_hash = self.context.get_deployhash();
         let gas_limit = self.context.gas_limit();
@@ -1753,6 +1757,7 @@ where
             authorization_keys,
             account,
             base_key,
+            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -1826,6 +1831,10 @@ where
         let authorization_keys = self.context.authorization_keys().to_owned();
         let account = self.context.account();
         let base_key = self.protocol_data().proof_of_stake().into();
+        let seed_key = {
+            let contract: Contract = self.context.read_gs_typed(&base_key)?;
+            contract.contract_package_hash().into()
+        };
         let blocktime = self.context.get_blocktime();
         let deploy_hash = self.context.get_deployhash();
         let gas_limit = self.context.gas_limit();
@@ -1845,6 +1854,7 @@ where
             authorization_keys,
             account,
             base_key,
+            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -1958,24 +1968,14 @@ where
             .cloned()
             .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
-        let context_key = match entry_point.entry_point_type() {
-            EntryPointType::Session
-                if self.context.entry_point_type() == EntryPointType::Contract =>
-            {
-                // Session code can't be called from Contract code for security reasons.
-                return Err(Error::InvalidContext);
-            }
-            EntryPointType::Session => {
-                assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
-                // Session code called from session reuses current base key
-                self.context.base_key()
-            }
-            EntryPointType::Contract => contract_hash.into(),
-        };
+        let context_key = self.get_context_key_for_contract_call(contract_hash, &entry_point)?;
+        let seed_key =
+            self.get_seed_key_for_contract_call(contract.contract_package_hash(), &entry_point);
 
         self.execute_contract(
             key,
             context_key,
+            seed_key,
             contract,
             args,
             entry_point,
@@ -2014,7 +2014,7 @@ where
         let contract_hash = contract_package
             .get_contract(contract_version_key)
             .cloned()
-            .ok_or_else(|| Error::InvalidContractVersion)?;
+            .ok_or_else(|| Error::InvalidContractVersion(contract_version_key))?;
 
         //
         // Get contract data
@@ -2050,10 +2050,12 @@ where
         }
 
         let context_key = self.get_context_key_for_contract_call(contract_hash, &entry_point)?;
-
+        let seed_key =
+            self.get_seed_key_for_contract_call(contract.contract_package_hash(), &entry_point);
         self.execute_contract(
             context_key,
             context_key,
+            seed_key,
             contract,
             args,
             entry_point,
@@ -2082,10 +2084,22 @@ where
         }
     }
 
+    fn get_seed_key_for_contract_call(
+        &self,
+        contract_package_hash: ContractPackageHash,
+        entry_point: &EntryPoint,
+    ) -> Key {
+        match entry_point.entry_point_type() {
+            EntryPointType::Session => self.context.base_key(),
+            EntryPointType::Contract => contract_package_hash.into(),
+        }
+    }
+
     fn execute_contract(
         &mut self,
         key: Key,
         base_key: Key,
+        seed_key: Key,
         contract: Contract,
         args: RuntimeArgs,
         entry_point: EntryPoint,
@@ -2093,6 +2107,7 @@ where
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
         if !contract.is_compatible_protocol_version(protocol_version) {
+            println!("incompatible 2  {:?} {:?}", protocol_version, contract);
             return Err(Error::IncompatibleProtocolMajorVersion {
                 actual: contract.protocol_version().value().major,
                 expected: protocol_version.value().major,
@@ -2188,6 +2203,7 @@ where
             self.context.authorization_keys().clone(),
             &self.context.account(),
             base_key,
+            seed_key,
             self.context.get_blocktime(),
             self.context.get_deployhash(),
             self.context.gas_limit(),
@@ -2480,7 +2496,7 @@ where
         contract_package_hash: ContractPackageHash,
         access_key: URef,
         entry_points: EntryPoints,
-        named_keys: BTreeMap<String, Key>,
+        mut named_keys: BTreeMap<String, Key>,
         output_ptr: u32,
         output_size: usize,
         bytes_written_ptr: u32,
@@ -2508,6 +2524,17 @@ where
 
         let protocol_version = self.context.protocol_version();
         let major = protocol_version.value().major;
+
+        // TODO: Implement different ways of carrying on existing named keys
+        if let Some(&previous_contract_hash) = contract_package.get_current_contract() {
+            let previous_contract: Contract =
+                self.context.read_gs_typed(&previous_contract_hash.into())?;
+
+            let mut previous_named_keys = previous_contract.take_named_keys();
+            println!("extending with {:?}", previous_named_keys);
+            named_keys.append(&mut previous_named_keys);
+        }
+
         let contract = Contract::new(
             contract_package_hash,
             contract_wasm_hash,
@@ -2519,6 +2546,10 @@ where
         // Michal: is there a way to communicate the contract version back, or should we throw it
         // away?
         let _contract_version = contract_package.insert_contract_version(major, contract_hash);
+        println!(
+            "contract hash:{:?} new version:({:?}, {:?})",
+            contract_hash, protocol_version, _contract_version
+        );
 
         self.context
             .state()
@@ -3051,11 +3082,15 @@ where
     }
 
     fn get_balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {
-        let seed = self.get_mint_contract();
+        // let seed = {
+        //     let mint_contract_hash = self.get_mint_contract();
+        //     let mint_contract: Contract = self.context.read_gs_typed(&mint_contract_hash.into())?;
+        //     mint_contract.contract_package_hash()
+        // };
 
-        let key = purse.addr().into_bytes()?;
+        let key = purse.addr();
 
-        let uref_key = match self.context.read_ls_with_seed(seed, &key)? {
+        let uref_key = match self.context.read_ls( &key)? {
             Some(cl_value) => {
                 let key: Key = cl_value.into_t().expect("expected Key type");
                 match key {

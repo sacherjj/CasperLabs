@@ -19,6 +19,7 @@ const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 const TRANSFER_PURSE_TO_ACCOUNT_WASM: &str = "transfer_purse_to_account.wasm";
 const REVERT_WASM: &str = "revert.wasm";
 const ENDLESS_LOOP_WASM: &str = "endless_loop.wasm";
+const ARG_AMOUNT: &str = "amount";
 
 #[ignore]
 #[test]
@@ -85,7 +86,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(1) },
             )
-            .with_empty_payment_bytes((U512::from(1),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(1)})
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
@@ -155,7 +156,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_empty_payment_bytes((payment_purse_amount,))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => payment_purse_amount})
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 (account_1_public_key, transferred_amount),
@@ -364,7 +365,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_session_code(
                 ENDLESS_LOOP_WASM,
                 runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
@@ -402,7 +403,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_session_code(ENDLESS_LOOP_WASM, ())
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
@@ -460,7 +461,7 @@ fn should_correctly_charge_when_session_code_fails() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_session_code(
                 REVERT_WASM,
                 runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
@@ -521,7 +522,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
 
@@ -599,7 +600,7 @@ fn should_finalize_to_rewards_purse() {
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transferred_amount) }
             )
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
@@ -636,7 +637,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
                 runtime_args! { "target" =>account_1_public_key, "amount" => U512::from(transfer_amount) }
             )
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([1; 32])
             .build();
@@ -655,7 +656,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
@@ -667,7 +668,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
-            .with_empty_payment_bytes((U512::from(payment_purse_amount),))
+            .with_empty_payment_bytes(runtime_args!{ ARG_AMOUNT => U512::from(payment_purse_amount)})
             .with_authorization_keys(&[account_1_public_key])
             .with_deploy_hash([1; 32])
             .build();

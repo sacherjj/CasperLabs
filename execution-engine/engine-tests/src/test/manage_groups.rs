@@ -25,6 +25,7 @@ const NEW_UREFS_COUNT: u64 = 3;
 const GROUP_1_NAME: &str = "Group 1";
 const TOTAL_NEW_UREFS_ARG: &str = "total_new_urefs";
 const TOTAL_EXISTING_UREFS_ARG: &str = "total_existing_urefs";
+const ARG_AMOUNT: &str = "amount";
 
 lazy_static! {
     static ref DEFAULT_CREATE_GROUP_ARGS: RuntimeArgs = runtime_args! {
@@ -76,7 +77,7 @@ fn should_create_and_remove_group() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -114,7 +115,7 @@ fn should_create_and_remove_group() {
                 REMOVE_GROUP,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -178,7 +179,7 @@ fn should_create_and_extend_user_group() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([5; 32])
             .build();
@@ -217,7 +218,7 @@ fn should_create_and_extend_user_group() {
                 EXTEND_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -285,7 +286,7 @@ fn should_create_and_remove_urefs_from_group() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -326,7 +327,7 @@ fn should_create_and_remove_urefs_from_group() {
                 REMOVE_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -391,7 +392,7 @@ fn should_limit_max_urefs_while_extending() {
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([3; 32])
             .build();
@@ -430,7 +431,7 @@ fn should_limit_max_urefs_while_extending() {
                 EXTEND_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([5; 32])
             .build();
@@ -455,7 +456,7 @@ fn should_limit_max_urefs_while_extending() {
                 EXTEND_GROUP_UREFS,
                 args,
             )
-            .with_empty_payment_bytes((*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR])
             .with_deploy_hash([32; 32])
             .build();
