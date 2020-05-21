@@ -30,7 +30,7 @@ NAME = "casperlabs_client"
 
 
 def read_version() -> str:
-    with open(VERSION_FILE, 'r') as f:
+    with open(VERSION_FILE, "r") as f:
         return f.read().strip()
 
 
@@ -238,8 +238,7 @@ setup(
     description="Python Client for interacting with a CasperLabs Node",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    include_package_data=True,
-    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm"]},
+    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm", VERSION_FILE]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",
@@ -247,13 +246,12 @@ setup(
     zip_safe=False,
     classifiers=[
         "Development Status :: 3 - Alpha",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3 :: Only",
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
     ],
-    python_requires=">=3.6.0",
+    python_requires="=3.7.0",
     url="https://casperlabs.io/",
     project_urls={
         "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",
