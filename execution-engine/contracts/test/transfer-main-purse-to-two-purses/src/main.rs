@@ -46,11 +46,12 @@ pub extern "C" fn call() {
             None => runtime::revert(ApiError::UnexpectedKeyVariant),
         }
     };
-    let transfer_amount_one: U512 = runtime::get_arg(Args::TransferAmountOne as u32)
+
+    let dst_purse_two_name: String = runtime::get_arg(Args::DestinationPurseTwo as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    let dst_purse_two_name: String = runtime::get_arg(Args::DestinationPurseTwo as u32)
+    let transfer_amount_one: U512 = runtime::get_arg(Args::TransferAmountOne as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 

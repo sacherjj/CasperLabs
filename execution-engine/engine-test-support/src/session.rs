@@ -2,8 +2,7 @@ use rand::Rng;
 
 use contract::args_parser::ArgsParser;
 use engine_core::engine_state::execute_request::ExecuteRequest;
-use engine_shared::motes::Motes;
-use types::{ProtocolVersion, URef};
+use types::{ProtocolVersion, URef, U512};
 
 use crate::{
     internal::{DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT},
@@ -14,7 +13,7 @@ use crate::{
 pub struct SessionTransferInfo {
     pub(crate) source_purse: URef,
     pub(crate) maybe_target_purse: Option<URef>,
-    pub(crate) transfer_amount: Motes,
+    pub(crate) transfer_amount: U512,
 }
 
 impl SessionTransferInfo {
@@ -27,7 +26,7 @@ impl SessionTransferInfo {
     pub fn new(
         source_purse: URef,
         maybe_target_purse: Option<URef>,
-        transfer_amount: Motes,
+        transfer_amount: U512,
     ) -> Self {
         SessionTransferInfo {
             source_purse,

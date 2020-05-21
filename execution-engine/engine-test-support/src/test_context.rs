@@ -63,8 +63,8 @@ impl TestContext {
                         let target_ending_balance = self
                             .maybe_get_balance_for_purse(session_transfer_info.maybe_target_purse)
                             .expect("target ending balance");
-                        let expected_target_ending_balance =
-                            target_initial_balance + session_transfer_info.transfer_amount;
+                        let expected_target_ending_balance = target_initial_balance
+                            + Motes::new(session_transfer_info.transfer_amount);
                         if expected_target_ending_balance != target_ending_balance {
                             panic!(
                                 "target ending balance does not match; expected: {}  actual: {}",
@@ -75,7 +75,7 @@ impl TestContext {
                 }
 
                 let expected_source_ending_balance = source_initial_balance
-                    - session_transfer_info.transfer_amount
+                    - Motes::new(session_transfer_info.transfer_amount)
                     - Motes::from_gas(gas_cost, CONV_RATE).expect("motes from gas");
                 let actual_source_ending_balance = self
                     .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
