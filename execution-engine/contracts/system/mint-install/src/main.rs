@@ -3,19 +3,12 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::BTreeMap, vec};
+use alloc::collections::BTreeMap;
 use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use mint_token::{
-    ARG_AMOUNT, ARG_PURSE, ARG_SOURCE, ARG_TARGET, METHOD_BALANCE, METHOD_CREATE, METHOD_MINT,
-    METHOD_TRANSFER,
-};
-use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
-    CLType, CLValue,
-};
+use types::CLValue;
 
 const HASH_KEY_NAME: &str = "mint_hash";
 const ACCESS_KEY_NAME: &str = "mint_access";

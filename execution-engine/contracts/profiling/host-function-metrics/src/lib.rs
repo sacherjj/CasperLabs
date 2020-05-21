@@ -171,7 +171,7 @@ pub extern "C" fn call() {
     runtime::call_contract::<BTreeMap<String, Key>>(
         store_function(entry_point_name, Some(named_keys.clone())),
         entry_point_name,
-        runtime_args.clone(),
+        runtime_args,
     );
 
     // Small function
@@ -204,7 +204,7 @@ pub extern "C" fn call() {
 
     // Store small function with 10 named keys, then execute it.
     runtime::call_contract::<()>(
-        store_function(entry_point_name, Some(named_keys.clone())),
+        store_function(entry_point_name, Some(named_keys)),
         entry_point_name,
         runtime_args,
     );
@@ -262,14 +262,14 @@ pub extern "C" fn call() {
 }
 
 fn store_function(
-    entry_point_name: &String,
+    entry_point_name: &str,
     named_keys: Option<BTreeMap<String, Key>>,
 ) -> ContractHash {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
-            entry_point_name.clone(),
+            entry_point_name,
             vec![
                 Parameter::new(ARG_SEED, CLType::U64),
                 Parameter::new(ARG_BYTES, CLType::List(Box::new(CLType::U8))),

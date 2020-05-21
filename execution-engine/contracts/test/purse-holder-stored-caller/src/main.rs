@@ -3,14 +3,10 @@
 
 extern crate alloc;
 
-use alloc::{string::String, vec};
+use alloc::string::String;
 
-use alloc::string::ToString;
-use contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
-use types::{runtime_args, CLValue, ContractHash, NamedArg, RuntimeArgs};
+use contract::contract_api::{runtime, storage};
+use types::{runtime_args, ContractHash, RuntimeArgs};
 
 const METHOD_VERSION: &str = "version";
 const HASH_KEY_NAME: &str = "purse_holder";

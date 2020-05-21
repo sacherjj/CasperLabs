@@ -2071,7 +2071,7 @@ where
                 if self.context.entry_point_type() == EntryPointType::Contract =>
             {
                 // Session code can't be called from Contract code for security reasons.
-                return Err(Error::InvalidContext);
+                Err(Error::InvalidContext)
             }
             EntryPointType::Session => {
                 assert_eq!(self.context.entry_point_type(), EntryPointType::Session);
@@ -2150,11 +2150,10 @@ where
                 }
                 None => return Err(Error::KeyNotFound(key)),
             };
-            let module = match maybe_module {
+            match maybe_module {
                 Some(module) => module,
                 None => parity_wasm::deserialize_buffer(contract_wasm.bytes())?,
-            };
-            module
+            }
         };
 
         let mut named_keys = match entry_point.entry_point_type() {
@@ -2475,6 +2474,7 @@ where
         Ok(Ok(()))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn add_contract_version(
         &mut self,
         contract_package_hash: ContractPackageHash,
@@ -2549,14 +2549,14 @@ where
 
             // Set serialized Key bytes into the output buffer
             if let Err(error) = self.memory.set(output_ptr, &key_bytes) {
-                return Err(Error::Interpreter(error.into()).into());
+                return Err(Error::Interpreter(error.into()));
             }
 
             // Following cast is assumed to be safe
             let bytes_size = key_bytes.len() as u32;
             let size_bytes = bytes_size.to_le_bytes(); // Wasm is little-endian
             if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
-                return Err(Error::Interpreter(error.into()).into());
+                return Err(Error::Interpreter(error.into()));
             }
         }
 
@@ -2875,8 +2875,7 @@ where
     }
 
     fn create_purse(&mut self) -> Result<URef, Error> {
-        let mint_contract_key = self.get_mint_contract().into();
-        self.mint_create(mint_contract_key)
+        self.mint_create(self.get_mint_contract())
     }
 
     /// Calls the "transfer" method on the mint contract at the given mint
@@ -2898,7 +2897,7 @@ where
             ARG_AMOUNT => amount,
         };
 
-        let result = self.call_contract(mint_contract_hash, "transfer", args_values.clone())?;
+        let result = self.call_contract(mint_contract_hash, "transfer", args_values)?;
         let result: Result<(), mint::Error> = result.into_t()?;
         Ok(result.map_err(system_contract_errors::Error::from)?)
     }
@@ -2961,7 +2960,7 @@ where
         target: URef,
         amount: U512,
     ) -> Result<TransferResult, Error> {
-        let mint_contract_key = self.get_mint_contract().into();
+        let mint_contract_key = self.get_mint_contract();
 
         // This appears to be a load-bearing use of `RuntimeContext::insert_uref`.
         self.context.insert_uref(target);
@@ -3039,7 +3038,7 @@ where
             bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
         };
 
-        let mint_contract_key = self.get_mint_contract().into();
+        let mint_contract_key = self.get_mint_contract();
 
         if self
             .mint_transfer(mint_contract_key, source, target, amount)

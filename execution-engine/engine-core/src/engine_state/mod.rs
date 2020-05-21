@@ -676,8 +676,7 @@ where
                 let executor = Executor::new(self.config);
 
                 let upgrade_entry_point = EntryPoint::default(); // TODO: implement
-                println!("system account {:?}", system_account);
-                let result = executor.exec_system(
+                executor.exec_system(
                     upgrade_installer_module,
                     upgrade_entry_point,
                     args,
@@ -704,8 +703,6 @@ where
                 let value = StoredValue::Account(system_account);
 
                 tracking_copy.borrow_mut().write(key, value);
-
-                result
             }
         }
 
@@ -904,14 +901,14 @@ where
                 match method_entry_point.entry_point_type() {
                     EntryPointType::Session => Ok(GetModuleResult::Session {
                         module,
-                        contract_package: contract_package.to_owned(),
+                        contract_package,
                         entry_point: method_entry_point.to_owned(),
                     }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_hash.into(),
                         contract: contract.to_owned(),
-                        contract_package: contract_package.to_owned(),
+                        contract_package,
                         entry_point: method_entry_point.to_owned(),
                     }),
                 }
@@ -957,14 +954,14 @@ where
                 match method_entry_point.entry_point_type() {
                     EntryPointType::Session => Ok(GetModuleResult::Session {
                         module,
-                        contract_package: contract_package.to_owned(),
+                        contract_package,
                         entry_point: method_entry_point.to_owned(),
                     }),
                     EntryPointType::Contract => Ok(GetModuleResult::Contract {
                         module,
                         base_key: contract_hash.into(),
                         contract: contract.to_owned(),
-                        contract_package: contract_package.to_owned(),
+                        contract_package,
                         entry_point: method_entry_point.to_owned(),
                     }),
                 }
@@ -981,7 +978,7 @@ where
     ) -> Result<Module, error::Error> {
         let contract = tracking_copy
             .borrow_mut()
-            .get_contract(correlation_id, contract_hash.into())?;
+            .get_contract(correlation_id, contract_hash)?;
 
         // A contract may only call a stored contract that has the same protocol major version
         // number.
@@ -1307,7 +1304,7 @@ where
                 ),
             };
 
-            let payment_args = match payment.clone().take_args() {
+            let payment_args = match payment.take_args() {
                 Ok(args) => args,
                 Err(e) => {
                     let exec_err: crate::execution::Error = e.into();
@@ -1511,7 +1508,7 @@ where
             ),
         };
 
-        let session_args = match session.clone().take_args() {
+        let session_args = match session.take_args() {
             Ok(args) => args,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
@@ -1583,7 +1580,7 @@ where
             // session, so we need to look them up again from the tracking copy
             let proof_of_stake_contract = match finalization_tc
                 .borrow_mut()
-                .get_contract(correlation_id, proof_of_stake_hash.into())
+                .get_contract(correlation_id, proof_of_stake_hash)
             {
                 Ok(info) => info,
                 Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),

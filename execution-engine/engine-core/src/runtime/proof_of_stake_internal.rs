@@ -40,7 +40,7 @@ where
         target: URef,
         amount: U512,
     ) -> Result<(), ()> {
-        let mint_contract_key = self.get_mint_contract().into();
+        let mint_contract_key = self.get_mint_contract();
         if self
             .mint_transfer(mint_contract_key, source, target, amount)
             .is_ok()

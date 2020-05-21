@@ -7,14 +7,9 @@ use contract::{
 };
 use types::{
     contracts::{NamedKeys, Parameters},
-    ApiError, CLType, ContractHash, ContractPackageHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, URef,
+    CLType, ContractHash, ContractPackageHash, EntryPoint, EntryPointAccess, EntryPointType,
+    EntryPoints, URef,
 };
-
-#[repr(u16)]
-enum Args {
-    LocalStateURef = 0,
-}
 
 const CONTRACT_NAME: &str = "local_state_stored";
 const ENTRY_FUNCTION_NAME: &str = "delegate";
@@ -23,7 +18,8 @@ const CONTRACT_ACCESS_KEY: &str = "access_key";
 
 #[no_mangle]
 pub extern "C" fn delegate() {
-    local_state_stored_upgraded::delegate()
+    todo!("reimplement upgraded")
+    // local_state_stored_upgraded::delegate()
 }
 
 fn upgrade(contract_package_hash: ContractPackageHash, access_key: URef) -> ContractHash {

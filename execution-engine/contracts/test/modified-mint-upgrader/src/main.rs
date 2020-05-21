@@ -1,8 +1,5 @@
 #![no_std]
 #![no_main]
-#![allow(unused_imports)]
-
-use contract;
 
 // use contract::contract_api::{runtime, system};
 // use types::{ApiError, Key};

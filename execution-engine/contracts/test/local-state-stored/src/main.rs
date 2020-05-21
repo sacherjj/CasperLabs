@@ -1,19 +1,14 @@
 #![no_std]
 #![no_main]
-#![allow(unused_imports)]
 
 extern crate alloc;
 
 use alloc::string::ToString;
-use contract;
 
-use contract::{
-    contract_api::{runtime, storage},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::{runtime, storage};
 use types::{
-    contracts::Parameters, ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints,
+    contracts::Parameters, CLType, ContractHash, EntryPoint, EntryPointAccess, EntryPointType,
+    EntryPoints,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";

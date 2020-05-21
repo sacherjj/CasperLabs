@@ -5,11 +5,8 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{
-    contracts::CONTRACT_INITIAL_VERSION, runtime_args, ApiError, ContractPackageHash, Key,
-    RuntimeArgs,
-};
+use contract::contract_api::runtime;
+use types::{runtime_args, ContractPackageHash, RuntimeArgs};
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const PURSE_NAME_ARG_NAME: &str = "purse_name";

@@ -11,48 +11,18 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contracts::NamedKeys, ApiError, CLType, CLValue, ContractPackageHash, EntryPoint,
-    EntryPointAccess, EntryPointType, EntryPoints, Parameter, URef,
+    contracts::NamedKeys, CLType, CLValue, ContractPackageHash, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Parameter, URef,
 };
 
-const ENTRY_FUNCTION_NAME: &str = "apply_method";
 pub const METHOD_ADD: &str = "add";
 pub const METHOD_REMOVE: &str = "remove";
 pub const METHOD_VERSION: &str = "version";
 pub const ARG_PURSE_NAME: &str = "purse_name";
 pub const NEW_VERSION: &str = "1.0.1";
 const VERSION: &str = "version";
-const HASH_KEY_NAME: &str = "purse_holder";
 const ACCESS_KEY_NAME: &str = "purse_holder_access";
 const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
-
-#[repr(u16)]
-enum ApplyArgs {
-    MethodName = 0,
-    PurseName = 1,
-}
-
-#[repr(u16)]
-enum CallArgs {
-    PurseHolderURef = 0,
-}
-
-#[repr(u16)]
-enum CustomError {
-    MissingPurseHolderURefArg = 0,
-    InvalidPurseHolderURefArg = 1,
-    MissingMethodNameArg = 2,
-    InvalidMethodNameArg = 3,
-    MissingPurseNameArg = 4,
-    InvalidPurseNameArg = 5,
-    UnknownMethodName = 6,
-}
-
-impl From<CustomError> for ApiError {
-    fn from(error: CustomError) -> Self {
-        ApiError::User(error as u16)
-    }
-}
 
 fn purse_name() -> String {
     runtime::get_named_arg(ARG_PURSE_NAME)

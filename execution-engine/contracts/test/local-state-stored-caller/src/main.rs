@@ -2,7 +2,7 @@
 #![no_main]
 
 use contract::contract_api::runtime;
-use types::{contracts::DEFAULT_ENTRY_POINT_NAME, ContractHash, RuntimeArgs};
+use types::{ContractHash, RuntimeArgs};
 
 const ARG_SEED: &str = "seed";
 const ENTRY_FUNCTION_NAME: &str = "delegate";
