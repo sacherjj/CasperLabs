@@ -6,7 +6,7 @@ use engine_core::engine_state::{
     CONV_RATE,
 };
 
-use engine_shared::motes::Motes;
+use engine_shared::{account::Account, motes::Motes};
 use types::{AccessRights, Key, URef, U512};
 
 use crate::{
@@ -20,15 +20,16 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    fn maybe_get_balance_for_purse(&self, purse_address: Option<URef>) -> Option<Motes> {
-        match purse_address {
+    fn maybe_get_balance_for_purse(&self, purse_uref: Option<URef>) -> Option<Motes> {
+        match purse_uref {
             None => None,
-            Some(purse_address) => {
-                let purse_balance = self.get_balance(purse_address.addr());
+            Some(purse_uref) => {
+                let purse_balance = self.get_balance(purse_uref.addr());
                 Some(Motes::new(purse_balance))
             }
         }
     }
+
     /// Runs the supplied [`Session`], return Result of executing the contained deploy
     ///
     /// if Session.expect_success (default) will err if failure.  (Allows cases where failure is
@@ -38,7 +39,7 @@ impl TestContext {
     /// including gas used.
     ///
     /// if Session.commit (default) will commit resulting transforms.
-    pub fn run(&mut self, session: Session) -> std::result::Result<(), Error> {
+    pub fn run(&mut self, session: Session) -> &mut Self {
         match session.check_transfer_success {
             Some(session_transfer_info) => {
                 let source_initial_balance = self
@@ -65,27 +66,25 @@ impl TestContext {
                         let expected_target_ending_balance =
                             target_initial_balance + session_transfer_info.transfer_amount;
                         if expected_target_ending_balance != target_ending_balance {
-                            let error = format!(
-                                "source ending balance does not match. expected: {}  actual{}",
+                            panic!(
+                                "target ending balance does not match; expected: {}  actual: {}",
                                 expected_target_ending_balance, target_ending_balance
                             );
-                            return Err(Error::from(error));
                         }
                     }
                 }
 
-                let source_ending_balance = self
-                    .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
-                    .expect("source ending balance");
                 let expected_source_ending_balance = source_initial_balance
                     - session_transfer_info.transfer_amount
                     - Motes::from_gas(gas_cost, CONV_RATE).expect("motes from gas");
-                if expected_source_ending_balance != source_ending_balance {
-                    let error = format!(
-                        "source ending balance does not match. expected: {}  actual{}",
-                        expected_source_ending_balance, source_ending_balance
+                let actual_source_ending_balance = self
+                    .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
+                    .expect("source ending balance");
+                if expected_source_ending_balance != actual_source_ending_balance {
+                    panic!(
+                        "source ending balance does not match; expected: {}  actual: {}",
+                        expected_source_ending_balance, actual_source_ending_balance
                     );
-                    return Err(Error::from(error));
                 }
             }
             None => {
@@ -98,7 +97,7 @@ impl TestContext {
                 }
             }
         }
-        Ok(())
+        self
     }
 
     /// Queries for a [`Value`] stored under the given `key` and `path`.
@@ -120,12 +119,17 @@ impl TestContext {
         self.inner.get_purse_balance(purse)
     }
 
-    /// Gets the main purse Uref from an account
+    /// Gets the main purse [`URef`] from an [`Account`] stored under a [`PublicKey`], or `None`
     pub fn get_main_purse_address(&self, account_key: PublicKey) -> Option<URef> {
         match self.inner.get_account(account_key) {
             None => None,
             Some(account) => Some(account.main_purse()),
         }
+    }
+
+    /// Gets an [`Account`] stored under a [`PublicKey`], or `None`
+    pub fn get_account(&self, account_key: PublicKey) -> Option<Account> {
+        self.inner.get_account(account_key)
     }
 }
 
