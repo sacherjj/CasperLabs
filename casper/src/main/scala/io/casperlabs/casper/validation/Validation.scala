@@ -465,7 +465,7 @@ object Validation {
         verify(
           b.blockHash.toByteArray,
           Signature(b.getSignature.sig.toByteArray),
-          PublicKey(b.getHeader.validatorPublicKeyTemp.toByteArray)
+          PublicKey(b.getHeader.validatorPublicKey.toByteArray)
         )
       ) match {
         case Success(true) => true.pure[F]

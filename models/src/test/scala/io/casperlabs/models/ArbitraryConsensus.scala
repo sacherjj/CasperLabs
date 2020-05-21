@@ -167,7 +167,7 @@ trait ArbitraryConsensus {
         .withParentHashes(parentHashes)
         .withState(Block.GlobalState(preStateHash, postStateHash, Seq.empty))
         .withDeployCount(deployCount)
-        .withValidatorPublicKeyTemp(validator.publicKey)
+        .withValidatorPublicKey(validator.publicKey)
         .withValidatorPublicKeyHash(validator.publicKeyHash)
         .withBodyHash(bodyHash)
         .withProtocolVersion(protocolVersion)
@@ -313,7 +313,7 @@ trait ArbitraryConsensus {
         .update(_.header.jRank := 0)
         .update(_.header.mainRank := 0)
         .update(_.header.validatorPublicKeyHash := ByteString.EMPTY)
-        .update(_.header.validatorPublicKeyTemp := ByteString.EMPTY)
+        .update(_.header.validatorPublicKey := ByteString.EMPTY)
         .clearSignature
     } flatMap { genesis =>
       loop(Vector(genesis), Set(genesis))

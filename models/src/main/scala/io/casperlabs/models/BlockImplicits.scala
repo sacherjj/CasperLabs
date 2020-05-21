@@ -28,8 +28,8 @@ object BlockImplicits {
     def validatorBlockSeqNum: Int        = block.getHeader.validatorBlockSeqNum
     def validatorPublicKeyHash: PublicKeyHashBS =
       PublicKeyHash(block.getHeader.validatorPublicKeyHash)
-    def validatorPublicKeyTemp: PublicKeyBS =
-      PublicKey(block.getHeader.validatorPublicKeyTemp)
+    def validatorPublicKey: PublicKeyBS =
+      PublicKey(block.getHeader.validatorPublicKey)
     def jRank: JRank       = asJRank(block.getHeader.jRank)
     def mainRank: MainRank = asMainRank(block.getHeader.mainRank)
     def weightMap: Map[PublicKeyHashBS, Weight] =
@@ -84,8 +84,8 @@ object BlockImplicits {
     def validatorBlockSeqNum: Int          = summary.getHeader.validatorBlockSeqNum
     def validatorPublicKeyHash: PublicKeyHashBS =
       PublicKeyHash(summary.getHeader.validatorPublicKeyHash)
-    def validatorPublicKeyTemp: PublicKeyBS =
-      PublicKey(summary.getHeader.validatorPublicKeyTemp)
+    def validatorPublicKey: PublicKeyBS =
+      PublicKey(summary.getHeader.validatorPublicKey)
     def jRank: JRank       = asJRank(summary.getHeader.jRank)
     def mainRank: MainRank = asMainRank(summary.getHeader.mainRank)
     def weightMap: Map[PublicKeyHashBS, Weight] =

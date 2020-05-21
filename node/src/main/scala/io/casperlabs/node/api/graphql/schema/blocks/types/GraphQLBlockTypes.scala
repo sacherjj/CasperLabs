@@ -297,7 +297,7 @@ class GraphQLBlockTypes(
           "validatorPublicKey",
           StringType,
           "Validator's public key in Base16 encoding".some,
-          resolve = c => Base16.encode(c.value._1.getSummary.validatorPublicKeyTemp.toByteArray)
+          resolve = c => Base16.encode(c.value._1.getSummary.validatorPublicKey.toByteArray)
         ),
         Field(
           "signature",
