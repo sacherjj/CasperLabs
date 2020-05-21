@@ -262,7 +262,7 @@ message ChainSpec {
             CostTable costs = 5;
 
             message GenesisAccount {
-                bytes account_hash = 1;
+                bytes public_key_hash = 1;
                 io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
                 io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
             }

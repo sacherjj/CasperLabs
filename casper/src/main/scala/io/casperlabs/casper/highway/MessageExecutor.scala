@@ -15,7 +15,7 @@ import io.casperlabs.casper._
 import io.casperlabs.casper.util.execengine.ExecEngineUtil
 import io.casperlabs.catscontrib.Fs2Compiler
 import io.casperlabs.catscontrib.effect.implicits.fiberSyntax
-import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.Message
@@ -38,7 +38,7 @@ class MessageExecutor[F[_]: Concurrent: Log: Time: Metrics: BlockStorage: DagSto
     chainName: String,
     genesis: Block,
     upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-    maybeValidatorId: Option[PublicKeyBS]
+    maybeValidatorId: Option[Keys.PublicKeyHashBS]
 ) {
 
   private implicit val metricsSource: Source = HighwayMetricsSource / "MessageExecutor"

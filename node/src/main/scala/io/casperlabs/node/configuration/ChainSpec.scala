@@ -143,8 +143,7 @@ object ChainSpec extends ParserImplicits {
   ) extends SubConfig
 
   final case class Account(
-      publicKey: PublicKey,
-      accountHash: PublicKeyHash,
+      publicKeyHash: PublicKeyHash,
       initialBalance: BigInt,
       initialBondedAmount: BigInt
   )
@@ -164,7 +163,7 @@ object ChainSpec extends ParserImplicits {
                 accountHash  = sigAlgorithm.publicKeyHash(publicKey)
                 balance      <- parseBigInt(balanceStr)
                 bondedAmount <- parseBigInt(bondedAmountStr)
-              } yield Account(publicKey, accountHash, balance, bondedAmount)
+              } yield Account(accountHash, balance, bondedAmount)
 
             case _ =>
               s"Could not parse line into an Account: $line".asLeft[Account]
@@ -341,7 +340,7 @@ object ChainSpecReader {
                   .withAccounts(accounts.map { account =>
                     ipc.ChainSpec.GenesisConfig.ExecConfig
                       .GenesisAccount()
-                      .withAccountHash(ByteString.copyFrom(account.accountHash))
+                      .withPublicKeyHash(ByteString.copyFrom(account.publicKeyHash))
                       .withBalance(state.BigInt(account.initialBalance.toString, bitWidth = 512))
                       .withBondedAmount(
                         state.BigInt(account.initialBondedAmount.toString, bitWidth = 512)

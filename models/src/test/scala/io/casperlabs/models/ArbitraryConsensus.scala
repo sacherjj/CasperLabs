@@ -71,8 +71,10 @@ trait ArbitraryConsensus {
       privateKey: ByteString,
       publicKey: ByteString
   ) {
-    val publicKeyHash =
-      ByteString.copyFrom(Ed25519.publicKeyHash(PublicKey(publicKey.toByteArray)))
+    val publicKeyHash: Keys.PublicKeyHashBS =
+      Keys.PublicKeyHash(
+        ByteString.copyFrom(Ed25519.publicKeyHash(PublicKey(publicKey.toByteArray)))
+      )
 
     def sign(data: ByteString): Signature = {
       val sig = Ed25519.sign(data.toByteArray, PrivateKey(privateKey.toByteArray))

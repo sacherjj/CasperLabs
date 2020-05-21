@@ -95,7 +95,7 @@ class GossipServiceCasperTestNode[F[_]](
     new MultiParentCasperImpl[F](
       semaphoresMap,
       new MultiParentCasperImpl.StatelessExecutor[F](
-        Some(validatorId.publicKey),
+        Some(validatorId.publicKeyHashBS),
         chainName,
         upgrades = Nil,
         semaphore

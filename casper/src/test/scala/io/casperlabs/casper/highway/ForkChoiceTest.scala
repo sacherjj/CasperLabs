@@ -335,13 +335,11 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
         withEquivocation: Boolean
     ): Task[List[BlockHash]] =
       for {
-        dag         <- DagStorage[Task].getRepresentation
-        tips        <- dag.latestInEra(era.keyBlockHash)
-        parentBlock <- dag.lookupBlockUnsafe(parent)
-        latest      <- tips.latestMessages
-        justifications = latest.map {
-          case (v, ms) => PublicKey(v) -> ms
-        }
+        dag            <- DagStorage[Task].getRepresentation
+        tips           <- dag.latestInEra(era.keyBlockHash)
+        parentBlock    <- dag.lookupBlockUnsafe(parent)
+        latest         <- tips.latestMessages
+        justifications = latest
         b <- mp.block(
               era.keyBlockHash,
               roundId = Ticks(era.startTick),

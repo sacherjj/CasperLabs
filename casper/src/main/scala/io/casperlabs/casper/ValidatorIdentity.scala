@@ -18,7 +18,8 @@ import scala.language.higherKinds
 final case class ValidatorIdentity(
     publicKey: Keys.PublicKey,
     privateKey: Keys.PrivateKey,
-    signatureAlgorithm: SignatureAlgorithm
+    signatureAlgorithm: SignatureAlgorithm,
+    publicKeyHash: Keys.PublicKeyHash
 ) {
   def signature(data: Array[Byte]): Signature =
     Signature(
@@ -26,14 +27,22 @@ final case class ValidatorIdentity(
       ByteString.copyFrom(signatureAlgorithm.sign(data, privateKey))
     )
 
-  val publicKeyHash: Keys.PublicKeyHash =
-    signatureAlgorithm.publicKeyHash(publicKey)
-
   val publicKeyHashBS: Keys.PublicKeyHashBS =
     Keys.PublicKeyHash(ByteString.copyFrom(publicKeyHash))
 }
 
 object ValidatorIdentity {
+  def apply(
+      publicKey: Keys.PublicKey,
+      privateKey: Keys.PrivateKey,
+      signatureAlgorithm: SignatureAlgorithm
+  ): ValidatorIdentity = ValidatorIdentity(
+    publicKey,
+    privateKey,
+    signatureAlgorithm,
+    publicKeyHash = signatureAlgorithm.publicKeyHash(publicKey)
+  )
+
   val empty = ValidatorIdentity(
     Keys.PublicKey(Array.empty[Byte]),
     Keys.PrivateKey(Array.empty[Byte]),

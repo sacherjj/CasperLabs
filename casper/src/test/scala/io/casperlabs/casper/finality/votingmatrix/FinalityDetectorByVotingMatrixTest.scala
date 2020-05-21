@@ -18,6 +18,7 @@ import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
 import io.casperlabs.casper.util.BondingUtil.Bond
 import io.casperlabs.casper.util.EventStreamParser
 import io.casperlabs.casper.{validation, InvalidBlock}
+import io.casperlabs.crypto.Keys
 import io.casperlabs.models.Message
 import io.casperlabs.shared.{FilesAPI, Log, LogStub, Time}
 import io.casperlabs.storage.block.BlockStorage
@@ -80,7 +81,7 @@ class FinalityDetectorByVotingMatrixTest
     val bonds  = Seq(v1Bond, v2Bond)
 
     for {
-      genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
       dag     <- storage.getRepresentation
       implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                   dag,
@@ -140,7 +141,7 @@ class FinalityDetectorByVotingMatrixTest
     val bonds  = Seq(v1Bond, v2Bond)
 
     for {
-      genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
       dag     <- storage.getRepresentation
       implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                   dag,
@@ -151,7 +152,7 @@ class FinalityDetectorByVotingMatrixTest
                    genesis.blockHash,
                    v1,
                    bonds,
-                   HashMap(ByteString.EMPTY -> genesis.blockHash),
+                   HashMap(EmptyValidator -> genesis.blockHash),
                    lfb = genesis
                  )
       _ = c1 shouldBe Seq(CommitteeWithConsensusValue(Set(v1), 20, b1.blockHash))
@@ -203,7 +204,7 @@ class FinalityDetectorByVotingMatrixTest
       val v1Bond = Bond(v1, 10)
       val bonds  = Seq(v1Bond)
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         dag     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                     dag,
@@ -277,7 +278,7 @@ class FinalityDetectorByVotingMatrixTest
       val v3Bond = Bond(v3, 10)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         dag     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                     dag,
@@ -360,7 +361,7 @@ class FinalityDetectorByVotingMatrixTest
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         dag     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                     dag,
@@ -430,7 +431,7 @@ class FinalityDetectorByVotingMatrixTest
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
 
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         dag     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                     dag,
@@ -502,7 +503,7 @@ class FinalityDetectorByVotingMatrixTest
       val v3Bond = Bond(v3, 10)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         dag     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                     dag,
@@ -602,7 +603,7 @@ class FinalityDetectorByVotingMatrixTest
       val v3Bond = Bond(v3, 10)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond)
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         dag     <- storage.getRepresentation
         implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
                                                                     dag,
@@ -662,7 +663,7 @@ class FinalityDetectorByVotingMatrixTest
       val v5Bond = Bond(v5, 53)
       val bonds  = Seq(v1Bond, v2Bond, v3Bond, v4Bond, v5Bond)
       import monix.execution.Scheduler.Implicits.global
-      val genesis = createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds).runSyncUnsafe()
+      val genesis = createAndStoreMessage[Task](Seq(), EmptyValidator, bonds).runSyncUnsafe()
 
       type LFB = Block
 
@@ -675,7 +676,9 @@ class FinalityDetectorByVotingMatrixTest
             genesis.blockHash,
             v,
             bonds,
-            justifications.map(b => b.getHeader.validatorPublicKey -> b.blockHash).toMap,
+            justifications
+              .map(b => Keys.PublicKeyHash(b.getHeader.validatorPublicKeyHash) -> b.blockHash)
+              .toMap,
             lfb = lfb
           ).map {
             case (block, finalizedBlocks) =>
@@ -746,7 +749,7 @@ class FinalityDetectorByVotingMatrixTest
           .withMessageRole(m.messageRole)
           .withValidatorBlockSeqNum(m.validatorMsgSeqNum)
           .withValidatorPrevBlockHash(m.validatorPrevMessageHash)
-          .withValidatorPublicKey(m.validatorId)
+          .withValidatorPublicKeyHash(m.validatorId)
           .withState(
             m.blockSummary.getHeader.getState
           )

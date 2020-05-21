@@ -55,18 +55,13 @@ object Genesis {
       // Sorted list of bonded validators.
       bonds = genesisConfig.getEeConfig.accounts
         .sortBy { x =>
-          x.accountHash -> x.getBondedAmount.value
+          x.publicKeyHash -> x.getBondedAmount.value
         }
         .collect {
           case account if account.bondedAmount.isDefined && account.getBondedAmount.value != "0" =>
-            PublicKeyHash(account.accountHash.toByteArray) -> account.bondedAmount
+            Bond(account.publicKeyHash, account.bondedAmount)
         }
         .toSeq
-        .map {
-          case (hash, stake) =>
-            val validatorPublicKeyHash = ByteString.copyFrom(hash)
-            Bond(validatorPublicKeyHash, stake)
-        }
 
       state = Block
         .GlobalState()

@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 import io.casperlabs.casper.consensus.{Block, BlockSummary, Bond, Era}
 import io.casperlabs.casper.consensus.state
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
@@ -93,11 +93,11 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     .asInstanceOf[Message.Block]
 
   def makeBlock(
-      validator: String,
+      validator: Keys.PublicKeyHashBS,
       era: Era,
       roundId: Ticks,
       mainParent: ByteString = genesis.messageHash,
-      justifications: Map[ByteString, ByteString] = Map.empty,
+      justifications: Map[Keys.PublicKeyHashBS, ByteString] = Map.empty,
       messageRole: Block.MessageRole = Block.MessageRole.PROPOSAL
   ) =
     Message
@@ -107,7 +107,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
             Block
               .Header()
               .withMessageRole(messageRole)
-              .withValidatorPublicKey(validator)
+              .withValidatorPublicKeyHash(validator)
               .withKeyBlockHash(era.keyBlockHash)
               .withRoundId(roundId)
               .withParentHashes(List(mainParent).filterNot(_.isEmpty))
@@ -125,11 +125,11 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       .asInstanceOf[Message.Block]
 
   def makeBallot(
-      validator: String,
+      validator: Keys.PublicKeyHashBS,
       era: Era,
       roundId: Ticks,
       target: ByteString = genesis.messageHash,
-      justifications: Map[ByteString, ByteString] = Map.empty,
+      justifications: Map[Keys.PublicKeyHashBS, ByteString] = Map.empty,
       messageRole: Block.MessageRole = Block.MessageRole.WITNESS
   ) =
     Message
@@ -142,7 +142,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
               .withMessageRole(messageRole)
               .withKeyBlockHash(era.keyBlockHash)
               .withRoundId(roundId)
-              .withValidatorPublicKey(validator)
+              .withValidatorPublicKeyHash(validator)
               .withParentHashes(List(target).filterNot(_.isEmpty))
               .withJustifications(
                 justifications.toSeq.map {
@@ -275,7 +275,11 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
   /** Fill the DagStorage with blocks at a fixed interval along the era,
     * right up to and including the switch block. */
-  def makeFullChain(validator: String, runtime: EraRuntime[Id], interval: FiniteDuration) =
+  def makeFullChain(
+      validator: Keys.PublicKeyHashBS,
+      runtime: EraRuntime[Id],
+      interval: FiniteDuration
+  ) =
     Stream
       .iterate(runtime.start)(_ plus interval)
       .takeWhile(t => !t.isAfter(runtime.end))
@@ -1230,7 +1234,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
                 eraId: ByteString,
                 roundId: Ticks,
                 mainParent: Message.Block,
-                justifications: Map[PublicKeyBS, Set[Message]],
+                justifications: Map[Keys.PublicKeyHashBS, Set[Message]],
                 isBookingBlock: Boolean,
                 messageRole: Block.MessageRole
             ): Id[Message.Block] = {
@@ -1403,8 +1407,8 @@ object EraRuntimeSpec {
   import cats.Monad
   import cats.implicits._
 
-  implicit def validatorKey(name: String): PublicKeyBS =
-    PublicKey(ByteString.copyFromUtf8(name))
+  implicit def validatorKey(name: String): Keys.PublicKeyHashBS =
+    Keys.PublicKeyHash(ByteString.copyFromUtf8(name))
 
   implicit class MessageOps(msg: Message) {
     def toBlock: Block = {
@@ -1421,7 +1425,7 @@ object EraRuntimeSpec {
     case other         => Prettifier.default(other)
   }
 
-  def toJustifications(messages: Message*): Map[ByteString, ByteString] =
+  def toJustifications(messages: Message*): Map[Keys.PublicKeyHashBS, ByteString] =
     messages.map(m => m.validatorId -> m.messageHash).toMap
 
   def mockSequencer(validator: String) = new LeaderSequencer {

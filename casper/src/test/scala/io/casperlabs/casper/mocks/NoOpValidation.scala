@@ -16,7 +16,11 @@ import io.casperlabs.catscontrib.Fs2Compiler
 
 class NoOpValidation[F[_]: Applicative] extends Validation[F] {
 
-  override def neglectedInvalidBlock(block: Block, invalidBlockTracker: Set[BlockHash]): F[Unit] =
+  override def neglectedInvalidBlock(
+      block: Block,
+      dag: DagRepresentation[F],
+      invalidBlockTracker: Set[BlockHash]
+  ): F[Unit] =
     ().pure[F]
 
   override def parents(

@@ -334,8 +334,7 @@ object Highway {
                        chainName = chainSpec.getGenesis.name,
                        genesis = genesis,
                        upgrades = chainSpec.upgrades,
-                       maybeValidatorId =
-                         maybeValidatorId.map(v => PublicKey(ByteString.copyFrom(v.publicKey)))
+                       maybeValidatorId = maybeValidatorId.map(_.publicKeyHashBS)
                      ),
                      initRoundExponent = conf.highway.initRoundExponent.value,
                      isSynced = isSyncedRef.get
