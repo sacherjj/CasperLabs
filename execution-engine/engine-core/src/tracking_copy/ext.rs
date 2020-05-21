@@ -101,8 +101,8 @@ where
         let uref = outer_key
             .as_uref()
             .ok_or_else(|| execution::Error::URefNotFound("public purse balance 1".to_string()))?;
-        let local_key_bytes = uref.addr().into_bytes()?;
-        let balance_mapping_key = Key::local(mint_package_hash, &local_key_bytes);
+        let local_key_bytes = uref.addr();
+        let balance_mapping_key = Key::Hash(local_key_bytes);
         match self
             .read(correlation_id, &balance_mapping_key)
             .map_err(Into::into)?

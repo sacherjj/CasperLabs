@@ -614,9 +614,10 @@ where
         let mint_package_hash = mint_contract.contract_package_hash();
 
         let purse_addr = purse.addr();
-        let purse_bytes =
-            ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
-        let balance_mapping_key = Key::local(mint_package_hash, &purse_bytes);
+        // let purse_bytes =
+        //     ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
+        // let balance_mapping_key = Key::local(mint_package_hash, &purse_bytes);
+        let balance_mapping_key = Key::Hash(purse_addr);
 
         let base_key = self
             .query(None, balance_mapping_key, &[])

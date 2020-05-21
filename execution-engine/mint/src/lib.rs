@@ -18,17 +18,18 @@ pub trait Mint: RuntimeProvider + StorageProvider {
             return Err(Error::InvalidNonEmptyPurseCreation);
         }
 
-        let balance_uref: Key = self.new_uref(initial_balance).into();
-        let purse_key: URef = self.new_uref(());
-        let purse_uref_name = purse_key.remove_access_rights().as_string();
+        let balance_key: Key = self.new_uref(initial_balance).into();
+        let purse_uref: URef = self.new_uref(());
+        let purse_uref_name = purse_uref.remove_access_rights().as_string();
 
         // store balance uref so that the runtime knows the mint has full access
-        self.put_key(&purse_uref_name, balance_uref);
+        self.put_key(&purse_uref_name, balance_key);
 
         // store association between purse id and balance uref
-        self.write_local(purse_key.addr(), balance_uref);
+        self.write_local(purse_uref.addr(), balance_key);
+        // self.write(purse_uref.addr(), Key::Hash)
 
-        Ok(purse_key)
+        Ok(purse_uref)
     }
 
     fn balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {

@@ -97,7 +97,7 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
         Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
         Key::Hash(_) => None,
-        Key::Local { .. } => None,
+        // Key::Local { .. } => None,
     }
 }
 
@@ -3082,15 +3082,15 @@ where
     }
 
     fn get_balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {
-        let seed = {
-            let mint_contract_hash = self.get_mint_contract();
-            let mint_contract: Contract = self.context.read_gs_typed(&mint_contract_hash.into())?;
-            mint_contract.contract_package_hash()
-        };
+        // let seed = {
+        //     let mint_contract_hash = self.get_mint_contract();
+        //     let mint_contract: Contract = self.context.read_gs_typed(&mint_contract_hash.into())?;
+        //     mint_contract.contract_package_hash()
+        // };
 
-        let key = purse.addr().into_bytes()?;
+        let key = purse.addr();
 
-        let uref_key = match self.context.read_ls_with_seed(seed, &key)? {
+        let uref_key = match self.context.read_ls( &key)? {
             Some(cl_value) => {
                 let key: Key = cl_value.into_t().expect("expected Key type");
                 match key {
