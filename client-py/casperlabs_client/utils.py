@@ -1,7 +1,13 @@
 import os
+import sys
 import time
 import ssl
+from pathlib import Path
+
 import pkg_resources
+import functools
+import base64
+
 import google.protobuf.text_format
 import google.protobuf.json_format
 from . import abi
@@ -10,9 +16,51 @@ from . import consensus_pb2 as consensus
 from . import crypto
 
 
-def _read_binary(file_name: str):
+def read_binary_file(file_name: str):
     with open(file_name, "rb") as f:
         return f.read()
+
+
+def write_file(file_name, text):
+    with open(file_name, "w") as f:
+        f.write(text)
+
+
+def write_binary_file(file_name, data):
+    with open(file_name, "wb") as f:
+        f.write(data)
+
+
+def encode_base64(a: bytes):
+    return str(base64.b64encode(a), "utf-8")
+
+
+def guarded_command(function):
+    """
+    Decorator of functions that implement CLI commands.
+
+    Occasionally the node can throw some exceptions instead of properly sending us a response,
+    those will be deserialized on our end and rethrown by the gRPC layer.
+    In this case we want to catch the exception and return a non-zero return code to the shell.
+
+    :param function:  function to be decorated
+    :return:
+    """
+
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        try:
+            rc = function(*args, **kwargs)
+            # Generally the CLI commands are assumed to succeed if they don't throw,
+            # but they can also return a positive error code if they need to.
+            if rc is not None:
+                return rc
+            return 0
+        except Exception as e:
+            print(str(e), file=sys.stderr)
+            return 1
+
+    return wrapper
 
 
 def hexify(o):
@@ -58,7 +106,7 @@ def key_variant(key_type):
     """
     variant = STATE_QUERY_KEY_VARIANT.get(key_type.lower(), None)
     if variant is None:
-        raise Exception(f"{key_type} is not a known query-state key type")
+        raise ValueError(f"{key_type} is not a known query-state key type")
     return variant
 
 
@@ -66,7 +114,7 @@ def _encode_contract(contract_options, contract_args):
     file_name, hash, name, uref = contract_options
     Code = consensus.Deploy.Code
     if file_name:
-        return Code(wasm=_read_binary(file_name), args=contract_args)
+        return Code(wasm=read_binary_file(file_name), args=contract_args)
     if hash:
         return Code(hash=hash, args=contract_args)
     if name:
@@ -78,6 +126,26 @@ def _encode_contract(contract_options, contract_args):
 
 def _serialize(o) -> bytes:
     return o.SerializeToString()
+
+
+def _print_blocks(response, element_name="block"):
+    count = 0
+    for block in response:
+        print(f"------------- {element_name} {count} ---------------")
+        _print_block(block)
+        print("-----------------------------------------------------\n")
+        count += 1
+    print("count:", count)
+
+
+def _print_block(block):
+    print(hexify(block))
+
+
+def _read_version() -> str:
+    version_path = Path(os.path.dirname(os.path.realpath(__file__))) / "VERSION"
+    with open(version_path, "r") as f:
+        return f.read().strip()
 
 
 def make_deploy(

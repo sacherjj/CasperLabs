@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""
-CasperLabs Client API library and command line tool.
-"""
 
 from pathlib import Path
+import os
+import time
+import grpc
+import functools
+import logging
+import tempfile
+import warnings
 
-# Hack to fix the relative imports problems #
+
+# Hack to fix the relative imports problems with grpc #
 import sys
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
-import os
-import time
-import grpc
+
 from grpc._channel import _Rendezvous
-import functools
-import logging
-import tempfile
 
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
@@ -35,7 +35,7 @@ def _hex(text, as_utf8):
 google.protobuf.text_format.text_encoding.CEscape = _hex
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
-from . import control_pb2_grpc
+from . import control_pb2_grpc, consts
 from . import control_pb2 as control
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
@@ -74,6 +74,7 @@ class InternalError(Exception):
     not have to worry about handling any other exceptions.
     """
 
+    # TODO: Is there a reason we need to hide error types?
     def __init__(self, status="", details=""):
         super(InternalError, self).__init__()
         self.status = status
@@ -90,7 +91,7 @@ def api(function):
     It will catch all exceptions and throw InternalError.
 
     :param function: function to be decorated
-    :return:
+    :return: decorated function
     """
 
     @functools.wraps(function)
@@ -216,9 +217,6 @@ class CasperLabsClient:
     """
     gRPC CasperLabs client.
     """
-
-    DEPLOY_STATUS_CHECK_DELAY = 0.5
-    DEPLOY_STATUS_TIMEOUT = 180  # 3 minutes
 
     def __init__(
         self,
@@ -428,7 +426,7 @@ class CasperLabsClient:
         self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
 
     @api
-    def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
+    def show_blocks(self, depth: int = 1, max_rank=0, full_view=True):
         """
         Get slices of the DAG, going backwards, rank by rank.
 
@@ -449,14 +447,34 @@ class CasperLabsClient:
         )
 
     @api
-    def showBlock(self, block_hash_base16: str, full_view=True):
+    def showBlocks(self, depth: int = 1, max_rank=0, full_view=True):
         """
-        Returns object describing a block known by Casper on an existing running node.
+        DEPRECATED: Call `show_blocks`
 
-        :param block_hash_base16: hash of the block to be retrieved
-        :param full_view:         full view if True, otherwise basic
-        :return:                  object representing the retrieved block
+        Get slices of the DAG, going backwards, rank by rank.
+
+        :param depth:     How many of the top ranks of the DAG to show.
+        :param max_rank:  Maximum rank to go back from.
+                          0 means go from the current tip of the DAG.
+        :param full_view: Full view if True, otherwise basic.
+        :return:          Generator of block info objects.
         """
+        warnings.warn(
+            "showBlocks is deprecated and replaced with show_blocks.",
+            DeprecationWarning,
+        )
+        for block_info_request in self.show_blocks(depth, max_rank, full_view):
+            yield block_info_request
+
+    @api
+    def show_block(self, block_hash_base16: str, full_view=True):
+        """
+                Returns object describing a block known by Casper on an existing running node.
+
+                :param block_hash_base16: hash of the block to be retrieved
+                :param full_view:         full view if True, otherwise basic
+                :return:                  object representing the retrieved block
+                """
         return self.casperService.GetBlockInfo(
             casper.GetBlockInfoRequest(
                 block_hash_base16=block_hash_base16,
@@ -467,6 +485,22 @@ class CasperLabsClient:
         )
 
     @api
+    def showBlock(self, block_hash_base16: str, full_view=True):
+        """
+        DEPRECATED: call `show_block`
+
+        Returns object describing a block known by Casper on an existing running node.
+
+        :param block_hash_base16: hash of the block to be retrieved
+        :param full_view:         full view if True, otherwise basic
+        :return:                  object representing the retrieved block
+        """
+        warnings.warn(
+            "showBlock is deprecated and replaced with show_block.", DeprecationWarning
+        )
+        return self.show_block(block_hash_base16, full_view)
+
+    @api
     def propose(self):
         """"
         THIS METHOD IS DEPRECATED! It will be removed soon.
@@ -475,10 +509,11 @@ class CasperLabsClient:
 
         :return:    response object with block_hash
         """
+        warnings.warn("propose is deprecated and will be removed.", DeprecationWarning)
         return self.controlService.Propose(control.ProposeRequest())
 
     @api
-    def visualizeDag(
+    def visualize_dag(
         self,
         depth: int,
         out: str = None,
@@ -501,7 +536,7 @@ class CasperLabsClient:
         :return:                          Yields generated DOT source or file name when out provided.
                                           Generates endless stream of file names if stream is not None.
         """
-        block_infos = list(self.showBlocks(depth, full_view=False))
+        block_infos = list(self.show_blocks(depth, full_view=False))
         dot_dag_description = vdag.generate_dot(block_infos, show_justification_lines)
         if not out:
             yield dot_dag_description
@@ -534,7 +569,43 @@ class CasperLabsClient:
                 yield self._call_dot(dot_dag_description, file_name(), file_format)
                 previous_block_hashes = block_hashes
 
-    def _call_dot(self, dot_dag_description, file_name, file_format):
+    @api
+    def visualizeDag(
+        self,
+        depth: int,
+        out: str = None,
+        show_justification_lines: bool = False,
+        stream: str = None,
+        delay_in_seconds=5,
+    ):
+        """
+        DEPRECATED: call `visualize_dag`
+
+        Generate DAG in DOT format.
+
+        :param depth:                     depth in terms of block height
+        :param out:                       output image filename, outputs to stdout if
+                                          not specified, must end with one of the png,
+                                          svg, svg_standalone, xdot, plain, plain_ext,
+                                          ps, ps2, json, json0
+        :param show_justification_lines:  if justification lines should be shown
+        :param stream:                    subscribe to changes, 'out' has to specified,
+                                          valid values are 'single-output', 'multiple-outputs'
+        :param delay_in_seconds:          delay in seconds when polling for updates (streaming)
+        :return:                          Yields generated DOT source or file name when out provided.
+                                          Generates endless stream of file names if stream is not None.
+        """
+        warnings.warn(
+            "visualizeDag is deprecated and replaced with visualize_dag.",
+            DeprecationWarning,
+        )
+        for output in self.visualize_dag(
+            depth, out, show_justification_lines, stream, delay_in_seconds
+        ):
+            yield output
+
+    @staticmethod
+    def _call_dot(dot_dag_description, file_name, file_format):
         with tempfile.NamedTemporaryFile(mode="w") as f:
             f.write(dot_dag_description)
             f.flush()
@@ -546,8 +617,30 @@ class CasperLabsClient:
         return file_name
 
     @api
+    def query_state(self, block_hash: str, key: str, path: str, key_type: str):
+        """
+        Query a value in the global state.
+
+        :param block_hash:         Hash of the block to query the state of
+        :param key:               Base16 encoding of the base key
+        :param path:              Path to the value to query. Must be of the form
+                                  'key1/key2/.../keyn'
+        :param key_type:           Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'.
+                                  For 'local' key type, 'key' value format is {seed}:{rest},
+                                  where both parts are hex encoded."
+        :return:                  QueryStateResponse object
+        """
+        q = casper.StateQuery(key_variant=key_variant(key_type), key_base16=key)
+        q.path_segments.extend([name for name in path.split("/") if name])
+        return self.casperService.GetBlockState(
+            casper.GetBlockStateRequest(block_hash_base16=block_hash, query=q)
+        )
+
+    @api
     def queryState(self, blockHash: str, key: str, path: str, keyType: str):
         """
+        DEPRECATED: call `query_state`
+
         Query a value in the global state.
 
         :param blockHash:         Hash of the block to query the state of
@@ -559,15 +652,15 @@ class CasperLabsClient:
                                   where both parts are hex encoded."
         :return:                  QueryStateResponse object
         """
-        q = casper.StateQuery(key_variant=key_variant(keyType), key_base16=key)
-        q.path_segments.extend([name for name in path.split("/") if name])
-        return self.casperService.GetBlockState(
-            casper.GetBlockStateRequest(block_hash_base16=blockHash, query=q)
+        warnings.warn(
+            "queryState is deprecated and replaced with query_state.",
+            DeprecationWarning,
         )
+        return self.query_state(blockHash, key, path, keyType)
 
     @api
     def balance(self, address: str, block_hash: str):
-        value = self.queryState(block_hash, address, "", "address")
+        value = self.query_state(block_hash, address, "", "address")
         account = None
         try:
             account = value.account
@@ -583,26 +676,26 @@ class CasperLabsClient:
                 "Account's named_keys map did not contain Mint contract address.",
             )
 
-        mintPublic = urefs[0]
+        mint_public = urefs[0]
 
-        mintPublicHex = mintPublic.key.uref.uref.hex()
-        purseAddrHex = account.main_purse.uref.hex()
-        localKeyValue = f"{mintPublicHex}:{purseAddrHex}"
+        mint_public_hex = mint_public.key.uref.uref.hex()
+        purse_addr_hex = account.main_purse.uref.hex()
+        local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
 
-        balanceURef = self.queryState(block_hash, localKeyValue, "", "local")
-        balanceURefHex = balanceURef.cl_value.value.key.uref.uref.hex()
-        balance = self.queryState(block_hash, balanceURefHex, "", "uref")
-        balanceStrValue = balance.cl_value.value.u512.value
-        return int(balanceStrValue)
+        balance_u_ref = self.queryState(block_hash, local_key_value, "", "local")
+        balance_u_ref_hex = balance_u_ref.cl_value.value.key.uref.uref.hex()
+        balance = self.queryState(block_hash, balance_u_ref_hex, "", "uref")
+        balance_str_value = balance.cl_value.value.u512.value
+        return int(balance_str_value)
 
     @api
-    def showDeploy(
+    def show_deploy(
         self,
         deploy_hash_base16: str,
         full_view: bool = False,
         wait_for_processed: bool = False,
-        delay: int = DEPLOY_STATUS_CHECK_DELAY,
-        timeout_seconds: int = DEPLOY_STATUS_TIMEOUT,
+        delay: int = consts.STATUS_CHECK_DELAY,
+        timeout_seconds: int = consts.STATUS_TIMEOUT,
     ):
         """
         Retrieve information about a single deploy by hash.
@@ -632,7 +725,29 @@ class CasperLabsClient:
             return deploy_info
 
     @api
-    def showDeploys(self, block_hash_base16: str, full_view=True):
+    def showDeploy(
+        self,
+        deploy_hash_base16: str,
+        full_view: bool = False,
+        wait_for_processed: bool = False,
+        delay: int = consts.STATUS_CHECK_DELAY,
+        timeout_seconds: int = consts.STATUS_TIMEOUT,
+    ):
+        """
+        DEPRECATED: call `show_deploy`
+
+        Retrieve information about a single deploy by hash.
+        """
+        warnings.warn(
+            "showDeploy is deprecated and replaced with show_deploy.",
+            DeprecationWarning,
+        )
+        return self.show_deploy(
+            deploy_hash_base16, full_view, wait_for_processed, delay, timeout_seconds
+        )
+
+    @api
+    def show_deploys(self, block_hash_base16: str, full_view=True):
         """
         Get the processed deploys within a block.
         """
@@ -646,6 +761,20 @@ class CasperLabsClient:
                 ),
             )
         )
+
+    @api
+    def showDeploys(self, block_hash_base16: str, full_view=True):
+        """
+        DEPRECATED: use `show_deploys`
+
+        Get the processed deploys within a block.
+        """
+        warnings.warn(
+            "showDeploys is deprecated and replaced with show_deploys.",
+            DeprecationWarning,
+        )
+        for block_deploys in self.show_deploy(block_hash_base16, full_view):
+            yield block_deploys
 
     @api
     def stream_events(
@@ -708,8 +837,8 @@ class CasperLabsClient:
         self,
         deploy_hash,
         on_error_raise=True,
-        delay=DEPLOY_STATUS_CHECK_DELAY,
-        timeout_seconds=DEPLOY_STATUS_TIMEOUT,
+        delay=consts.STATUS_CHECK_DELAY,
+        timeout_seconds=consts.STATUS_TIMEOUT,
     ):
         start_time = time.time()
         result = None
@@ -738,16 +867,3 @@ class CasperLabsClient:
     @api
     def show_peers(self):
         return list(self.diagnosticsService.ListPeers(empty_pb2.Empty()).peers)
-
-    def cli(self, *arguments) -> int:
-        from . import cli
-
-        return cli(
-            "--host",
-            self.host,
-            "--port",
-            self.port,
-            "--port-internal",
-            self.port_internal,
-            *arguments,
-        )
