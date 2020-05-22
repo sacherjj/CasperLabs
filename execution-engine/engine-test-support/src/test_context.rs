@@ -20,7 +20,7 @@ pub struct TestContext {
 }
 
 impl TestContext {
-    fn maybe_get_balance_for_purse(&self, purse_uref: Option<URef>) -> Option<Motes> {
+    fn maybe_purse_balance(&self, purse_uref: Option<URef>) -> Option<Motes> {
         match purse_uref {
             None => None,
             Some(purse_uref) => {
@@ -43,10 +43,10 @@ impl TestContext {
         match session.check_transfer_success {
             Some(session_transfer_info) => {
                 let source_initial_balance = self
-                    .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
+                    .maybe_purse_balance(Some(session_transfer_info.source_purse))
                     .expect("source purse balance");
                 let maybe_target_initial_balance =
-                    self.maybe_get_balance_for_purse(session_transfer_info.maybe_target_purse);
+                    self.maybe_purse_balance(session_transfer_info.maybe_target_purse);
 
                 let builder = self.inner.exec(session.inner);
                 if session.expect_success {
@@ -61,7 +61,7 @@ impl TestContext {
                     None => (),
                     Some(target_initial_balance) => {
                         let target_ending_balance = self
-                            .maybe_get_balance_for_purse(session_transfer_info.maybe_target_purse)
+                            .maybe_purse_balance(session_transfer_info.maybe_target_purse)
                             .expect("target ending balance");
                         let expected_target_ending_balance = target_initial_balance
                             + Motes::new(session_transfer_info.transfer_amount);
@@ -78,7 +78,7 @@ impl TestContext {
                     - Motes::new(session_transfer_info.transfer_amount)
                     - Motes::from_gas(gas_cost, CONV_RATE).expect("motes from gas");
                 let actual_source_ending_balance = self
-                    .maybe_get_balance_for_purse(Some(session_transfer_info.source_purse))
+                    .maybe_purse_balance(Some(session_transfer_info.source_purse))
                     .expect("source ending balance");
                 if expected_source_ending_balance != actual_source_ending_balance {
                     panic!(
@@ -120,13 +120,14 @@ impl TestContext {
     }
 
     /// Gets the main purse [`URef`] from an [`Account`] stored under a [`PublicKey`], or `None`
-    pub fn get_main_purse_address(&self, account_key: PublicKey) -> Option<URef> {
+    pub fn main_purse_address(&self, account_key: PublicKey) -> Option<URef> {
         match self.inner.get_account(account_key) {
             None => None,
             Some(account) => Some(account.main_purse()),
         }
     }
 
+    // TODO: Remove this once test can use query
     /// Gets an [`Account`] stored under a [`PublicKey`], or `None`
     pub fn get_account(&self, account_key: PublicKey) -> Option<Account> {
         self.inner.get_account(account_key)

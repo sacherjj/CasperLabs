@@ -25,7 +25,7 @@ fn test_check_transfer_success_with_source_only() {
 
     // Getting main purse URef to verify transfer
     let source_purse = test_context
-        .get_main_purse_address(DEFAULT_ACCOUNT_ADDR)
+        .main_purse_address(DEFAULT_ACCOUNT_ADDR)
         .expect("main purse address");
     // Target purse doesn't exist yet, so only verifying removal from source
     let maybe_target_purse = None;
@@ -57,7 +57,7 @@ fn test_check_transfer_success_with_source_only_errors() {
 
     // Getting main purse Uref to verify transfer
     let source_purse = test_context
-        .get_main_purse_address(DEFAULT_ACCOUNT_ADDR)
+        .main_purse_address(DEFAULT_ACCOUNT_ADDR)
         .expect("main purse address");
     let maybe_target_purse = None;
     // Setup mismatch between transfer_amount performed and given to trigger assertion.
@@ -90,7 +90,7 @@ fn test_check_transfer_success_with_source_and_target() {
 
     // Getting main purse URef to verify transfer
     let source_purse = test_context
-        .get_main_purse_address(DEFAULT_ACCOUNT_ADDR)
+        .main_purse_address(DEFAULT_ACCOUNT_ADDR)
         .expect("main purse address");
 
     let maybe_target_purse = None;
@@ -127,7 +127,7 @@ fn test_check_transfer_success_with_target_error() {
 
     // Getting main purse URef to verify transfer
     let source_purse = test_context
-        .get_main_purse_address(DEFAULT_ACCOUNT_ADDR)
+        .main_purse_address(DEFAULT_ACCOUNT_ADDR)
         .expect("main purse address");
     let maybe_target_purse = None;
 

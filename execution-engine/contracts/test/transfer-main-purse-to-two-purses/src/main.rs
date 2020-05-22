@@ -25,6 +25,21 @@ enum CustomError {
     TransferToPurseTwoFailed = 102,
 }
 
+fn get_or_create_purse(purse_name: &str) -> URef {
+    match runtime::get_key(purse_name) {
+        None => {
+            // Create and store purse if doesn't exist
+            let purse = system::create_purse();
+            runtime::put_key(purse_name, purse.into());
+            purse
+        }
+        Some(purse_key) => match purse_key.as_uref() {
+            Some(uref) => *uref,
+            None => runtime::revert(ApiError::UnexpectedKeyVariant),
+        },
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn call() {
     let main_purse: URef = account::get_main_purse();
@@ -33,19 +48,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    let destination_purse_one = if !runtime::has_key(&destination_purse_one_name) {
-        // Create and store purse if doesn't exist
-        let purse = system::create_purse();
-        runtime::put_key(&destination_purse_one_name, purse.into());
-        purse
-    } else {
-        let destination_purse_one_key = runtime::get_key(&destination_purse_one_name)
-            .unwrap_or_revert_with(ApiError::InvalidArgument);
-        match destination_purse_one_key.as_uref() {
-            Some(uref) => *uref,
-            None => runtime::revert(ApiError::UnexpectedKeyVariant),
-        }
-    };
+    let destination_purse_one = get_or_create_purse(&destination_purse_one_name);
 
     let destination_purse_two_name: String = runtime::get_arg(Args::DestinationPurseTwo as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
@@ -55,19 +58,8 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    let destination_purse_two = if !runtime::has_key(&destination_purse_two_name) {
-        // Create and store purse if doesn't exist
-        let purse = system::create_purse();
-        runtime::put_key(&destination_purse_two_name, purse.into());
-        purse
-    } else {
-        let destination_purse_two_key = runtime::get_key(&destination_purse_two_name)
-            .unwrap_or_revert_with(ApiError::InvalidArgument);
-        match destination_purse_two_key.as_uref() {
-            Some(uref) => *uref,
-            None => runtime::revert(ApiError::UnexpectedKeyVariant),
-        }
-    };
+    let destination_purse_two = get_or_create_purse(&destination_purse_two_name);
+
     let transfer_amount_two: U512 = runtime::get_arg(Args::TransferAmountTwo as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
