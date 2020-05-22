@@ -5,11 +5,6 @@ set -eu -o pipefail
 CRATES_URL=https://crates.io/api/v1/crates
 GH_URL=https://api.github.com/repos/CasperLabs/CasperLabs
 EE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-# These are the subdirs of CasperLabs/execution-engine which contain packages for publishing.  They
-# should remain ordered from least-dependent to most.
-#
-# Note: 'cargo-casperlabs' is treated specially since it needs '--allow-dirty' passed to the publish call
-PACKAGE_DIRS=(types contract engine-wasm-prep mint proof-of-stake standard-payment engine-shared engine-storage engine-core engine-grpc-server engine-test-support)
 
 run_curl() {
     set +e
@@ -80,8 +75,17 @@ publish() {
 
 check_python_has_toml
 
-for PACKAGE_DIR in "${PACKAGE_DIRS[@]}"; do
-    publish $PACKAGE_DIR
-done
-
+# These are the subdirs of CasperLabs/execution-engine which contain packages for publishing.  They should remain
+# ordered from least-dependent to most.
+publish types
+publish contract
+publish engine-wasm-prep
+publish mint
+publish proof-of-stake
+publish standard-payment
+publish engine-shared
+publish engine-storage
+publish engine-core --allow-dirty
+publish engine-grpc-server
+publish engine-test-support
 publish cargo-casperlabs --allow-dirty
