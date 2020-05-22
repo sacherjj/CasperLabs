@@ -1,6 +1,5 @@
 use std::{collections::BTreeSet, path::Path};
 
-use contract::args_parser::ArgsParser;
 use engine_core::{
     engine_state::{deploy_item::DeployItem, executable_deploy_item::ExecutableDeployItem},
     DeployHash,
@@ -36,18 +35,18 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_payment_bytes(mut self, module_bytes: Vec<u8>, args: impl ArgsParser) -> Self {
+    pub fn with_payment_bytes(mut self, module_bytes: Vec<u8>, args: RuntimeArgs) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code =
             Some(ExecutableDeployItem::ModuleBytes { module_bytes, args });
         self
     }
 
-    pub fn with_empty_payment_bytes(self, args: impl ArgsParser) -> Self {
+    pub fn with_empty_payment_bytes(self, args: RuntimeArgs) -> Self {
         self.with_payment_bytes(vec![], args)
     }
 
-    pub fn with_payment_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
+    pub fn with_payment_code<T: AsRef<Path>>(self, file_name: T, args: RuntimeArgs) -> Self {
         let module_bytes = utils::read_wasm_file_bytes(file_name);
         self.with_payment_bytes(module_bytes, args)
     }
@@ -56,7 +55,7 @@ impl DeployItemBuilder {
         mut self,
         hash: ContractHash,
         entry_point: &str,
-        args: impl ArgsParser,
+        args: RuntimeArgs,
     ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByHash {
@@ -70,12 +69,12 @@ impl DeployItemBuilder {
     pub(crate) fn with_stored_payment_uref_addr(
         self,
         _uref_addr: Vec<u8>,
-        _args: impl ArgsParser,
+        _args: RuntimeArgs,
     ) -> Self {
         todo!("with_stored_payment_uref_addr")
     }
 
-    pub fn with_stored_payment_uref(self, _uref: URef, _args: impl ArgsParser) -> Self {
+    pub fn with_stored_payment_uref(self, _uref: URef, _args: RuntimeArgs) -> Self {
         todo!("with_stored_payment_uref")
     }
 
@@ -83,7 +82,7 @@ impl DeployItemBuilder {
         mut self,
         uref_name: &str,
         entry_point_name: &str,
-        args: impl ArgsParser,
+        args: RuntimeArgs,
     ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByName {
@@ -94,14 +93,14 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_session_bytes(mut self, module_bytes: Vec<u8>, args: impl ArgsParser) -> Self {
+    pub fn with_session_bytes(mut self, module_bytes: Vec<u8>, args: RuntimeArgs) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code =
             Some(ExecutableDeployItem::ModuleBytes { module_bytes, args });
         self
     }
 
-    pub fn with_session_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
+    pub fn with_session_code<T: AsRef<Path>>(self, file_name: T, args: RuntimeArgs) -> Self {
         let module_bytes = utils::read_wasm_file_bytes(file_name);
         self.with_session_bytes(module_bytes, args)
     }
@@ -110,7 +109,7 @@ impl DeployItemBuilder {
         mut self,
         hash: ContractHash,
         entry_point: &str,
-        args: impl ArgsParser,
+        args: RuntimeArgs,
     ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByHash {
@@ -124,12 +123,12 @@ impl DeployItemBuilder {
     pub(crate) fn with_stored_session_uref_addr(
         self,
         _uref_addr: Vec<u8>,
-        _args: impl ArgsParser,
+        _args: RuntimeArgs,
     ) -> Self {
         todo!("with_stored_session_uref_addr")
     }
 
-    pub fn with_stored_session_uref(self, _uref: URef, _args: impl ArgsParser) -> Self {
+    pub fn with_stored_session_uref(self, _uref: URef, _args: RuntimeArgs) -> Self {
         todo!("with_stored_session_uref")
     }
 
@@ -137,7 +136,7 @@ impl DeployItemBuilder {
         mut self,
         name: &str,
         entry_point: &str,
-        args: impl ArgsParser,
+        args: RuntimeArgs,
     ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByName {
@@ -254,11 +253,8 @@ impl DeployItemBuilder {
         }
     }
 
-    fn serialize_args(args: impl ArgsParser) -> Vec<u8> {
-        args.parse()
-            .expect("should convert to `Vec<CLValue>`")
-            .into_bytes()
-            .expect("should serialize args")
+    fn serialize_args(args: RuntimeArgs) -> Vec<u8> {
+        args.into_bytes().expect("should serialize args")
     }
 }
 

@@ -28,6 +28,7 @@ const UNCALLABLE_SESSION: &str = "uncallable_session";
 const UNCALLABLE_CONTRACT: &str = "uncallable_contract";
 const CALL_RESTRICTED_ENTRY_POINTS: &str = "call_restricted_entry_points";
 const ARG_AMOUNT: &str = "amount";
+const ARG_TARGET: &str = "target";
 
 lazy_static! {
     static ref TRANSFER_1_AMOUNT: U512 = U512::from(250_000_000) + 1000;
@@ -41,8 +42,12 @@ lazy_static! {
 fn should_call_group_restricted_session() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -102,8 +107,12 @@ fn should_call_group_restricted_session() {
 fn should_call_group_restricted_session_caller() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -161,13 +170,17 @@ fn should_call_group_restricted_session_caller() {
 fn should_not_call_restricted_session_from_wrong_account() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
+        runtime_args! { ARG_TARGET => ACCOUNT_1_ADDR, ARG_AMOUNT => *TRANSFER_1_AMOUNT },
     )
     .build();
 
@@ -237,13 +250,17 @@ fn should_not_call_restricted_session_from_wrong_account() {
 fn should_not_call_restricted_session_caller_from_wrong_account() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
+        runtime_args! { ARG_TARGET => ACCOUNT_1_ADDR, ARG_AMOUNT => *TRANSFER_1_AMOUNT },
     )
     .build();
 
@@ -315,8 +332,12 @@ fn should_not_call_restricted_session_caller_from_wrong_account() {
 fn should_call_group_restricted_contract() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -378,12 +399,16 @@ fn should_call_group_restricted_contract() {
 fn should_not_call_group_restricted_contract_from_wrong_account() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
+        runtime_args! { ARG_TARGET => ACCOUNT_1_ADDR, ARG_AMOUNT => *TRANSFER_1_AMOUNT },
     )
     .build();
 
@@ -450,8 +475,12 @@ fn should_not_call_group_restricted_contract_from_wrong_account() {
 fn should_call_group_unrestricted_contract_caller() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -507,12 +536,16 @@ fn should_call_group_unrestricted_contract_caller() {
 #[ignore]
 #[test]
 fn should_call_unrestricted_contract_caller_from_different_account() {
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
+        runtime_args! { ARG_TARGET => ACCOUNT_1_ADDR, ARG_AMOUNT => *TRANSFER_1_AMOUNT },
     )
     .build();
 
@@ -570,12 +603,16 @@ fn should_call_unrestricted_contract_caller_from_different_account() {
 fn should_call_group_restricted_contract_as_session() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
+        runtime_args! { ARG_TARGET => ACCOUNT_1_ADDR, ARG_AMOUNT => *TRANSFER_1_AMOUNT },
     )
     .build();
 
@@ -633,12 +670,16 @@ fn should_call_group_restricted_contract_as_session() {
 fn should_call_group_restricted_contract_as_session_from_wrong_account() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_TO_ACCOUNT,
-        (ACCOUNT_1_ADDR, *TRANSFER_1_AMOUNT),
+        runtime_args! { ARG_TARGET => ACCOUNT_1_ADDR, ARG_AMOUNT => *TRANSFER_1_AMOUNT },
     )
     .build();
 
@@ -705,8 +746,12 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
 fn should_not_call_uncallable_contract_from_deploy() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -791,8 +836,12 @@ fn should_not_call_uncallable_contract_from_deploy() {
 fn should_not_call_uncallable_session_from_deploy() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 

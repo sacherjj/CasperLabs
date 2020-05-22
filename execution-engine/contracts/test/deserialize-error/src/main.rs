@@ -11,7 +11,6 @@ use alloc::{collections::BTreeMap, vec::Vec};
 
 use contract::{
     self,
-    args_parser::ArgsParser,
     contract_api::{self, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };

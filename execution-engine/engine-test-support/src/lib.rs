@@ -6,16 +6,13 @@
 //! ```no_run
 //! # use contract as casperlabs_contract;
 //! # use types as casperlabs_types;
-//! use casperlabs_contract::{contract_api::{runtime, storage}, unwrap_or_revert::UnwrapOrRevert};
+//! use casperlabs_contract::contract_api::{runtime, storage};
 //! use casperlabs_types::{ApiError, Key};
 //! const KEY: &str = "special_value";
 //!
 //! #[no_mangle]
 //! pub extern "C" fn call() {
-//!     let value: String = runtime::get_arg(0)
-//!         .unwrap_or_revert_with(ApiError::MissingArgument)
-//!         .unwrap_or_revert_with(ApiError::InvalidArgument);
-//!
+//!     let value: String = runtime::get_named_arg("value");
 //!     let value_ref = storage::new_uref(value);
 //!     let value_key: Key = value_ref.into();
 //!     runtime::put_key(KEY, value_key);

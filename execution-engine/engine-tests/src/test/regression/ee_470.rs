@@ -3,6 +3,7 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
+use types::RuntimeArgs;
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 
@@ -11,8 +12,12 @@ const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 fn regression_test_genesis_hash_mismatch() {
     let mut builder_base = InMemoryWasmTestBuilder::default();
 
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_LOCAL_STATE,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     // Step 1.
     let builder = builder_base.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);

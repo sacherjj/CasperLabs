@@ -16,11 +16,15 @@ enum Error {
 }
 
 pub const ARG_PURSE: &str = "purse";
+const ARG_PAYMENT_AMOUNT: &str = "payment_amount";
+const SET_REFUND_PURSE: &str = "set_refund_purse";
+const GET_REFUND_PURSE: &str = "get_refund_purse";
+const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 
 fn set_refund_purse(contract_hash: ContractHash, p: &URef) {
     runtime::call_contract(
         contract_hash,
-        "set_refund_purse",
+        SET_REFUND_PURSE,
         runtime_args! {
             ARG_PURSE => *p,
         },
@@ -28,11 +32,11 @@ fn set_refund_purse(contract_hash: ContractHash, p: &URef) {
 }
 
 fn get_refund_purse(pos: ContractHash) -> Option<URef> {
-    runtime::call_contract(pos, "get_refund_purse", runtime_args! {})
+    runtime::call_contract(pos, GET_REFUND_PURSE, runtime_args! {})
 }
 
 fn get_payment_purse(pos: ContractHash) -> URef {
-    runtime::call_contract(pos, "get_payment_purse", runtime_args! {})
+    runtime::call_contract(pos, GET_PAYMENT_PURSE, runtime_args! {})
 }
 
 fn submit_payment(pos: ContractHash, amount: U512) {
@@ -76,10 +80,7 @@ pub extern "C" fn call() {
             Some(_) => runtime::revert(ApiError::User(Error::Invalid as u16)),
         }
 
-        let payment_amount: U512 = runtime::get_arg(0)
-            .unwrap_or_revert_with(ApiError::MissingArgument)
-            .unwrap_or_revert_with(ApiError::InvalidArgument);
-
+        let payment_amount: U512 = runtime::get_named_arg(ARG_PAYMENT_AMOUNT);
         submit_payment(pos, payment_amount);
     }
 }

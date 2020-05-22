@@ -7,7 +7,7 @@ use engine_test_support::{
     internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, U512};
+use types::{account::PublicKey, RuntimeArgs, U512};
 
 const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
@@ -40,8 +40,12 @@ fn should_return_bonded_validators() {
 
     let run_genesis_request = utils::create_run_genesis_request(accounts.clone());
 
-    let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_LOCAL_STATE,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let actual = InMemoryWasmTestBuilder::default()
         .run_genesis(&run_genesis_request)

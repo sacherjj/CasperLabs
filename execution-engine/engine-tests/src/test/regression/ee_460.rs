@@ -3,9 +3,11 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::U512;
+use types::{runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_EE_460_REGRESSION: &str = "ee_460_regression.wasm";
+
+const ARG_AMOUNT: &str = "amount";
 
 #[ignore]
 #[test]
@@ -13,7 +15,7 @@ fn should_run_ee_460_no_side_effects_on_error_regression() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_EE_460_REGRESSION,
-        (U512::max_value(),),
+        runtime_args! { ARG_AMOUNT => U512::max_value() },
     )
     .build();
     let result = InMemoryWasmTestBuilder::default()

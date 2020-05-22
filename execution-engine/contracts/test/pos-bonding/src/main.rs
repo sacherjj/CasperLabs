@@ -3,19 +3,14 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::string::String;
 
 use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
 
-use types::{
-    account::PublicKey, ApiError, CLValue, ContractHash, NamedArg, RuntimeArgs, URef, U512,
-};
+use types::{account::PublicKey, runtime_args, ApiError, ContractHash, RuntimeArgs, URef, U512};
 
 const ARG_AMOUNT: &str = "amount";
 const ARG_PURSE: &str = "purse";
@@ -64,20 +59,11 @@ fn bond_from_main_purse() {
 }
 
 fn bonding(pos: ContractHash, bond_amount: U512, bonding_purse: URef) {
-    let runtime_args = {
-        let args = vec![
-            NamedArg::new(
-                ARG_AMOUNT.to_string(),
-                CLValue::from_t(bond_amount).unwrap_or_revert(),
-            ),
-            NamedArg::new(
-                ARG_PURSE.to_string(),
-                CLValue::from_t(bonding_purse).unwrap_or_revert(),
-            ),
-        ];
-        RuntimeArgs::Named(args)
+    let args = runtime_args! {
+        ARG_AMOUNT => bond_amount,
+        ARG_PURSE => bonding_purse,
     };
-    runtime::call_contract(pos, ARG_BOND, runtime_args)
+    runtime::call_contract(pos, ARG_BOND, args)
 }
 
 fn unbond() {
@@ -87,14 +73,10 @@ fn unbond() {
 }
 
 fn unbonding(pos: ContractHash, unbond_amount: Option<U512>) {
-    let runtime_args = {
-        let args = vec![NamedArg::new(
-            ARG_AMOUNT.to_string(),
-            CLValue::from_t(unbond_amount).unwrap_or_revert(),
-        )];
-        RuntimeArgs::Named(args)
+    let args = runtime_args! {
+        ARG_AMOUNT => unbond_amount,
     };
-    runtime::call_contract(pos, ARG_UNBOND, runtime_args)
+    runtime::call_contract(pos, ARG_UNBOND, args)
 }
 
 fn seed_new_account() {

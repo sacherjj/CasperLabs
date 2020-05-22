@@ -131,58 +131,6 @@ fn deserialize_contract_result<T: CLTyped + FromBytes>(bytes_written: usize) -> 
     bytesrepr::deserialize(serialized_result).unwrap_or_revert()
 }
 
-/// Takes the name of a (non-mangled) `extern "C"` function to store as a contract under the given
-/// [`URef`] which should already reference a stored contract.
-///
-/// If successful, this overwrites the value under `uref` with a new contract instance containing
-/// the original contract's named_keys, the current protocol version, and the newly created bytes of
-/// the stored function.
-pub fn upgrade_contract_at_uref(_name: &str, _uref: URef) {
-    todo!("contracts are no longer stored under urefs");
-    // let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
-    // let key: Key = uref.into();
-    // let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
-    // let result_value =
-    //     unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
-    // match api_error::result_from(result_value) {
-    //     Ok(()) => (),
-    //     Err(error) => revert(error),
-    // }
-}
-
-fn get_arg_size(i: u32) -> Option<usize> {
-    let mut arg_size: usize = 0;
-    let ret = unsafe { ext_ffi::get_arg_size(i as usize, &mut arg_size as *mut usize) };
-    match api_error::result_from(ret) {
-        Ok(_) => Some(arg_size),
-        Err(ApiError::MissingArgument) => None,
-        Err(e) => revert(e),
-    }
-}
-
-/// Returns the i-th argument passed to the host for the current module invocation.
-///
-/// Note that this is only relevant to contracts stored on-chain since a contract deployed directly
-/// is not invoked with any arguments.
-pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
-    let arg_size = get_arg_size(i)?;
-    let arg_bytes = if arg_size > 0 {
-        let res = {
-            let data_non_null_ptr = contract_api::alloc_bytes(arg_size);
-            let ret = unsafe { ext_ffi::get_arg(i as usize, data_non_null_ptr.as_ptr(), arg_size) };
-            let data =
-                unsafe { Vec::from_raw_parts(data_non_null_ptr.as_ptr(), arg_size, arg_size) };
-            api_error::result_from(ret).map(|_| data)
-        };
-        // Assumed to be safe as `get_arg_size` checks the argument already
-        res.unwrap_or_revert()
-    } else {
-        // Avoids allocation with 0 bytes and a call to get_arg
-        Vec::new()
-    };
-    Some(bytesrepr::deserialize(arg_bytes))
-}
-
 fn get_named_arg_size(name: &str) -> Option<usize> {
     let mut arg_size: usize = 0;
     let ret = unsafe {
@@ -224,10 +172,10 @@ pub fn get_named_arg<T: FromBytes>(name: &str) -> T {
         // Assumed to be safe as `get_named_arg_size` checks the argument already
         res.unwrap_or_revert()
     } else {
-        // Avoids allocation with 0 bytes and a call to get_arg
+        // Avoids allocation with 0 bytes and a call to get_named_arg
         Vec::new()
     };
-    bytesrepr::deserialize(arg_bytes).unwrap_or_revert()
+    bytesrepr::deserialize(arg_bytes).unwrap_or_revert_with(ApiError::InvalidArgument)
 }
 
 /// Returns the caller of the current context, i.e. the [`PublicKey`] of the account which made the

@@ -57,7 +57,12 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -92,7 +97,12 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -139,7 +149,12 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -191,7 +206,12 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_UPGRADER_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -240,7 +260,12 @@ fn should_be_able_to_observe_state_transition_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -331,7 +356,12 @@ fn should_support_extending_functionality() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -465,7 +495,12 @@ fn should_maintain_named_keys_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", PURSE_HOLDER_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();
@@ -564,7 +599,12 @@ fn should_maintain_local_state_across_upgrade() {
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", LOCAL_STATE_STORED_CONTRACT_NAME);
-            ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, &contract_name, ()).build()
+            ExecuteRequestBuilder::standard(
+                DEFAULT_ACCOUNT_ADDR,
+                &contract_name,
+                RuntimeArgs::default(),
+            )
+            .build()
         };
 
         builder.exec(exec_request).expect_success().commit();

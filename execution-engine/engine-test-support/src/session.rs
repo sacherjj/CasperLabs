@@ -1,6 +1,5 @@
 use rand::Rng;
 
-use contract::args_parser::ArgsParser;
 use engine_core::engine_state::execute_request::ExecuteRequest;
 use types::{runtime_args, ProtocolVersion, RuntimeArgs};
 
@@ -26,7 +25,7 @@ impl SessionBuilder {
     /// Constructs a new `SessionBuilder` containing a deploy with the provided session code and
     /// session args, and with default values for the account address, payment code args, gas price,
     /// authorization keys and protocol version.
-    pub fn new(session_code: Code, session_args: impl ArgsParser) -> Self {
+    pub fn new(session_code: Code, session_args: RuntimeArgs) -> Self {
         let di_builder = DeployItemBuilder::new()
             .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT });
         let di_builder = match session_code {
@@ -54,7 +53,7 @@ impl SessionBuilder {
     }
 
     /// Returns `self` with the provided payment code and args set.
-    pub fn with_payment_code(mut self, code: Code, args: impl ArgsParser) -> Self {
+    pub fn with_payment_code(mut self, code: Code, args: RuntimeArgs) -> Self {
         self.di_builder = match code {
             Code::Path(path) => self.di_builder.with_payment_code(path, args),
             Code::NamedKey(name, entry_point) => {

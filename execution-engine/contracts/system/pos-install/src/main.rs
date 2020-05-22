@@ -21,8 +21,9 @@ use types::{
         EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter,
         CONTRACT_INITIAL_VERSION,
     },
+    runtime_args,
     system_contract_errors::mint,
-    CLType, CLValue, ContractPackageHash, Key, NamedArg, RuntimeArgs, URef, U512,
+    CLType, CLValue, ContractPackageHash, Key, RuntimeArgs, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -175,17 +176,15 @@ pub extern "C" fn install() {
 }
 
 fn mint_purse(contract_metadata_hash: ContractPackageHash, amount: U512) -> URef {
-    let runtime_args = {
-        let amount = CLValue::from_t(amount).unwrap_or_revert();
-        let arg_amount = NamedArg::new(ARG_AMOUNT.to_string(), amount);
-        RuntimeArgs::Named(vec![arg_amount])
+    let args = runtime_args! {
+        ARG_AMOUNT => amount,
     };
 
     let result: Result<URef, mint::Error> = runtime::call_versioned_contract(
         contract_metadata_hash,
         CONTRACT_INITIAL_VERSION,
         ENTRY_POINT_MINT,
-        runtime_args,
+        args,
     );
 
     result.unwrap_or_revert()

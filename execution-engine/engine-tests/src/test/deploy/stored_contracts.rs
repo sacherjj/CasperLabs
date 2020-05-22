@@ -67,9 +67,12 @@ fn store_payment_to_account_context(
     builder: &mut WasmTestBuilder<InMemoryGlobalState>,
 ) -> (Account, ContractHash) {
     // store payment contract
-    let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, STORED_PAYMENT_CONTRACT_NAME, ())
-            .build();
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        STORED_PAYMENT_CONTRACT_NAME,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     builder.exec_commit_finish(exec_request);
 
@@ -379,7 +382,7 @@ fn should_exec_payment_and_session_stored_code() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                (),
+                RuntimeArgs::default(),
             )
             .with_stored_versioned_payment_contract_by_name(
                 STORED_PAYMENT_CONTRACT_PACKAGE_HASH_NAME,
@@ -491,7 +494,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}_stored.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                    (),
+                    RuntimeArgs::default(),
                 )
                 .with_empty_payment_bytes(runtime_args! {
                     ARG_AMOUNT => U512::from(payment_purse_amount),
@@ -508,7 +511,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         let exec_request_2 = {
             let store_transfer = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
-                .with_session_code(STORED_PAYMENT_CONTRACT_NAME, ())
+                .with_session_code(STORED_PAYMENT_CONTRACT_NAME, RuntimeArgs::default())
                 .with_empty_payment_bytes(runtime_args! {
                     ARG_AMOUNT => U512::from(payment_purse_amount),
                 })
@@ -563,7 +566,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
         let do_nothing_request = |deploy_hash: [u8; 32]| {
             let deploy = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
-                .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
+                .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), RuntimeArgs::default())
                 .with_empty_payment_bytes(
                     runtime_args! { ARG_AMOUNT => U512::from(payment_purse_amount), },
                 )
@@ -664,9 +667,12 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store payment contract
-    let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, STORED_PAYMENT_CONTRACT_NAME, ())
-            .build();
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        STORED_PAYMENT_CONTRACT_NAME,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
@@ -710,7 +716,7 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
+            .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), RuntimeArgs::default())
             .with_stored_payment_named_key(
                 STORED_PAYMENT_CONTRACT_HASH_NAME,
                 PAY,
@@ -758,9 +764,12 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
     let payment_purse_amount = 10_000_000;
 
     // first, store payment contract
-    let exec_request =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, STORED_PAYMENT_CONTRACT_NAME, ())
-            .build();
+    let exec_request = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        STORED_PAYMENT_CONTRACT_NAME,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
@@ -807,7 +816,7 @@ fn should_fail_payment_stored_at_hash_with_incompatible_major_version() {
     let exec_request_stored_payment = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), ())
+            .with_session_code(&format!("{}.wasm", DO_NOTHING_NAME), RuntimeArgs::default())
             .with_stored_payment_hash(
                 stored_payment_contract_hash,
                 DEFAULT_ENTRY_POINT_NAME,
@@ -844,7 +853,7 @@ fn should_fail_session_stored_at_named_key_with_incompatible_major_version() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         &format!("{}_stored.wasm", DO_NOTHING_NAME),
-        (),
+        RuntimeArgs::default(),
     )
     .build();
 
@@ -935,7 +944,7 @@ fn should_fail_session_stored_at_named_key_with_missing_new_major_version() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         &format!("{}_stored.wasm", DO_NOTHING_NAME),
-        (),
+        RuntimeArgs::default(),
     )
     .build();
 
@@ -1027,7 +1036,7 @@ fn should_fail_session_stored_at_hash_with_incompatible_major_version() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         &format!("{}_stored.wasm", DO_NOTHING_NAME),
-        (),
+        RuntimeArgs::default(),
     )
     .build();
 
@@ -1124,15 +1133,18 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
 
     // first, store payment contract for v2.0.0
 
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, STORED_PAYMENT_CONTRACT_NAME, ())
-            .with_protocol_version(new_protocol_version)
-            .build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        STORED_PAYMENT_CONTRACT_NAME,
+        RuntimeArgs::default(),
+    )
+    .with_protocol_version(new_protocol_version)
+    .build();
 
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         &format!("{}_stored.wasm", DO_NOTHING_NAME),
-        (),
+        RuntimeArgs::default(),
     )
     .with_protocol_version(new_protocol_version)
     .build();

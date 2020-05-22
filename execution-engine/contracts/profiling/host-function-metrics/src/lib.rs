@@ -29,10 +29,9 @@ const VALUE_FOR_ADDITION_1: u64 = 1;
 const VALUE_FOR_ADDITION_2: u64 = 2;
 const TRANSFER_AMOUNT: u64 = 1_000_000;
 
-enum Arg {
-    Seed = 0,
-    Others = 1,
-}
+const ARG_SEED: &str = "seed";
+const ARG_OTHERS: &str = "others";
+const ARG_BYTES: &str = "bytes";
 
 #[repr(u16)]
 enum Error {
@@ -70,12 +69,8 @@ fn create_random_names(seed: u64) -> impl Iterator<Item = String> {
 // Executes the named key functions from the `runtime` module and most of the functions from the
 // `storage` module.
 fn large_function() {
-    let seed: u64 = runtime::get_arg(Arg::Seed as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let random_bytes: Vec<u8> = runtime::get_arg(Arg::Others as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let seed: u64 = runtime::get_named_arg(ARG_SEED);
+    let random_bytes: Vec<u8> = runtime::get_named_arg(ARG_BYTES);
 
     let uref = storage::new_uref(random_bytes.clone());
 
@@ -127,18 +122,11 @@ fn small_function() {
     }
 }
 
-const ARG_SEED: &str = "seed";
-const ARG_BYTES: &str = "bytes";
-
 #[no_mangle]
 pub extern "C" fn call() {
-    let seed: u64 = runtime::get_arg(Arg::Seed as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let seed: u64 = runtime::get_named_arg(ARG_SEED);
     let (random_bytes, source_account, destination_account): (Vec<u8>, PublicKey, PublicKey) =
-        runtime::get_arg(Arg::Others as u32)
-            .unwrap_or_revert_with(ApiError::MissingArgument)
-            .unwrap_or_revert_with(ApiError::InvalidArgument);
+        runtime::get_named_arg(ARG_OTHERS);
 
     // ========== storage, execution and upgrading of contracts ====================================
 
@@ -161,12 +149,6 @@ pub extern "C" fn call() {
         runtime_args.clone(),
     );
 
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &large_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
-
     // Store large function with 10 named keys, then execute it.
     runtime::call_contract::<BTreeMap<String, Key>>(
         store_function(entry_point_name, Some(named_keys.clone())),
@@ -183,12 +165,6 @@ pub extern "C" fn call() {
     let entry_point_name = &small_function_name;
     let runtime_args = runtime_args! {};
 
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &small_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
-
     // Store small function with no named keys, then execute it.
     runtime::call_contract::<()>(
         store_function(entry_point_name, Some(BTreeMap::new())),
@@ -196,24 +172,12 @@ pub extern "C" fn call() {
         runtime_args.clone(),
     );
 
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &large_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
-
     // Store small function with 10 named keys, then execute it.
     runtime::call_contract::<()>(
         store_function(entry_point_name, Some(named_keys)),
         entry_point_name,
         runtime_args,
     );
-
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &small_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
 
     // ========== functions from `account` module ==================================================
 

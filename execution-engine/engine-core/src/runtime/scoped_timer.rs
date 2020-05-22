@@ -94,7 +94,6 @@ impl Drop for ScopedTimer {
             FunctionIndex::NewFuncIndex => "host_function_new_uref",
             FunctionIndex::RetFuncIndex => "host_function_ret",
             FunctionIndex::CallContractFuncIndex => "host_function_call_contract",
-            FunctionIndex::GetArgFuncIndex => "host_function_get_arg",
             FunctionIndex::GetKeyFuncIndex => "host_function_get_key",
             FunctionIndex::HasKeyFuncIndex => "host_function_has_key",
             FunctionIndex::PutKeyFuncIndex => "host_function_put_key",
@@ -118,10 +117,8 @@ impl Drop for ScopedTimer {
             }
             FunctionIndex::GetBalanceIndex => "host_function_get_balance",
             FunctionIndex::GetPhaseIndex => "host_function_get_phase",
-            FunctionIndex::UpgradeContractAtURefIndex => "host_function_upgrade_contract_at_uref",
             FunctionIndex::GetSystemContractIndex => "host_function_get_system_contract",
             FunctionIndex::GetMainPurseIndex => "host_function_get_main_purse",
-            FunctionIndex::GetArgSizeFuncIndex => "host_function_get_arg_size",
             FunctionIndex::ReadHostBufferIndex => "host_function_read_host_buffer",
             FunctionIndex::CreateContractMetadataAtHash => {
                 "host_function_create_contract_package_at_hash"

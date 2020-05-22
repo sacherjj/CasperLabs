@@ -17,10 +17,10 @@ const CMD_ADD: &str = "add";
 #[test]
 fn should_run_local_state_contract() {
     let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, RuntimeArgs::default()).build();
 
     let exec_request_2 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, ()).build();
+        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_LOCAL_STATE, RuntimeArgs::default()).build();
 
     // This test runs a contract that's after every call extends the same key with
     // more data

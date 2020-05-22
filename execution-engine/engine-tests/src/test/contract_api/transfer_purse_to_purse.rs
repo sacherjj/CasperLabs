@@ -12,6 +12,9 @@ use engine_test_support::{
 
 const CONTRACT_TRANSFER_PURSE_TO_PURSE: &str = "transfer_purse_to_purse.wasm";
 const PURSE_TO_PURSE_AMOUNT: u64 = 42;
+const ARG_SOURCE: &str = "source";
+const ARG_TARGET: &str = "target";
+const ARG_AMOUNT: &str = "amount";
 
 #[ignore]
 #[test]
@@ -23,9 +26,9 @@ fn should_run_purse_to_purse_transfer() {
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_PURSE,
         runtime_args! {
-            "source" => source,
-            "target" => target,
-            "amount" => U512::from(PURSE_TO_PURSE_AMOUNT)
+            ARG_SOURCE => source,
+            ARG_TARGET => target,
+            ARG_AMOUNT => U512::from(PURSE_TO_PURSE_AMOUNT)
         },
     )
     .build();
@@ -116,7 +119,7 @@ fn should_run_purse_to_purse_transfer_with_error() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_PURSE,
-        runtime_args! { "source" => source, "target" => target, "amount" => U512::from(999_999_999_999i64) },
+        runtime_args! { ARG_SOURCE => source, ARG_TARGET => target, ARG_AMOUNT => U512::from(999_999_999_999i64) },
     )
         .build();
     let mut builder = InMemoryWasmTestBuilder::default();

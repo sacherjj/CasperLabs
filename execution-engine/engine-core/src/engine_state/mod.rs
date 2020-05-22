@@ -43,9 +43,9 @@ use types::{
     runtime_args,
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
-    AccessRights, BlockTime, CLValue, Contract, ContractHash, ContractPackage, ContractPackageHash,
-    ContractVersionKey, EntryPoint, EntryPointType, Key, NamedArg, Phase, ProtocolVersion,
-    RuntimeArgs, URef, KEY_HASH_LENGTH, U512,
+    AccessRights, BlockTime, Contract, ContractHash, ContractPackage, ContractPackageHash,
+    ContractVersionKey, EntryPoint, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
+    KEY_HASH_LENGTH, U512,
 };
 
 pub use self::{
@@ -79,6 +79,7 @@ pub const CONV_RATE: u64 = 10;
 pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
+const ARG_AMOUNT: &str = "amount";
 
 #[derive(Debug)]
 pub struct EngineState<S> {
@@ -267,16 +268,9 @@ where
             let proof_of_stake_installer_bytes = ee_config.proof_of_stake_installer_bytes();
             let proof_of_stake_installer_module =
                 preprocessor.preprocess(proof_of_stake_installer_bytes)?;
-            let args = {
-                let arg_mint_package_hash = NamedArg::new(
-                    "mint_contract_metadata_hash".to_string(),
-                    CLValue::from_t(mint_package_hash).expect("should convert to `CLValue`"),
-                );
-                let arg_genesis_validators = NamedArg::new(
-                    "genesis_validators".to_string(),
-                    CLValue::from_t(bonded_validators).expect("should convert to `CLValue`"),
-                );
-                RuntimeArgs::Named(vec![arg_mint_package_hash, arg_genesis_validators])
+            let args = runtime_args! {
+                "mint_contract_metadata_hash" => mint_package_hash,
+                "genesis_validators" => bonded_validators,
             };
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
 
@@ -412,13 +406,8 @@ where
             // For each account...
             for (account, named_keys) in accounts.into_iter() {
                 let module = module.clone();
-                let args = {
-                    let arg_motes = NamedArg::new(
-                        "amount".to_string(),
-                        CLValue::from_t(account.balance().value())
-                            .expect("should convert to `CLValue`"),
-                    );
-                    RuntimeArgs::Named(vec![arg_motes])
+                let args = runtime_args! {
+                    ARG_AMOUNT => account.balance().value(),
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
@@ -580,9 +569,7 @@ where
                 // supported
                 let args = match upgrade_config.upgrade_installer_args() {
                     Some(args) => {
-                        let args: Vec<CLValue> =
-                            bytesrepr::deserialize(args.to_vec()).expect("should deserialize");
-                        RuntimeArgs::from(args)
+                        bytesrepr::deserialize(args.to_vec()).expect("should deserialize")
                     }
                     None => RuntimeArgs::new(),
                 };
@@ -649,12 +636,10 @@ where
                     new_protocol_data,
                     system_contract_cache,
                 )?;
-                println!("upgraded hashes: {:?}", result);
 
                 if !new_protocol_data.update_from(result) {
                     return Err(Error::InvalidUpgradeResult);
                 } else {
-                    println!("write new protocol data {:?}", new_protocol_data);
                     self.state
                         .put_protocol_data(new_protocol_version, &new_protocol_data)
                         .map_err(Into::into)?;
@@ -966,11 +951,6 @@ where
             .borrow_mut()
             .get_contract(correlation_id, contract_hash)?;
 
-        println!(
-            "get_module_from_contract_hash: protocol version {:?} contract {:?}",
-            protocol_version,
-            contract.protocol_version()
-        );
         // A contract may only call a stored contract that has the same protocol major version
         // number.
         if !contract.is_compatible_protocol_version(*protocol_version) {
@@ -1367,12 +1347,6 @@ where
                 };
 
                 let effects_snapshot = tracking_copy.borrow().effect();
-
-                // if let Err(error) = runtime
-                //     .validate_entry_point_access(&payment_metadata, &payment_entrypoint.access())
-                // {
-                //     return Ok(ExecutionResult::precondition_failure(Error::Exec(error)));
-                // }
 
                 match runtime.call_host_standard_payment() {
                     Ok(()) => ExecutionResult::Success {
