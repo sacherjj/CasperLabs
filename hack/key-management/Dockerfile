@@ -1,4 +1,5 @@
 FROM alpine as build
+
 RUN apk add --no-cache git make g++; \
     cd /tmp; \
     git clone https://github.com/maandree/libkeccak.git; \
@@ -6,13 +7,25 @@ RUN apk add --no-cache git make g++; \
     cd /tmp/libkeccak; git checkout 1.2; make install; ldconfig; \
     cd /tmp/sha3sum; make;
 
+RUN cd /tmp; \
+    git clone https://github.com/BLAKE2/BLAKE2.git; \
+    cd /tmp/BLAKE2/b2sum; make;
+
+
+
 FROM alpine
+
 RUN apk add --no-cache openssl && mkdir -p -- "/usr/local/include"
+
 COPY --from=build /tmp/libkeccak/libkeccak.so /usr/local/lib/libkeccak.so.1.2
 RUN ln -sf -- "/usr/local/lib/libkeccak.so.1.2" "/usr/local/lib/libkeccak.so.1" && ln -sf -- "/usr/local/lib/libkeccak.so.1.2" "/usr/local/lib/libkeccak.so"
 COPY --from=build /tmp/libkeccak/libkeccak.a /usr/local/lib/libkeccak.a
 COPY --from=build /tmp/libkeccak/libkeccak.h /usr/local/include
 COPY --from=build /tmp/libkeccak/libkeccak-legacy.h /usr/local/include
+
 COPY --from=build /tmp/sha3sum/keccak-256sum /usr/local/bin
+
+COPY --from=build /tmp/BLAKE2/b2sum/b2sum /usr/local/bin
+
 COPY gen-keys.sh /
 ENTRYPOINT [ "/gen-keys.sh" ]
