@@ -431,9 +431,9 @@ package object gossiping {
     for {
       _ <- Resource.liftF {
             maybeValidatorId match {
-              case Some(ValidatorIdentity(publicKey, _, _)) =>
+              case Some(validator) =>
                 Log[F].info(
-                  s"Starting with validator identity ${Base16.encode(publicKey) -> "validator"}"
+                  s"Starting with validator identity ${Base16.encode(validator.publicKeyHash) -> "validator"}"
                 )
               case None =>
                 Log[F].info("Starting without a validator identity.")
