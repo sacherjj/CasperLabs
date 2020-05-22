@@ -2438,7 +2438,6 @@ where
                 self.context.read_gs_typed(&previous_contract_hash.into())?;
 
             let mut previous_named_keys = previous_contract.take_named_keys();
-            println!("extending with {:?}", previous_named_keys);
             named_keys.append(&mut previous_named_keys);
         }
 
@@ -2453,10 +2452,6 @@ where
         // Michal: is there a way to communicate the contract version back, or should we throw it
         // away?
         let _contract_version = contract_package.insert_contract_version(major, contract_hash);
-        println!(
-            "contract hash:{:?} new version:({:?}, {:?})",
-            contract_hash, protocol_version, _contract_version
-        );
 
         self.context
             .state()
