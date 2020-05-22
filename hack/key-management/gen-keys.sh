@@ -76,9 +76,16 @@ echo $VALIDATOR_PK_HEX > "$OUTPUT_DIR/validator-pk-hex"
 VALIDATOR_BYTES=$((${#VALIDATOR_PK_HEX} / 2))
 if [ $VALIDATOR_BYTES -ne 32 ]
     then
-        echo "ERROR: validator-id must be 32 bytes length, got" "$VALIDATOR_BYTES" "bytes instead"
+        echo "ERROR: validator-pk must be 32 bytes length, got" "$VALIDATOR_BYTES" "bytes instead"
         exit 1
 fi
+
+# Derive validator public key hash.
+VALIDATOR_ALGO_HEX=$(echo -n "ED25519" | xxd -p)
+VALIDATOR_ID_INPUT_HEX=$(echo ${VALIDATOR_ALGO_HEX}00${VALIDATOR_PK_HEX})
+echo $VALIDATOR_ID_INPUT_HEX | xxd -p -r | b2sum -a blake2b -l 256 | tr -d ' -' > "$OUTPUT_DIR/validator-id-hex"
+cat "$OUTPUT_DIR/validator-id-hex" | xxd -p -r | openssl base64 > "$OUTPUT_DIR/validator-id"
+
 
 # Generate private TLS key in PEM format
 openssl ecparam -name secp256r1 -genkey -noout -out "$OUTPUT_DIR/secp256r1-private.pem"
