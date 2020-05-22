@@ -30,6 +30,7 @@ from casperlabs_client.commands import (
     show_deploys_cmd,
     balance_cmd,
     show_peers_cmd,
+    account_hash_cmd,
 )
 
 
@@ -125,6 +126,7 @@ def cli(*arguments) -> int:
     parser = Parser()
 
     for command in (
+        account_hash_cmd,
         balance_cmd,
         deploy_cmd,
         keygen_cmd,

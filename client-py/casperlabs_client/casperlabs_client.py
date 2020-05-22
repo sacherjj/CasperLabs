@@ -13,6 +13,8 @@ import warnings
 # Hack to fix the relative imports problems with grpc #
 import sys
 
+from .consts import SUPPORTED_KEY_ALGORITHMS
+
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
 
@@ -35,7 +37,7 @@ def _hex(text, as_utf8):
 google.protobuf.text_format.text_encoding.CEscape = _hex
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
-from . import control_pb2_grpc, consts
+from . import control_pb2_grpc, consts, crypto
 from . import control_pb2 as control
 
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/casper.proto
@@ -848,7 +850,7 @@ class CasperLabsClient:
                     f"Timed out waiting for deploy {deploy_hash} to be processed"
                 )
 
-            result = self.showDeploy(deploy_hash, full_view=False)
+            result = self.show_deploy(deploy_hash, full_view=False)
             if result.status.state != info.DeployInfo.State.PENDING:
                 break
             time.sleep(delay)
@@ -867,3 +869,10 @@ class CasperLabsClient:
     @api
     def show_peers(self):
         return list(self.diagnosticsService.ListPeers(empty_pb2.Empty()).peers)
+
+    @api
+    def account_hash(self, algorithm: str, public_key) -> bytes:
+        """ Create account hash based on algorithm and public key """
+        if algorithm not in SUPPORTED_KEY_ALGORITHMS:
+            raise ValueError(f"algorithm must be one of {SUPPORTED_KEY_ALGORITHMS}.")
+        return crypto.blake2b_hash(algorithm.encode("UTF-8") + b"0x00" + public_key)
