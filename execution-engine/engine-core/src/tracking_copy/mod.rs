@@ -181,9 +181,10 @@ impl<R: StateReader<Key, StoredValue>> TrackingCopy<R> {
     pub fn new(reader: R) -> TrackingCopy<R> {
         TrackingCopy {
             reader,
-            cache: TrackingCopyCache::new(1024 * 16, HeapSize), /* TODO: Should `max_cache_size`
-                                                                 * be fraction of wasm memory
-                                                                 * limit? */
+            cache: TrackingCopyCache::new(1024 * 16, HeapSize),
+            /* TODO: Should `max_cache_size`
+             * be fraction of wasm memory
+             * limit? */
             ops: AdditiveMap::new(),
             fns: AdditiveMap::new(),
         }

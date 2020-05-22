@@ -24,7 +24,7 @@ use engine_shared::logging::{self, Settings};
 use engine_test_support::internal::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder,
 };
-use types::{ApiError, U512, runtime_args, RuntimeArgs};
+use types::{runtime_args, ApiError, RuntimeArgs};
 
 use casperlabs_engine_tests::profiling;
 

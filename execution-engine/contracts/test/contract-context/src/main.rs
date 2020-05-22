@@ -5,7 +5,10 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::ToString, vec::Vec};
 
-use contract::contract_api::{runtime, storage};
+use contract::{
+    contract_api::{runtime, storage},
+    unwrap_or_revert::UnwrapOrRevert,
+};
 use types::{
     contracts::{
         EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, CONTRACT_INITIAL_VERSION,
@@ -13,34 +16,36 @@ use types::{
     runtime_args, CLType, ContractHash, ContractPackageHash, Key, RuntimeArgs, URef,
 };
 
-const METADATA_HASH_KEY: &str = "metadata_hash_key";
-const METADATA_ACCESS_KEY: &str = "metadata_access_key";
+const PACKAGE_HASH_KEY: &str = "package_hash_key";
+const PACKAGE_ACCESS_KEY: &str = "package_access_key";
 const CONTRACT_CODE: &str = "contract_code_test";
 const SESSION_CODE: &str = "session_code_test";
 const NEW_KEY: &str = "new_key";
+const NAMED_KEY: &str = "contract_named_key";
 
 #[no_mangle]
 pub extern "C" fn session_code_test() {
-    assert!(runtime::get_key(METADATA_HASH_KEY).is_some());
-    assert!(runtime::get_key(METADATA_ACCESS_KEY).is_some());
-    assert!(runtime::get_key("contract_named_key").is_none());
+    assert!(runtime::get_key(PACKAGE_HASH_KEY).is_some());
+    assert!(runtime::get_key(PACKAGE_ACCESS_KEY).is_some());
+    assert!(runtime::get_key(NAMED_KEY).is_none());
 }
 
 #[no_mangle]
 pub extern "C" fn contract_code_test() {
-    assert!(runtime::get_key(METADATA_HASH_KEY).is_none());
-    assert!(runtime::get_key(METADATA_ACCESS_KEY).is_none());
-
-    assert!(runtime::get_key("contract_named_key").is_some());
+    assert!(runtime::get_key(PACKAGE_HASH_KEY).is_none());
+    assert!(runtime::get_key(PACKAGE_ACCESS_KEY).is_none());
+    assert!(runtime::get_key(NAMED_KEY).is_some());
 }
 
 #[no_mangle]
 pub extern "C" fn session_code_caller_as_session() {
-    let metadata_hash = runtime::get_key(METADATA_HASH_KEY)
-        .expect("should have metadata hash")
-        .into_seed();
+    let contract_package_hash = runtime::get_key(PACKAGE_HASH_KEY)
+        .expect("should have contract package key")
+        .into_hash()
+        .unwrap_or_revert();
+
     runtime::call_versioned_contract::<()>(
-        metadata_hash,
+        contract_package_hash,
         CONTRACT_INITIAL_VERSION,
         SESSION_CODE,
         runtime_args! {},
@@ -55,13 +60,14 @@ pub extern "C" fn add_new_key() {
 
 #[no_mangle]
 pub extern "C" fn add_new_key_as_session() {
-    let metadata_hash = runtime::get_key(METADATA_HASH_KEY)
+    let contract_package_hash = runtime::get_key(PACKAGE_HASH_KEY)
         .expect("should have metadata hash")
-        .into_seed();
+        .into_hash()
+        .unwrap_or_revert();
 
     assert!(runtime::get_key(NEW_KEY).is_none());
     runtime::call_versioned_contract::<()>(
-        metadata_hash,
+        contract_package_hash,
         CONTRACT_INITIAL_VERSION,
         "add_new_key",
         runtime_args! {},
@@ -71,10 +77,10 @@ pub extern "C" fn add_new_key_as_session() {
 
 #[no_mangle]
 pub extern "C" fn session_code_caller_as_contract() {
-    let metadata_hash_key: Key = runtime::get_named_arg("metadata_hash");
-    let metadata_hash = metadata_hash_key.into_seed();
+    let contract_package_key: Key = runtime::get_named_arg(PACKAGE_HASH_KEY);
+    let contract_package_hash = contract_package_key.into_hash().unwrap_or_revert();
     runtime::call_versioned_contract::<()>(
-        metadata_hash,
+        contract_package_hash,
         CONTRACT_INITIAL_VERSION,
         SESSION_CODE,
         runtime_args! {},
@@ -157,7 +163,7 @@ pub extern "C" fn call() {
     // Session contract
     let (contract_package_hash, access_uref) = storage::create_contract_package_at_hash();
 
-    runtime::put_key(METADATA_HASH_KEY, contract_package_hash.into());
-    runtime::put_key(METADATA_ACCESS_KEY, access_uref.into());
+    runtime::put_key(PACKAGE_HASH_KEY, contract_package_hash.into());
+    runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
     install_version_1(contract_package_hash, access_uref);
 }

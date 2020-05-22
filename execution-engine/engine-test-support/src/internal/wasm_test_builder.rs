@@ -47,7 +47,7 @@ use engine_storage::{
 };
 use types::{
     account::PublicKey,
-    bytesrepr::{self, ToBytes},
+    bytesrepr::{self},
     CLValue, Contract, ContractHash, Key, URef, U512,
 };
 
@@ -604,15 +604,6 @@ where
     }
 
     pub fn get_purse_balance(&self, purse: URef) -> U512 {
-        let mint = self.get_mint_contract_hash();
-        let mint_contract_value = self
-            .query(None, mint.into(), &[])
-            .expect("should have mint contract value");
-        let mint_contract = mint_contract_value
-            .as_contract()
-            .expect("should have mint contract");
-        let mint_package_hash = mint_contract.contract_package_hash();
-
         let purse_addr = purse.addr();
         // let purse_bytes =
         //     ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");

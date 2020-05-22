@@ -64,10 +64,6 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 4][..], None),
                 FunctionIndex::AddFuncIndex.into(),
             ),
-            "add_local" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 4][..], None),
-                FunctionIndex::AddLocalFuncIndex.into(),
-            ),
             "new_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 3][..], None),
                 FunctionIndex::NewFuncIndex.into(),

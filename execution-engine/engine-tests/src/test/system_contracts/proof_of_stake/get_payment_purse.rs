@@ -37,9 +37,9 @@ fn should_run_get_payment_purse_contract_account_1() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        runtime_args! { "target" =>ACCOUNT_1_ADDR, "amount" => U512::from(ACCOUNT_1_INITIAL_BALANCE) }
+        runtime_args! { "target" =>ACCOUNT_1_ADDR, "amount" => U512::from(ACCOUNT_1_INITIAL_BALANCE) },
     )
-    .build();
+        .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_POS_GET_PAYMENT_PURSE,

@@ -76,9 +76,9 @@ fn should_run_successful_bond_and_unbond() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
-        runtime_args! { "target" =>String::from(TEST_BOND), "amount" => U512::from(GENESIS_ACCOUNT_STAKE) }
+        runtime_args! { "target" =>String::from(TEST_BOND), "amount" => U512::from(GENESIS_ACCOUNT_STAKE) },
     )
-    .build();
+        .build();
 
     let mut builder = InMemoryWasmTestBuilder::from_result(result);
 

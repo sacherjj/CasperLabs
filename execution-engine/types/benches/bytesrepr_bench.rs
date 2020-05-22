@@ -67,6 +67,7 @@ fn deserialize_vector_of_u8(b: &mut Bencher) {
 fn serialize_u8(b: &mut Bencher) {
     b.iter(|| ToBytes::to_bytes(black_box(&129u8)));
 }
+
 #[bench]
 fn deserialize_u8(b: &mut Bencher) {
     b.iter(|| u8::from_bytes(black_box(&[129u8])));
@@ -76,6 +77,7 @@ fn deserialize_u8(b: &mut Bencher) {
 fn serialize_i32(b: &mut Bencher) {
     b.iter(|| ToBytes::to_bytes(black_box(&1_816_142_132i32)));
 }
+
 #[bench]
 fn deserialize_i32(b: &mut Bencher) {
     b.iter(|| i32::from_bytes(black_box(&[0x34, 0x21, 0x40, 0x6c])));
@@ -85,6 +87,7 @@ fn deserialize_i32(b: &mut Bencher) {
 fn serialize_u64(b: &mut Bencher) {
     b.iter(|| ToBytes::to_bytes(black_box(&14_157_907_845_468_752_670u64)));
 }
+
 #[bench]
 fn deserialize_u64(b: &mut Bencher) {
     b.iter(|| u64::from_bytes(black_box(&[0x1e, 0x8b, 0xe1, 0x73, 0x2c, 0xfe, 0x7a, 0xc4])));
@@ -96,6 +99,7 @@ fn serialize_some_u64(b: &mut Bencher) {
 
     b.iter(|| ToBytes::to_bytes(black_box(&data)));
 }
+
 #[bench]
 fn deserialize_some_u64(b: &mut Bencher) {
     let data = Some(14_157_907_845_468_752_670u64);
@@ -240,6 +244,7 @@ fn serialize_key_hash(b: &mut Bencher) {
     let hash = Key::Hash([0u8; 32]);
     b.iter(|| ToBytes::to_bytes(black_box(&hash)))
 }
+
 #[bench]
 fn deserialize_key_hash(b: &mut Bencher) {
     let hash = Key::Hash([0u8; 32]);
@@ -253,6 +258,7 @@ fn serialize_key_uref(b: &mut Bencher) {
     let uref = Key::URef(URef::new([0u8; 32], AccessRights::ADD_WRITE));
     b.iter(|| ToBytes::to_bytes(black_box(&uref)))
 }
+
 #[bench]
 fn deserialize_key_uref(b: &mut Bencher) {
     let uref = Key::URef(URef::new([0u8; 32], AccessRights::ADD_WRITE));
@@ -282,51 +288,62 @@ fn deserialize_vec_of_keys(b: &mut Bencher) {
 fn serialize_access_rights_read(b: &mut Bencher) {
     b.iter(|| AccessRights::READ.to_bytes());
 }
+
 #[bench]
 fn deserialize_access_rights_read(b: &mut Bencher) {
     let data = AccessRights::READ.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
+
 #[bench]
 fn serialize_access_rights_write(b: &mut Bencher) {
     b.iter(|| AccessRights::WRITE.to_bytes());
 }
+
 #[bench]
 fn deserialize_access_rights_write(b: &mut Bencher) {
     let data = AccessRights::WRITE.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
+
 #[bench]
 fn serialize_access_rights_add(b: &mut Bencher) {
     b.iter(|| AccessRights::ADD.to_bytes());
 }
+
 #[bench]
 fn deserialize_access_rights_add(b: &mut Bencher) {
     let data = AccessRights::ADD.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
+
 #[bench]
 fn serialize_access_rights_read_add(b: &mut Bencher) {
     b.iter(|| AccessRights::READ_ADD.to_bytes());
 }
+
 #[bench]
 fn deserialize_access_rights_read_add(b: &mut Bencher) {
     let data = AccessRights::READ_ADD.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
+
 #[bench]
 fn serialize_access_rights_read_write(b: &mut Bencher) {
     b.iter(|| AccessRights::READ_WRITE.to_bytes());
 }
+
 #[bench]
 fn deserialize_access_rights_read_write(b: &mut Bencher) {
     let data = AccessRights::READ_WRITE.to_bytes().unwrap();
     b.iter(|| AccessRights::from_bytes(&data));
 }
+
 #[bench]
 fn serialize_access_rights_add_write(b: &mut Bencher) {
     b.iter(|| AccessRights::ADD_WRITE.to_bytes());
 }
+
 #[bench]
 fn deserialize_access_rights_add_write(b: &mut Bencher) {
     let data = AccessRights::ADD_WRITE.to_bytes().unwrap();

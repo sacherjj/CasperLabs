@@ -22,7 +22,7 @@ use types::{
     },
     bytesrepr, AccessRights, BlockTime, CLType, CLValue, Contract, ContractPackage,
     EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
-    KEY_LOCAL_SEED_LENGTH,
+    KEY_HASH_LENGTH,
 };
 
 use crate::{
@@ -93,11 +93,8 @@ pub struct RuntimeContext<'a, R> {
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
-    // Key that is used for seeding local key seeds.
-    // For contracts it's using contract package hash, and account's public key otherwise
-    seed_key: Key,
     blocktime: BlockTime,
-    deploy_hash: [u8; 32],
+    deploy_hash: [u8; KEY_HASH_LENGTH],
     gas_limit: Gas,
     gas_counter: Gas,
     hash_address_generator: Rc<RefCell<AddressGenerator>>,
@@ -124,9 +121,8 @@ where
         authorization_keys: BTreeSet<PublicKey>,
         account: &'a Account,
         base_key: Key,
-        seed_key: Key,
         blocktime: BlockTime,
-        deploy_hash: [u8; 32],
+        deploy_hash: [u8; KEY_HASH_LENGTH],
         gas_limit: Gas,
         gas_counter: Gas,
         hash_address_generator: Rc<RefCell<AddressGenerator>>,
@@ -147,7 +143,6 @@ where
             blocktime,
             deploy_hash,
             base_key,
-            seed_key,
             gas_limit,
             gas_counter,
             hash_address_generator,
@@ -233,12 +228,11 @@ where
                 let contract: Contract = self.read_gs_typed(&contract_hash)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
-            }
-            // contract_local @ Key::Local { .. } => {
-            //     let contract: Contract = self.read_gs_typed(&contract_local)?;
-            //     self.named_keys.remove(name);
-            //     self.remove_key_from_contract(contract_local, contract, name)
-            // }
+            } /* contract_local @ Key::Local { .. } => {
+               *     let contract: Contract = self.read_gs_typed(&contract_local)?;
+               *     self.named_keys.remove(name);
+               *     self.remove_key_from_contract(contract_local, contract, name)
+               * } */
         }
     }
 
@@ -250,7 +244,7 @@ where
         self.blocktime
     }
 
-    pub fn get_deployhash(&self) -> [u8; 32] {
+    pub fn get_deploy_hash(&self) -> [u8; KEY_HASH_LENGTH] {
         self.deploy_hash
     }
 
@@ -294,10 +288,6 @@ where
         self.base_key
     }
 
-    pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
-        self.seed_key.into_seed()
-    }
-
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_version
     }
@@ -311,12 +301,12 @@ where
     }
 
     /// Generates new deterministic hash for uses as an address.
-    pub fn new_hash_address(&mut self) -> Result<[u8; 32], Error> {
+    pub fn new_hash_address(&mut self) -> Result<[u8; KEY_HASH_LENGTH], Error> {
         let pre_hash_bytes = self.hash_address_generator.borrow_mut().create_address();
 
-        let mut hasher = VarBlake2b::new(32).unwrap();
+        let mut hasher = VarBlake2b::new(KEY_HASH_LENGTH).unwrap();
         hasher.input(&pre_hash_bytes);
-        let mut hash_bytes = [0; 32];
+        let mut hash_bytes = [0; KEY_HASH_LENGTH];
         hasher.variable_result(|hash| hash_bytes.clone_from_slice(hash));
         Ok(hash_bytes)
     }
@@ -351,56 +341,40 @@ where
     }
 
     pub fn read_ls(&mut self, key_bytes: &[u8]) -> Result<Option<CLValue>, Error> {
-
-        if key_bytes.len() != 32 {
-            return Err(Error::InvalidContext);
+        let actual_length = key_bytes.len();
+        if actual_length != KEY_HASH_LENGTH {
+            return Err(Error::InvalidKeyLength {
+                actual: actual_length,
+                expected: KEY_HASH_LENGTH,
+            });
         }
-        let hash : [u8; 32] = key_bytes.try_into().unwrap();
-        let key  : Key = hash.into();
+        let hash: [u8; KEY_HASH_LENGTH] = key_bytes.try_into().unwrap();
+        let key: Key = hash.into();
         let maybe_stored_value = self
             .tracking_copy
             .borrow_mut()
             .read(self.correlation_id, &key)
             .map_err(Into::into)?;
 
-
-        
         if let Some(stored_value) = maybe_stored_value {
             Ok(Some(stored_value.try_into().map_err(Error::TypeMismatch)?))
         } else {
             Ok(None)
         }
 
-
         // let seed = self.seed();
         // self.read_ls_with_seed(seed, key)
     }
 
-    /// DO NOT EXPOSE THIS VIA THE FFI
-    // pub fn read_ls_with_seed(
-    //     &mut self,
-    //     seed: [u8; KEY_LOCAL_SEED_LENGTH],
-    //     key_bytes: &[u8],
-    // ) -> Result<Option<CLValue>, Error> {
-    //     let key = Key::local(seed, key_bytes);
-    //     let maybe_stored_value = self
-    //         .tracking_copy
-    //         .borrow_mut()
-    //         .read(self.correlation_id, &key)
-    //         .map_err(Into::into)?;
-
-    //     if let Some(stored_value) = maybe_stored_value {
-    //         Ok(Some(stored_value.try_into().map_err(Error::TypeMismatch)?))
-    //     } else {
-    //         Ok(None)
-    //     }
-    // }
-
     pub fn write_ls(&mut self, key_bytes: &[u8], cl_value: CLValue) -> Result<(), Error> {
-        if key_bytes.len() != 32 {
-            return Err(Error::InvalidContext);
+        let actual_length = key_bytes.len();
+        if actual_length != KEY_HASH_LENGTH {
+            return Err(Error::InvalidKeyLength {
+                actual: actual_length,
+                expected: KEY_HASH_LENGTH,
+            });
         }
-        let hash : [u8; 32] = key_bytes.try_into().unwrap();
+        let hash: [u8; KEY_HASH_LENGTH] = key_bytes.try_into().unwrap();
         // let seed = self.seed();
         // let hash = hash()
         // let key = Key::Hash(key_bytes);
@@ -481,12 +455,18 @@ where
         }
     }
 
-    pub fn store_function(&mut self, contract: StoredValue) -> Result<[u8; 32], Error> {
+    pub fn store_function(
+        &mut self,
+        contract: StoredValue,
+    ) -> Result<[u8; KEY_HASH_LENGTH], Error> {
         self.validate_value(&contract)?;
         self.new_uref(contract).map(|uref| uref.addr())
     }
 
-    pub fn store_function_at_hash(&mut self, contract: StoredValue) -> Result<[u8; 32], Error> {
+    pub fn store_function_at_hash(
+        &mut self,
+        contract: StoredValue,
+    ) -> Result<[u8; KEY_HASH_LENGTH], Error> {
         let new_hash = self.new_hash_address()?;
         self.validate_value(&contract)?;
         let hash_key = Key::Hash(new_hash);
@@ -681,13 +661,6 @@ where
         self.validate_key(&key)?;
         self.validate_value(&value)?;
         self.add_unsafe(key, value)
-    }
-
-    pub fn add_ls(&mut self, key_bytes: &[u8], cl_value: CLValue) -> Result<(), Error> {
-        // let seed = self.seed();
-        // let key = Key::local(seed, key_bytes);
-        let addr: [u8; 32] = key_bytes.try_into().expect("should have 32 bytes");
-        self.add_unsafe(addr.into(), StoredValue::CLValue(cl_value))
     }
 
     fn add_unsafe(&mut self, key: Key, value: StoredValue) -> Result<(), Error> {

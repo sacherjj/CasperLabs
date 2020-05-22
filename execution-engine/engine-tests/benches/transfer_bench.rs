@@ -13,7 +13,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, URef, U512, runtime_args, RuntimeArgs};
+use types::{account::PublicKey, runtime_args, Key, RuntimeArgs, URef, U512};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";
@@ -24,6 +24,7 @@ const CONTRACT_TRANSFER_TO_PURSE: &str = "transfer_to_purse.wasm";
 const TRANSFER_BATCH_SIZE: u64 = 3;
 const PER_RUN_FUNDING: u64 = 10_000_000;
 const TARGET_ADDR: PublicKey = PublicKey::ed25519_from([127; 32]);
+const ARG_AMOUNT: &str = "amount";
 
 /// Converts an integer into an array of type [u8; 32] by converting integer
 /// into its big endian representation and embedding it at the end of the

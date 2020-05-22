@@ -3,6 +3,7 @@
 
 #[macro_use]
 extern crate alloc;
+
 use alloc::string::ToString;
 
 use contract::contract_api::{runtime, storage};

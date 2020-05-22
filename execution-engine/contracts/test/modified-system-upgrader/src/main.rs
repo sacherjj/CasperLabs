@@ -12,8 +12,9 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contracts::{Parameters, NamedKeys}, CLType, CLValue, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Parameter, URef,
+    contracts::{NamedKeys, Parameters},
+    CLType, CLValue, ContractHash, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints,
+    Parameter, URef,
 };
 
 pub const MODIFIED_MINT_EXT_FUNCTION_NAME: &str = "modified_mint_ext";
@@ -77,10 +78,10 @@ fn upgrade_mint() -> ContractHash {
         Parameters::new(),
         CLType::String,
         EntryPointAccess::Public,
-        EntryPointType::Contract
+        EntryPointType::Contract,
     );
     entry_points.add_entry_point(entry_point);
-    
+
     let named_keys = NamedKeys::new();
     storage::add_contract_version(mint_package_hash, mint_access_key, entry_points, named_keys)
 }
@@ -90,10 +91,6 @@ fn upgrade_proof_of_stake() -> ContractHash {
         ARG_ACCOUNT_KEY, ARG_AMOUNT, ARG_PURSE, METHOD_BOND, METHOD_FINALIZE_PAYMENT,
         METHOD_GET_PAYMENT_PURSE, METHOD_GET_REFUND_PURSE, METHOD_SET_REFUND_PURSE, METHOD_UNBOND,
     };
-
-    const ARG_MINT_METADATA_HASH: &str = "mint_contract_metadata_hash";
-    const ARG_GENESIS_VALIDATORS: &str = "genesis_validators";
-    const ENTRY_POINT_MINT: &str = "mint";
 
     const HASH_KEY_NAME: &str = "pos_hash";
     const ACCESS_KEY_NAME: &str = "pos_access";
@@ -212,7 +209,6 @@ fn upgrade_standard_payment() -> ContractHash {
     const HASH_KEY_NAME: &str = "standard_payment_hash";
     const ACCESS_KEY_NAME: &str = "standard_payment_access";
     const ARG_AMOUNT: &str = "amount";
-    const METHOD_CALL: &str = "call";
 
     let standard_payment_package_hash: ContractHash = runtime::get_key(HASH_KEY_NAME)
         .expect("should have mint")

@@ -1481,7 +1481,7 @@ where
     fn get_arg_size(&mut self, index: usize, size_ptr: u32) -> Result<Result<(), ApiError>, Trap> {
         let arg_size = match self.context.args().get_positional(index) {
             Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
-                return Ok(Err(ApiError::OutOfMemory))
+                return Ok(Err(ApiError::OutOfMemory));
             }
             None => return Ok(Err(ApiError::MissingArgument)),
             Some(arg) => arg.inner_bytes().len() as u32,
@@ -1734,12 +1734,8 @@ where
         let authorization_keys = self.context.authorization_keys().to_owned();
         let account = self.context.account();
         let base_key = self.protocol_data().mint().into();
-        let seed_key = {
-            let contract: Contract = self.context.read_gs_typed(&base_key)?;
-            contract.contract_package_hash().into()
-        };
         let blocktime = self.context.get_blocktime();
-        let deploy_hash = self.context.get_deployhash();
+        let deploy_hash = self.context.get_deploy_hash();
         let gas_limit = self.context.gas_limit();
         let gas_counter = self.context.gas_counter();
         let fn_store_id = self.context.fn_store_id();
@@ -1757,7 +1753,6 @@ where
             authorization_keys,
             account,
             base_key,
-            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -1831,12 +1826,8 @@ where
         let authorization_keys = self.context.authorization_keys().to_owned();
         let account = self.context.account();
         let base_key = self.protocol_data().proof_of_stake().into();
-        let seed_key = {
-            let contract: Contract = self.context.read_gs_typed(&base_key)?;
-            contract.contract_package_hash().into()
-        };
         let blocktime = self.context.get_blocktime();
-        let deploy_hash = self.context.get_deployhash();
+        let deploy_hash = self.context.get_deploy_hash();
         let gas_limit = self.context.gas_limit();
         let gas_counter = self.context.gas_counter();
         let fn_store_id = self.context.fn_store_id();
@@ -1854,7 +1845,6 @@ where
             authorization_keys,
             account,
             base_key,
-            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -1958,7 +1948,7 @@ where
                 return Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a contract",
                     key
-                )))
+                )));
             }
             None => return Err(Error::KeyNotFound(key)),
         };
@@ -1969,13 +1959,10 @@ where
             .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
         let context_key = self.get_context_key_for_contract_call(contract_hash, &entry_point)?;
-        let seed_key =
-            self.get_seed_key_for_contract_call(contract.contract_package_hash(), &entry_point);
 
         self.execute_contract(
             key,
             context_key,
-            seed_key,
             contract,
             args,
             entry_point,
@@ -2001,7 +1988,7 @@ where
                 return Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a versioned contract",
                     contract_package_hash
-                )))
+                )));
             }
             None => return Err(Error::KeyNotFound(key)),
         };
@@ -2025,7 +2012,7 @@ where
                 return Err(Error::FunctionNotFound(format!(
                     "Value at {:?} is not a contract",
                     contract_package_hash
-                )))
+                )));
             }
             None => return Err(Error::KeyNotFound(key)),
         };
@@ -2050,12 +2037,10 @@ where
         }
 
         let context_key = self.get_context_key_for_contract_call(contract_hash, &entry_point)?;
-        let seed_key =
-            self.get_seed_key_for_contract_call(contract.contract_package_hash(), &entry_point);
+
         self.execute_contract(
             context_key,
             context_key,
-            seed_key,
             contract,
             args,
             entry_point,
@@ -2084,22 +2069,10 @@ where
         }
     }
 
-    fn get_seed_key_for_contract_call(
-        &self,
-        contract_package_hash: ContractPackageHash,
-        entry_point: &EntryPoint,
-    ) -> Key {
-        match entry_point.entry_point_type() {
-            EntryPointType::Session => self.context.base_key(),
-            EntryPointType::Contract => contract_package_hash.into(),
-        }
-    }
-
     fn execute_contract(
         &mut self,
         key: Key,
         base_key: Key,
-        seed_key: Key,
         contract: Contract,
         args: RuntimeArgs,
         entry_point: EntryPoint,
@@ -2107,7 +2080,6 @@ where
     ) -> Result<CLValue, Error> {
         // Check for major version compatibility before calling
         if !contract.is_compatible_protocol_version(protocol_version) {
-            println!("incompatible 2  {:?} {:?}", protocol_version, contract);
             return Err(Error::IncompatibleProtocolMajorVersion {
                 actual: contract.protocol_version().value().major,
                 expected: protocol_version.value().major,
@@ -2161,7 +2133,7 @@ where
                     return Err(Error::FunctionNotFound(format!(
                         "Value at {:?} is not contract wasm",
                         key
-                    )))
+                    )));
                 }
                 None => return Err(Error::KeyNotFound(key)),
             };
@@ -2203,9 +2175,8 @@ where
             self.context.authorization_keys().clone(),
             &self.context.account(),
             base_key,
-            seed_key,
             self.context.get_blocktime(),
-            self.context.get_deployhash(),
+            self.context.get_deploy_hash(),
             self.context.gas_limit(),
             self.context.gas_counter(),
             self.context.fn_store_id(),
@@ -2692,22 +2663,6 @@ where
             .map_err(Into::into)
     }
 
-    /// Adds `value` to the cell pointed to by a key derived from `key` in the "local cluster" of
-    /// GlobalState
-    pub fn add_local(
-        &mut self,
-        key_ptr: u32,
-        key_size: u32,
-        value_ptr: u32,
-        value_size: u32,
-    ) -> Result<(), Trap> {
-        let key_bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
-        let cl_value = self.cl_value_from_mem(value_ptr, value_size)?;
-        self.context
-            .add_ls(&key_bytes, cl_value)
-            .map_err(Into::into)
-    }
-
     /// Reads value from the GS living under key specified by `key_ptr` and
     /// `key_size`. Wasm and host communicate through memory that Wasm
     /// module exports. If contract wants to pass data to the host, it has
@@ -3084,13 +3039,13 @@ where
     fn get_balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {
         // let seed = {
         //     let mint_contract_hash = self.get_mint_contract();
-        //     let mint_contract: Contract = self.context.read_gs_typed(&mint_contract_hash.into())?;
-        //     mint_contract.contract_package_hash()
-        // };
+        //     let mint_contract: Contract =
+        // self.context.read_gs_typed(&mint_contract_hash.into())?;     mint_contract.
+        // contract_package_hash() };
 
         let key = purse.addr();
 
-        let uref_key = match self.context.read_ls( &key)? {
+        let uref_key = match self.context.read_ls(&key)? {
             Some(cl_value) => {
                 let key: Key = cl_value.into_t().expect("expected Key type");
                 match key {
@@ -3291,7 +3246,7 @@ where
 
         let arg_size = match self.context.args().get(&name) {
             Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
-                return Ok(Err(ApiError::OutOfMemory))
+                return Ok(Err(ApiError::OutOfMemory));
             }
             Some(arg) => arg.inner_bytes().len() as u32,
             None => return Ok(Err(ApiError::MissingArgument)),

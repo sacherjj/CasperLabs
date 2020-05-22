@@ -2,7 +2,7 @@ use engine_core::{engine_state, execution};
 use engine_test_support::{
     internal::{
         DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, ARG_AMOUNT,
-        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
+        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -45,8 +45,7 @@ fn should_raise_auth_failure_with_invalid_key() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
+            .with_empty_payment_bytes(
                 runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
             )
             .with_session_code(CONTRACT_AUTHORIZED_KEYS, runtime_args! { "key_management_threshold" => Weight::new(1), "deploy_threshold" => Weight::new(1) })
@@ -95,8 +94,7 @@ fn should_raise_auth_failure_with_invalid_keys() {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
+            .with_empty_payment_bytes(
                 runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
             )
             .with_session_code("authorized_keys.wasm", runtime_args! { "key_management_threshold" => Weight::new(1), "deploy_threshold" => Weight::new(1) })
@@ -165,7 +163,7 @@ fn should_raise_deploy_authorization_failure() {
         CONTRACT_AUTHORIZED_KEYS,
         runtime_args! { "key_management_threshold" => Weight::new(4), "deploy_threshold" => Weight::new(3) },
     )
-    .build();
+        .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
@@ -191,7 +189,7 @@ fn should_raise_deploy_authorization_failure() {
         CONTRACT_AUTHORIZED_KEYS,
         runtime_args! { "key_management_threshold" => Weight::new(5), "deploy_threshold" => Weight::new(4) }, //args
     )
-    .build();
+        .build();
 
     // With deploy threshold == 3 using single secondary key
     // with weight == 2 should raise deploy authorization failure.
@@ -218,8 +216,7 @@ fn should_raise_deploy_authorization_failure() {
     let exec_request_6 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
+            .with_empty_payment_bytes(
                 runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
             )
             // change deployment threshold to 4
@@ -241,7 +238,7 @@ fn should_raise_deploy_authorization_failure() {
         CONTRACT_AUTHORIZED_KEYS,
         runtime_args! { "key_management_threshold" => Weight::new(0), "deploy_threshold" => Weight::new(0) }, //args
     )
-    .build();
+        .build();
 
     // deployment threshold is now 4
     // failure: key_2 weight + key_1 weight < deployment threshold
@@ -269,8 +266,7 @@ fn should_raise_deploy_authorization_failure() {
     let exec_request_8 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
+            .with_empty_payment_bytes(
                 runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
             )
             // change deployment threshold to 4
@@ -365,7 +361,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
         CONTRACT_AUTHORIZED_KEYS,
         runtime_args! { "key_management_threshold" => Weight::new(4), "deploy_threshold" => Weight::new(3) },
     )
-    .build();
+        .build();
     // Basic deploy with single key
     let result1 = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)
@@ -381,8 +377,7 @@ fn should_not_authorize_deploy_with_duplicated_keys() {
     let exec_request_3 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
+            .with_empty_payment_bytes(
                 runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
             )
             .with_session_code("authorized_keys.wasm", runtime_args! { "key_management_threshold" => Weight::new(0), "deploy_threshold" => Weight::new(0) })

@@ -2,6 +2,7 @@
 #![no_main]
 
 extern crate alloc;
+
 use alloc::{string::ToString, vec};
 
 use alloc::string::String;
@@ -13,6 +14,7 @@ use contract::{
 use types::{
     CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter,
 };
+
 pub const METHOD_ADD: &str = "add";
 pub const METHOD_REMOVE: &str = "remove";
 pub const METHOD_VERSION: &str = "version";

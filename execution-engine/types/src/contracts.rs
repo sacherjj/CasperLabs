@@ -4,8 +4,8 @@ use crate::{
     alloc::string::ToString,
     bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
     uref::URef,
-    CLType, ContractHash, ContractPackageHash, ContractWasmHash, Key,
-    ProtocolVersion, KEY_HASH_LENGTH,
+    CLType, ContractHash, ContractPackageHash, ContractWasmHash, Key, ProtocolVersion,
+    KEY_HASH_LENGTH,
 };
 use alloc::{
     collections::{BTreeMap, BTreeSet},
@@ -591,6 +591,18 @@ impl FromBytes for Contract {
     }
 }
 
+impl Default for Contract {
+    fn default() -> Self {
+        Contract {
+            named_keys: NamedKeys::default(),
+            entry_points: EntryPoints::default(),
+            contract_wasm_hash: [0; KEY_HASH_LENGTH],
+            contract_package_hash: [0; KEY_HASH_LENGTH],
+            protocol_version: ProtocolVersion::V1_0_0,
+        }
+    }
+}
+
 /// Context of method execution
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -628,7 +640,7 @@ impl FromBytes for EntryPointType {
 pub const DEFAULT_ENTRY_POINT_NAME: &str = "call";
 
 /// Default name for an installer entry point
-pub const INSTALL_ENTRY_POINT_NAME: &str = "install";
+pub const ENTRY_POINT_NAME_INSTALL: &str = "install";
 
 /// Default name for an upgrader entry point
 pub const UPGRADE_ENTRY_POINT_NAME: &str = "upgrade";

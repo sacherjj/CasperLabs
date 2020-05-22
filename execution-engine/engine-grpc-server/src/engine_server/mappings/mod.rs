@@ -23,16 +23,6 @@ pub(crate) fn vec_to_array(input: Vec<u8>, input_name: &str) -> Result<[u8; 32],
         .map_err(|_| format!("{} must be 32 bytes.", input_name).into())
 }
 
-/// Try to convert a `Vec<u8>` to a 64-byte array.
-pub(crate) fn vec_to_array64(input: Vec<u8>, input_name: &str) -> Result<[u8; 64], ParsingError> {
-    if input.len() != 64 {
-        return Err(format!("{} must be 64 bytes.", input_name).into());
-    }
-    let mut result = [0; 64];
-    result.copy_from_slice(&input);
-    Ok(result)
-}
-
 #[derive(Debug)]
 pub enum MappingError {
     InvalidStateHashLength { expected: usize, actual: usize },

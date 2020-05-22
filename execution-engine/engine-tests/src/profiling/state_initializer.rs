@@ -13,7 +13,7 @@ use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, ARG_AMOUNT,
         DEFAULT_ACCOUNTS, DEFAULT_GENESIS_CONFIG_HASH, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION,
-        DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT, STANDARD_PAYMENT_CONTRACT,
+        DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT,
         STANDARD_PAYMENT_INSTALL_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
@@ -57,10 +57,7 @@ fn main() {
                     account_2_public_key,
                 ),
             )
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
-                runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
-            )
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[genesis_public_key])
             .build();
 

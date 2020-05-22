@@ -4,17 +4,12 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::boxed::Box;
-
 use alloc::collections::BTreeMap;
 use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{
-    contracts::NamedKeys, CLType, CLValue, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Parameter, URef,
-};
+use types::{contracts::NamedKeys, CLValue, ContractHash, URef};
 
 pub const MODIFIED_MINT_EXT_FUNCTION_NAME: &str = "modified_mint_ext";
 pub const POS_EXT_FUNCTION_NAME: &str = "pos_ext";

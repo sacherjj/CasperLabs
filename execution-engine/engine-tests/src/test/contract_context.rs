@@ -10,12 +10,11 @@ use engine_test_support::{
 use types::{contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key, RuntimeArgs};
 
 const CONTRACT_HEADERS: &str = "contract_context.wasm";
-const METADATA_HASH_KEY: &str = "metadata_hash_key";
-const METADATA_ACCESS_KEY: &str = "metadata_access_key";
+const PACKAGE_HASH_KEY: &str = "package_hash_key";
+const PACKAGE_ACCESS_KEY: &str = "package_access_key";
 const SESSION_CODE_TEST: &str = "session_code_test";
 const CONTRACT_CODE_TEST: &str = "contract_code_test";
 const ADD_NEW_KEY_AS_SESSION: &str = "add_new_key_as_session";
-const METADATA_HASH_ARG: &str = "metadata_hash";
 const NEW_KEY: &str = "new_key";
 const SESSION_CODE_CALLER_AS_CONTRACT: &str = "session_code_caller_as_contract";
 const ARG_AMOUNT: &str = "amount";
@@ -33,7 +32,7 @@ fn should_calling_session_and_contract_has_correct_context() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 SESSION_CODE_TEST,
                 args,
@@ -51,7 +50,7 @@ fn should_calling_session_and_contract_has_correct_context() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 CONTRACT_CODE_TEST,
                 args,
@@ -69,7 +68,7 @@ fn should_calling_session_and_contract_has_correct_context() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 ADD_NEW_KEY_AS_SESSION,
                 args,
@@ -102,11 +101,11 @@ fn should_calling_session_and_contract_has_correct_context() {
 
     let _metadata_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
+        .get(PACKAGE_HASH_KEY)
         .expect("should have contract metadata");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
+        .get(PACKAGE_ACCESS_KEY)
         .expect("should have metadata hash");
 
     let account = builder
@@ -143,20 +142,20 @@ fn should_not_call_session_from_contract() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let contract_package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
+        .get(PACKAGE_HASH_KEY)
         .cloned()
-        .expect("should have contract metadata");
+        .expect("should have contract package");
 
     let exec_request_2 = {
         let args = runtime_args! {
-            METADATA_HASH_ARG => metadata_hash,
+            PACKAGE_HASH_KEY => contract_package_hash,
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 SESSION_CODE_CALLER_AS_CONTRACT,
                 args,

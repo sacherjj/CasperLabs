@@ -1,7 +1,7 @@
 use engine_test_support::{
     internal::{
         DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, ARG_AMOUNT,
-        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
+        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -22,10 +22,7 @@ fn do_pass(pass: &str) -> (URef, URef) {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
-                runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
-            )
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_session_code(
                 EE_441_RNG_STATE,
                 runtime_args! {

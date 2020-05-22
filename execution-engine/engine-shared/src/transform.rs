@@ -686,7 +686,7 @@ mod tests {
             ONE_U128,
             add(
                 ZERO_U128,
-                U256::from_dec_str(&MAX_U128.to_string()).unwrap() + 2
+                U256::from_dec_str(&MAX_U128.to_string()).unwrap() + 2,
             )
         );
         assert_eq!(MAX_U128, add(ZERO_U128, MAX_U256));
@@ -697,7 +697,7 @@ mod tests {
             ONE_U128,
             add(
                 ZERO_U128,
-                U512::from_dec_str(&MAX_U128.to_string()).unwrap() + 2
+                U512::from_dec_str(&MAX_U128.to_string()).unwrap() + 2,
             )
         );
         assert_eq!(MAX_U128, add(ZERO_U128, MAX_U512));
@@ -724,7 +724,7 @@ mod tests {
             ONE_U256,
             add(
                 ZERO_U256,
-                U512::from_dec_str(&MAX_U256.to_string()).unwrap() + 2
+                U512::from_dec_str(&MAX_U256.to_string()).unwrap() + 2,
             )
         );
         assert_eq!(MAX_U256, add(ZERO_U256, MAX_U512));

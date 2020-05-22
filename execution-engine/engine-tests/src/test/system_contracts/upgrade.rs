@@ -11,7 +11,7 @@ use engine_test_support::{internal::ExecuteRequestBuilder, DEFAULT_ACCOUNT_ADDR}
 use engine_wasm_prep::wasm_costs::WasmCosts;
 use types::ProtocolVersion;
 #[cfg(feature = "use-system-contracts")]
-use types::{CLValue, Key, U512, runtime_args, RuntimeArgs};
+use types::{runtime_args, CLValue, Key, RuntimeArgs, U512};
 
 const PROTOCOL_VERSION: ProtocolVersion = ProtocolVersion::V1_0_0;
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
@@ -20,7 +20,6 @@ const MODIFIED_SYSTEM_UPGRADER_CONTRACT_NAME: &str = "modified_system_upgrader.w
 const MODIFIED_MINT_CALLER_CONTRACT_NAME: &str = "modified_mint_caller.wasm";
 #[cfg(feature = "use-system-contracts")]
 const PAYMENT_AMOUNT: u64 = 200_000_000;
-const ARG_AMOUNT: &str = "amount";
 
 fn get_upgraded_wasm_costs() -> WasmCosts {
     WasmCosts {
@@ -113,7 +112,7 @@ fn should_upgrade_system_contract() {
         ExecuteRequestBuilder::standard(
             DEFAULT_ACCOUNT_ADDR,
             &MODIFIED_MINT_CALLER_CONTRACT_NAME,
-            runtime_args! { ARG_AMOUNT => U512::from(PAYMENT_AMOUNT) }
+            runtime_args! { "amount" => U512::from(PAYMENT_AMOUNT) },
         )
         .with_protocol_version(new_protocol_version)
         .build()

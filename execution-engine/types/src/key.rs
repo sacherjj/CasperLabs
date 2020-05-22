@@ -1,10 +1,6 @@
 use alloc::{format, string::String, vec::Vec};
 use core::fmt::{self, Debug, Display, Formatter};
 
-use blake2::{
-    digest::{Input, VariableOutput},
-    VarBlake2b,
-};
 use hex_fmt::HexFmt;
 
 use crate::{
@@ -16,32 +12,16 @@ use crate::{
 const ACCOUNT_ID: u8 = 0;
 const HASH_ID: u8 = 1;
 const UREF_ID: u8 = 2;
-// const LOCAL_ID: u8 = 3;
 
 /// The number of bytes in a Blake2b hash
 pub const BLAKE2B_DIGEST_LENGTH: usize = 32;
 /// The number of bytes in a [`Key::Hash`].
 pub const KEY_HASH_LENGTH: usize = 32;
-/// The number of bytes in a [`Key::Local`].
-pub const KEY_LOCAL_LENGTH: usize = 64;
-/// The number of bytes in the seed for a new [`Key::Local`].
-pub const KEY_LOCAL_SEED_LENGTH: usize = 32;
 
-const KEY_ID_SERIALIZED_LENGTH: usize = 1; // u8 used to determine the ID
+const KEY_ID_SERIALIZED_LENGTH: usize = 1;
+// u8 used to determine the ID
 const KEY_HASH_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + KEY_HASH_LENGTH;
 const KEY_UREF_SERIALIZED_LENGTH: usize = KEY_ID_SERIALIZED_LENGTH + UREF_SERIALIZED_LENGTH;
-const KEY_LOCAL_SERIALIZED_LENGTH: usize =
-    KEY_ID_SERIALIZED_LENGTH + KEY_LOCAL_SEED_LENGTH + BLAKE2B_DIGEST_LENGTH;
-
-/// Creates a 32-byte BLAKE2b hash digest from a given a piece of data
-fn hash(bytes: &[u8]) -> [u8; BLAKE2B_DIGEST_LENGTH] {
-    let mut ret = [0u8; BLAKE2B_DIGEST_LENGTH];
-    // Safe to unwrap here because our digest length is constant and valid
-    let mut hasher = VarBlake2b::new(BLAKE2B_DIGEST_LENGTH).unwrap();
-    hasher.input(bytes);
-    hasher.variable_result(|hash| ret.clone_from_slice(hash));
-    ret
-}
 
 /// An alias for [`Key`]s hash variant.
 pub type HashAddr = [u8; KEY_HASH_LENGTH];
@@ -70,27 +50,13 @@ pub enum Key {
     Hash(HashAddr),
     /// A `Key` which is a [`URef`], under which most types of data can be stored.
     URef(URef),
-    // ContractPackage(ContractPackageHash),
-    // Contract(ContractHash),
-
-    // Local {
-    //     /// A value derived from the base key defining the local context.
-    //     seed: [u8; KEY_LOCAL_SEED_LENGTH],
-    //     /// A hash identifying the stored data.
-    //     hash: [u8; BLAKE2B_DIGEST_LENGTH],
-    // },
+    /* todo!(add contract related keys)
+    ContractPackage(ContractPackageHash),
+    ContractWasm(ContractWasmHash),
+    Contract(ContractHash), */
 }
 
 impl Key {
-    /// Constructs a new [`Key::Local`] by hashing `seed` concatenated with `key_bytes`.
-    // pub fn local(seed: [u8; KEY_LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
-    //     let key_hash = hash(&key_bytes);
-    //     Key::Local {
-    //         seed,
-    //         hash: key_hash,
-    //     }
-    // }
-
     // This method is not intended to be used by third party crates.
     #[doc(hidden)]
     pub fn type_string(&self) -> String {
@@ -103,7 +69,7 @@ impl Key {
 
     /// Returns the maximum size a [`Key`] can be serialized into.
     pub const fn max_serialized_length() -> usize {
-        KEY_LOCAL_SERIALIZED_LENGTH
+        KEY_UREF_SERIALIZED_LENGTH
     }
 
     /// If `self` is of type [`Key::URef`], returns `self` with the [`AccessRights`] stripped from
@@ -162,27 +128,12 @@ impl Key {
         }
     }
 
-    // /// Returns the inner bytes of `self` if `self` is of type [`Key::Local`], otherwise returns
-    // /// `None`.
-    // pub fn into_local(self) -> Option<[u8; KEY_LOCAL_LENGTH]> {
-    //     match self {
-    //         Key::Local { seed, hash } => {
-    //             let mut result = [0; KEY_LOCAL_LENGTH];
-    //             result[..KEY_LOCAL_SEED_LENGTH].copy_from_slice(&seed);
-    //             result[KEY_LOCAL_SEED_LENGTH..].copy_from_slice(&hash);
-    //             Some(result)
-    //         }
-    //         _ => None,
-    //     }
-    // }
-
     /// Creates the seed of a local key for a context with the given base key.
-    pub fn into_seed(self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
+    pub fn into_seed(self) -> [u8; BLAKE2B_DIGEST_LENGTH] {
         match self {
             Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
-            // Key::Local { seed, .. } => seed,
         }
     }
 }
@@ -193,8 +144,6 @@ impl Display for Key {
             Key::Account(PublicKey::Ed25519(ed25519)) => write!(f, "Key::Account({})", ed25519),
             Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
             Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
-            // URef(…).
-            // Key::Local { seed, hash } => write!(f, "Key::Local({}{})", HexFmt(seed), HexFmt(hash)),
         }
     }
 }
@@ -211,13 +160,11 @@ impl From<URef> for Key {
     }
 }
 
-
 impl From<PublicKey> for Key {
     fn from(public_key: PublicKey) -> Key {
         Key::Account(public_key)
     }
 }
-
 
 impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
@@ -235,11 +182,6 @@ impl ToBytes for Key {
                 result.push(UREF_ID);
                 result.append(&mut uref.to_bytes()?);
             }
-            // Key::Local { seed, hash } => {
-            //     result.push(LOCAL_ID);
-            //     result.append(&mut seed.to_bytes()?);
-            //     result.append(&mut hash.to_bytes()?);
-            // }
         }
         Ok(result)
     }
@@ -249,7 +191,6 @@ impl ToBytes for Key {
             Key::Account(public_key) => KEY_ID_SERIALIZED_LENGTH + public_key.serialized_length(),
             Key::Hash(_) => KEY_HASH_SERIALIZED_LENGTH,
             Key::URef(_) => KEY_UREF_SERIALIZED_LENGTH,
-            // Key::Local { .. } => KEY_LOCAL_SERIALIZED_LENGTH,
         }
     }
 }
@@ -270,11 +211,6 @@ impl FromBytes for Key {
                 let (uref, rem) = URef::from_bytes(remainder)?;
                 Ok((Key::URef(uref), rem))
             }
-            // LOCAL_ID => {
-            //     let (seed, remainder) = <[u8; KEY_LOCAL_SEED_LENGTH]>::from_bytes(remainder)?;
-            //     let (hash, remainder) = <[u8; BLAKE2B_DIGEST_LENGTH]>::from_bytes(remainder)?;
-            //     Ok((Key::Local { seed, hash }, remainder))
-            // }
             _ => Err(Error::Formatting),
         }
     }
@@ -353,15 +289,6 @@ mod tests {
             format!("{}", hash_key),
             format!("Key::Hash({})", expected_hash)
         );
-        let expected_hash = core::iter::repeat("0").take(128).collect::<String>();
-        // let local_key = Key::Local {
-        //     seed: addr_array,
-        //     hash: addr_array,
-        // };
-        // assert_eq!(
-        //     format!("{}", local_key),
-        //     format!("Key::Local({})", expected_hash)
-        // );
     }
 
     #[test]
@@ -383,7 +310,6 @@ mod tests {
         assert_eq!(key1.into_account(), Some(public_key));
         assert!(key1.into_hash().is_none());
         assert!(key1.as_uref().is_none());
-        // assert!(key1.into_local().is_none());
     }
 
     #[test]
@@ -393,7 +319,6 @@ mod tests {
         assert!(key1.into_account().is_none());
         assert_eq!(key1.into_hash(), Some(hash));
         assert!(key1.as_uref().is_none());
-        // assert!(key1.into_local().is_none());
     }
 
     #[test]
@@ -403,34 +328,17 @@ mod tests {
         assert!(key1.into_account().is_none());
         assert!(key1.into_hash().is_none());
         assert_eq!(key1.as_uref(), Some(&uref));
-        // assert!(key1.into_local().is_none());
     }
-
-    // #[test]
-    // fn check_key_local_getters() {
-    //     let local = [42; KEY_LOCAL_LENGTH];
-    //     let key1 = Key::Local {
-    //         seed: [42; KEY_LOCAL_SEED_LENGTH],
-    //         hash: [42; BLAKE2B_DIGEST_LENGTH],
-    //     };
-    //     assert!(key1.into_account().is_none());
-    //     assert!(key1.into_hash().is_none());
-    //     assert!(key1.as_uref().is_none());
-    //     assert_eq!(key1.into_local().map(|x| x.to_vec()), Some(local.to_vec()));
-    // }
 
     #[test]
     fn key_max_serialized_length() {
-        let key_account = Key::Account(PublicKey::ed25519_from([42; 32]));
-        assert!(key_account.serialized_length() < Key::max_serialized_length());
+        let key_account = Key::Account(PublicKey::ed25519_from([42; BLAKE2B_DIGEST_LENGTH]));
+        assert!(key_account.serialized_length() <= Key::max_serialized_length());
 
-        let key_hash = Key::Hash([42; 32]);
-        assert!(key_hash.serialized_length() < Key::max_serialized_length());
+        let key_hash = Key::Hash([42; KEY_HASH_LENGTH]);
+        assert!(key_hash.serialized_length() <= Key::max_serialized_length());
 
-        let key_uref = Key::URef(URef::new([42; 32], AccessRights::READ));
-        assert!(key_uref.serialized_length() < Key::max_serialized_length());
-
-        // let key_local = Key::local([42; 32], &[42; 32]);
-        // assert_eq!(key_local.serialized_length(), Key::max_serialized_length());
+        let key_uref = Key::URef(URef::new([42; BLAKE2B_DIGEST_LENGTH], AccessRights::READ));
+        assert!(key_uref.serialized_length() <= Key::max_serialized_length());
     }
 }

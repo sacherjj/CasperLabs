@@ -25,7 +25,6 @@ const ARG_PURSE_NAME: &str = "purse_name";
 /// Alternate payment logic that allows payment from a purse other than the executing [Account]'s
 /// main purse. A `Key::Uref` to the source purse must already exist in the executing context's
 /// named keys under the name passed in as the `purse_name` argument.
-
 #[no_mangle]
 pub extern "C" fn call() {
     // source purse uref by name (from current context's named keys)

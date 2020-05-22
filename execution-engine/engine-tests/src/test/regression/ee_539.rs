@@ -16,7 +16,7 @@ fn should_run_ee_539_serialize_action_thresholds_regression() {
         CONTRACT_EE_539_REGRESSION,
         runtime_args! { "key_management_threshold" => Weight::new(4), "deploy_threshold" => Weight::new(3) },
     )
-    .build();
+        .build();
 
     let _result = InMemoryWasmTestBuilder::default()
         .run_genesis(&DEFAULT_RUN_GENESIS_REQUEST)

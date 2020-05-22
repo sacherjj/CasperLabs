@@ -69,7 +69,6 @@ where
     let protocol_version = ProtocolVersion::V1_0_0;
     let correlation_id = CorrelationId::new();
     let base_key = Key::Account(address);
-    let seed_key = base_key;
 
     let account = builder.get_account(address).expect("should find account");
 
@@ -98,7 +97,6 @@ where
         BTreeSet::new(),
         &account,
         base_key,
-        seed_key,
         BlockTime::new(block_time),
         deploy_hash,
         gas_limit,

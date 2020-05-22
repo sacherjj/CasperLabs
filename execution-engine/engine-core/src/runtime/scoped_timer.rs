@@ -91,7 +91,6 @@ impl Drop for ScopedTimer {
             FunctionIndex::ReadFuncIndex => "host_function_read_value",
             FunctionIndex::ReadLocalFuncIndex => "host_function_read_value_local",
             FunctionIndex::AddFuncIndex => "host_function_add",
-            FunctionIndex::AddLocalFuncIndex => "host_function_add_local",
             FunctionIndex::NewFuncIndex => "host_function_new_uref",
             FunctionIndex::RetFuncIndex => "host_function_ret",
             FunctionIndex::CallContractFuncIndex => "host_function_call_contract",

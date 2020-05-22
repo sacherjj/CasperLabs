@@ -87,7 +87,6 @@ impl Executor {
         entry_point: EntryPoint,
         args: RuntimeArgs,
         base_key: Key,
-        seed_key: Key,
         account: &Account,
         mut named_keys: BTreeMap<String, Key>,
         authorization_keys: BTreeSet<PublicKey>,
@@ -141,7 +140,6 @@ impl Executor {
             authorization_keys,
             &account,
             base_key,
-            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -180,14 +178,14 @@ impl Executor {
                         return ExecutionResult::Success {
                             effect: runtime.context().effect(),
                             cost: runtime.context().gas_counter(),
-                        }
+                        };
                     }
                     Err(error) => {
                         return ExecutionResult::Failure {
                             error: error.into(),
                             effect: effects_snapshot,
                             cost: runtime.context().gas_counter(),
-                        }
+                        };
                     }
                 }
             } else if runtime.is_proof_of_stake(base_key) {
@@ -202,14 +200,14 @@ impl Executor {
                         return ExecutionResult::Success {
                             effect: runtime.context().effect(),
                             cost: runtime.context().gas_counter(),
-                        }
+                        };
                     }
                     Err(error) => {
                         return ExecutionResult::Failure {
                             error: error.into(),
                             effect: effects_snapshot,
                             cost: runtime.context().gas_counter(),
-                        }
+                        };
                     }
                 }
             }
@@ -233,7 +231,6 @@ impl Executor {
         args: RuntimeArgs,
         named_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
-        seed_key: Key,
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
@@ -283,7 +280,6 @@ impl Executor {
             authorization_keys,
             &account,
             base_key,
-            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -321,14 +317,14 @@ impl Executor {
                     return ExecutionResult::Success {
                         effect: runtime.context().effect(),
                         cost: runtime.context().gas_counter(),
-                    }
+                    };
                 }
                 Err(error) => {
                     return ExecutionResult::Failure {
                         error: error.into(),
                         effect: effects_snapshot,
                         cost: runtime.context().gas_counter(),
-                    }
+                    };
                 }
             }
         }
@@ -339,7 +335,7 @@ impl Executor {
                 return ExecutionResult::Success {
                     effect: runtime.context().effect(),
                     cost: runtime.context().gas_counter(),
-                }
+                };
             }
         };
 
@@ -364,7 +360,7 @@ impl Executor {
                         error: error.clone().into(),
                         effect: effects_snapshot,
                         cost: runtime.context().gas_counter(),
-                    }
+                    };
                 }
             }
         }
@@ -383,7 +379,6 @@ impl Executor {
         args: RuntimeArgs,
         named_keys: &'a mut BTreeMap<String, Key>,
         base_key: Key,
-        seed_key: Key,
         account: &'a Account,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
@@ -418,7 +413,6 @@ impl Executor {
             authorization_keys,
             account,
             base_key,
-            seed_key,
             blocktime,
             deploy_hash,
             gas_limit,
@@ -470,7 +464,6 @@ impl Executor {
     {
         let mut named_keys: NamedKeys = account.named_keys().clone();
         let base_key = account.public_key().into();
-        let seed_key = account.public_key().into();
 
         let (instance, mut runtime) = self.create_runtime(
             module,
@@ -478,7 +471,6 @@ impl Executor {
             args,
             &mut named_keys,
             base_key,
-            seed_key,
             account,
             authorization_keys,
             blocktime,

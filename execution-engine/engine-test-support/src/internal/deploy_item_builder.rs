@@ -6,10 +6,8 @@ use engine_core::{
     DeployHash,
 };
 use types::{
-    account::PublicKey,
-    bytesrepr::ToBytes,
-    contracts::{ContractVersion, DEFAULT_ENTRY_POINT_NAME},
-    ContractHash, HashAddr, RuntimeArgs, URef,
+    account::PublicKey, bytesrepr::ToBytes, contracts::ContractVersion, ContractHash, HashAddr,
+    RuntimeArgs, URef,
 };
 
 use crate::internal::utils;
@@ -81,7 +79,12 @@ impl DeployItemBuilder {
         todo!("with_stored_payment_uref")
     }
 
-    pub fn with_stored_payment_named_key(mut self, uref_name: &str, entry_point_name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_stored_payment_named_key(
+        mut self,
+        uref_name: &str,
+        entry_point_name: &str,
+        args: impl ArgsParser,
+    ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByName {
             name: uref_name.to_owned(),
@@ -130,7 +133,12 @@ impl DeployItemBuilder {
         todo!("with_stored_session_uref")
     }
 
-    pub fn with_stored_session_named_key(mut self, name: &str, entry_point: &str, args: impl ArgsParser) -> Self {
+    pub fn with_stored_session_named_key(
+        mut self,
+        name: &str,
+        entry_point: &str,
+        args: impl ArgsParser,
+    ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByName {
             name: name.to_owned(),

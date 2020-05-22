@@ -82,6 +82,11 @@ pub enum Error {
     NoSuchMethod(String),
     #[fail(display = "Wasm preprocessing error: {}", _0)]
     WasmPreprocessing(engine_wasm_prep::PreprocessingError),
+    #[fail(
+        display = "Unexpected Key length. Expected length {} but actual length is {}",
+        expected, actual
+    )]
+    InvalidKeyLength { expected: usize, actual: usize },
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {

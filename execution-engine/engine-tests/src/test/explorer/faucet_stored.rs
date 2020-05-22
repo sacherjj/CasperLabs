@@ -9,7 +9,6 @@ use types::{account::PublicKey, runtime_args, ApiError, RuntimeArgs, U512};
 
 const FAUCET: &str = "faucet";
 const CALL_FAUCET: &str = "call_faucet";
-const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const NEW_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([99u8; 32]);
 
 fn get_builder() -> InMemoryWasmTestBuilder {
@@ -58,10 +57,7 @@ fn should_get_funds_from_faucet_stored() {
                 CALL_FAUCET,
                 runtime_args! { "target" => NEW_ACCOUNT_ADDR, "amount" => amount },
             )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                runtime_args! { "amount" => U512::from(10_000_000) },
-            )
+            .with_empty_payment_bytes(runtime_args! { "amount" => U512::from(10_000_000) })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
@@ -112,10 +108,7 @@ fn should_fail_if_already_funded() {
                 CALL_FAUCET,
                 runtime_args! { "target" => NEW_ACCOUNT_ADDR, "amount" => amount },
             )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                runtime_args! { "amount" => U512::from(10_000_000) },
-            )
+            .with_empty_payment_bytes(runtime_args! { "amount" => U512::from(10_000_000) })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();
@@ -135,10 +128,7 @@ fn should_fail_if_already_funded() {
                 CALL_FAUCET,
                 runtime_args! { "target" => NEW_ACCOUNT_ADDR, "amount" => amount },
             )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                runtime_args! { "amount" => U512::from(10_000_000) },
-            )
+            .with_empty_payment_bytes(runtime_args! { "amount" => U512::from(10_000_000) })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();

@@ -1,4 +1,3 @@
-use crate::error::Error;
 use engine_wasm_prep::wasm_costs::{WasmCosts, WASM_COSTS_SERIALIZED_LENGTH};
 use std::collections::BTreeMap;
 use types::{

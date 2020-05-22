@@ -180,7 +180,6 @@ fn should_add_all_gas_for_subcall() {
 fn expensive_subcall_should_cost_more() {
     const DO_NOTHING: &str = "do_nothing_stored.wasm";
     const EXPENSIVE_CALCULATION: &str = "expensive_calculation.wasm";
-    const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
     const DO_NOTHING_PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
     const EXPENSIVE_CALCULATION_KEY: &str = "expensive-calculation";
     const ENTRY_FUNCTION_NAME: &str = "delegate";

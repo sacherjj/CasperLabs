@@ -10,7 +10,6 @@ use engine_test_support::{
 use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT_NAME: &str = "transfer_to_account";
-const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 
 #[ignore]
@@ -62,12 +61,9 @@ fn should_transfer_to_account_stored() {
                 "transfer",
                 runtime_args! { "target" => ACCOUNT_1_ADDR, "amount" => transferred_amount },
             )
-            .with_payment_code(
-                &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
-                runtime_args! {
-                    "amount" => U512::from(payment_purse_amount),
-                },
-            )
+            .with_empty_payment_bytes(runtime_args! {
+                "amount" => U512::from(payment_purse_amount),
+            })
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .with_deploy_hash([2; 32])
             .build();

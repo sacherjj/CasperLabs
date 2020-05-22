@@ -22,15 +22,21 @@ pub enum ExecutableDeployItem {
         args: Vec<u8>,
     },
     StoredVersionedContractByName {
-        name: String,             // named key storing contract metadata hash
-        version: ContractVersion, // finds active version
-        entry_point: String,      // finds header by entry point name
+        name: String,
+        // named key storing contract metadata hash
+        version: ContractVersion,
+        // finds active version
+        entry_point: String,
+        // finds header by entry point name
         args: Vec<u8>,
     },
     StoredVersionedContractByHash {
-        hash: ContractPackageHash, // named key storing contract metadata hash
-        version: ContractVersion,  // finds active version
-        entry_point: String,       // finds header by entry point name
+        hash: ContractPackageHash,
+        // named key storing contract metadata hash
+        version: ContractVersion,
+        // finds active version
+        entry_point: String,
+        // finds header by entry point name
         args: Vec<u8>,
     },
 }

@@ -1,7 +1,7 @@
 use engine_test_support::{
     internal::{
         DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, ARG_AMOUNT,
-        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST, STANDARD_PAYMENT_CONTRACT,
+        DEFAULT_PAYMENT, DEFAULT_RUN_GENESIS_REQUEST,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -46,10 +46,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
-                runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, },
-            )
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             // This test verifies that all key management operations succeed
             .with_session_code(
                 "key_management_thresholds.wasm",

@@ -24,7 +24,7 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
     AccessRights, BlockTime, CLValue, Contract, EntryPointType, EntryPoints, Key, Phase,
-    ProtocolVersion, RuntimeArgs, URef, KEY_LOCAL_SEED_LENGTH,
+    ProtocolVersion, RuntimeArgs, URef, KEY_HASH_LENGTH,
 };
 
 use super::{Address, Error, RuntimeContext};
@@ -102,16 +102,15 @@ fn create_uref(address_generator: &mut AddressGenerator, rights: AccessRights) -
     Key::URef(URef::new(address, rights))
 }
 
-fn random_local_key<G: RngCore>(entropy_source: &mut G, seed: [u8; KEY_LOCAL_SEED_LENGTH]) -> Key {
-    let mut key = [0u8; 64];
+fn random_hash<G: RngCore>(entropy_source: &mut G) -> Key {
+    let mut key = [0u8; KEY_HASH_LENGTH];
     entropy_source.fill_bytes(&mut key);
-    Key::local(seed, &key)
+    Key::Hash(key)
 }
 
 fn mock_runtime_context<'a>(
     account: &'a Account,
     base_key: Key,
-    seed_key: Key,
     named_keys: &'a mut BTreeMap<String, Key>,
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     hash_address_generator: AddressGenerator,
@@ -127,7 +126,6 @@ fn mock_runtime_context<'a>(
         BTreeSet::from_iter(vec![PublicKey::ed25519_from([0; 32])]),
         &account,
         base_key,
-        seed_key,
         BlockTime::new(0),
         [1u8; 32],
         Gas::default(),
@@ -166,14 +164,13 @@ where
 {
     let deploy_hash = [1u8; 32];
     let (base_key, account) = mock_account(PublicKey::ed25519_from([0u8; 32]));
-    let seed_key = base_key;
+
     let mut named_keys = BTreeMap::new();
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
         &account,
         base_key,
-        seed_key,
         &mut named_keys,
         access_rights,
         hash_address_generator,
@@ -332,7 +329,6 @@ fn contract_key_addable_valid() {
 
     let mut rng = rand::thread_rng();
     let contract_key = random_contract_key(&mut rng);
-    let seed_key = random_contract_key(&mut rng);
     let contract = StoredValue::Contract(Contract::default());
 
     let tracking_copy = Rc::new(RefCell::new(mock_tracking_copy(
@@ -358,7 +354,6 @@ fn contract_key_addable_valid() {
         authorization_keys,
         &account,
         contract_key,
-        seed_key,
         BlockTime::new(0),
         DEPLOY_HASH,
         Gas::default(),
@@ -405,7 +400,6 @@ fn contract_key_addable_invalid() {
     let contract_key = random_contract_key(&mut rng);
 
     let other_contract_key = random_contract_key(&mut rng);
-    let other_contract_package_key = random_contract_key(&mut rng);
     let contract = StoredValue::Contract(Contract::default());
     let tracking_copy = Rc::new(RefCell::new(mock_tracking_copy(
         account_key,
@@ -430,7 +424,6 @@ fn contract_key_addable_invalid() {
         authorization_keys,
         &account,
         other_contract_key,
-        other_contract_package_key,
         BlockTime::new(0),
         DEPLOY_HASH,
         Gas::default(),
@@ -528,80 +521,38 @@ fn uref_key_addable_invalid() {
 }
 
 #[test]
-fn local_key_writeable_valid() {
-    let access_rights = HashMap::new();
+fn hash_key_readable() {
+    // values under hash's are universally readable
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = runtime_context.seed();
-        let key = random_local_key(&mut rng, seed);
-        runtime_context.validate_writeable(&key)
-    };
-    let query_result = test(access_rights, query);
-    assert!(query_result.is_err())
-}
-
-#[test]
-fn local_key_writeable_invalid() {
-    let access_rights = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
-        let mut rng = rand::thread_rng();
-        let seed = [1u8; KEY_LOCAL_SEED_LENGTH];
-        let key = random_local_key(&mut rng, seed);
-        runtime_context.validate_writeable(&key)
-    };
-    let query_result = test(access_rights, query);
-    assert!(query_result.is_err())
-}
-
-#[test]
-fn local_key_readable_valid() {
-    let access_rights = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
-        let mut rng = rand::thread_rng();
-        let seed = runtime_context.seed();
-        let key = random_local_key(&mut rng, seed);
+        let key = random_hash(&mut rng);
         runtime_context.validate_readable(&key)
     };
-    let query_result = test(access_rights, query);
-    assert!(query_result.is_err())
+    let query_result = test(HashMap::new(), query);
+    assert!(query_result.is_ok())
 }
 
 #[test]
-fn local_key_readable_invalid() {
-    let access_rights = HashMap::new();
+fn hash_key_writeable() {
+    // values under hash's are immutable
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = [1u8; KEY_LOCAL_SEED_LENGTH];
-        let key = random_local_key(&mut rng, seed);
-        runtime_context.validate_readable(&key)
+        let key = random_hash(&mut rng);
+        runtime_context.validate_writeable(&key)
     };
-    let query_result = test(access_rights, query);
+    let query_result = test(HashMap::new(), query);
     assert!(query_result.is_err())
 }
 
 #[test]
-fn local_key_addable_valid() {
-    let access_rights = HashMap::new();
+fn hash_key_addable_invalid() {
+    // values under hashes are immutable
     let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         let mut rng = rand::thread_rng();
-        let seed = runtime_context.seed();
-        let key = random_local_key(&mut rng, seed);
+        let key = random_hash(&mut rng);
         runtime_context.validate_addable(&key)
     };
-    let query_result = test(access_rights, query);
-    assert!(query_result.is_err())
-}
-
-#[test]
-fn local_key_addable_invalid() {
-    let access_rights = HashMap::new();
-    let query = |runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
-        let mut rng = rand::thread_rng();
-        let seed = [1u8; KEY_LOCAL_SEED_LENGTH];
-        let key = random_local_key(&mut rng, seed);
-        runtime_context.validate_addable(&key)
-    };
-    let query_result = test(access_rights, query);
+    let query_result = test(HashMap::new(), query);
     assert!(query_result.is_err())
 }
 
@@ -786,17 +737,18 @@ fn should_verify_ownership_before_setting_action_threshold() {
 }
 
 #[test]
-fn can_roundtrip_key_value_pairs_into_local_state() {
+fn can_roundtrip_key_value_pairs() {
     let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
-        let test_key = b"test_key";
+        let mut rng = rand::thread_rng();
+        let test_key = random_hash(&mut rng).into_hash().expect("should be hash");
         let test_value = CLValue::from_t("test_value".to_string()).unwrap();
 
         runtime_context
-            .write_ls(test_key, test_value.clone())
+            .write_ls(&test_key, test_value.clone())
             .expect("should write_ls");
 
-        let result = runtime_context.read_ls(test_key).expect("should read_ls");
+        let result = runtime_context.read_ls(&test_key).expect("should read_ls");
 
         Ok(result == Some(test_value))
     };
@@ -813,7 +765,6 @@ fn remove_uref_works() {
     let access_rights = HashMap::new();
     let deploy_hash = [1u8; 32];
     let (base_key, account) = mock_account(PublicKey::ed25519_from([0u8; 32]));
-    let seed_key = base_key;
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let mut uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_name = "Foo".to_owned();
@@ -822,7 +773,6 @@ fn remove_uref_works() {
     let mut runtime_context = mock_runtime_context(
         &account,
         base_key,
-        seed_key,
         &mut named_keys,
         access_rights,
         hash_address_generator,
@@ -850,14 +800,12 @@ fn validate_valid_purse_of_an_account() {
     let deploy_hash = [1u8; 32];
     let (base_key, account) =
         mock_account_with_purse(PublicKey::ed25519_from([0u8; 32]), mock_purse);
-    let seed_key = base_key;
     let mut named_keys = BTreeMap::new();
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
         &account,
         base_key,
-        seed_key,
         &mut named_keys,
         access_rights,
         hash_address_generator,

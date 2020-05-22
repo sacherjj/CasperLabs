@@ -5,7 +5,7 @@ use engine_shared::motes::Motes;
 use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS,
-        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+        DEFAULT_PAYMENT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
@@ -54,10 +54,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(
-                STANDARD_PAYMENT_CONTRACT,
-                runtime_args! { ARG_AMOUNT => *ACCOUNT_1_FUND },
-            )
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *ACCOUNT_1_FUND })
             .with_session_code(
                 "ee_598_regression.wasm",
                 runtime_args! { ARG_AMOUNT => *ACCOUNT_1_BOND },

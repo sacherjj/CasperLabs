@@ -44,6 +44,7 @@ pub extern "C" fn call() {
         _ => runtime::revert(ApiError::User(Error::UnknownCommand as u16)),
     }
 }
+
 fn bond() {
     let pos_contract_hash = system::get_proof_of_stake();
     // Creates new purse with desired amount based on main purse and sends funds

@@ -42,7 +42,8 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    let do_nothing_package_hash = runtime::get_key(DO_NOTHING_PACKAGE_HASH_KEY_NAME).unwrap_or_revert();
+    let do_nothing_package_hash =
+        runtime::get_key(DO_NOTHING_PACKAGE_HASH_KEY_NAME).unwrap_or_revert();
 
     let do_nothing_uref = runtime::get_key(DO_NOTHING_ACCESS_KEY_NAME)
         .unwrap_or_revert()

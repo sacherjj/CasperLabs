@@ -1,5 +1,3 @@
-use std::convert::TryFrom;
-
 use engine_core::engine_state::CONV_RATE;
 use engine_shared::motes::Motes;
 use engine_test_support::{
@@ -9,9 +7,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{
-    account::PublicKey, bytesrepr::ToBytes, runtime_args, CLValue, Key, RuntimeArgs, U512,
-};
+use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";

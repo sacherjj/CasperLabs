@@ -3,7 +3,7 @@ use proptest::{arbitrary, array, collection, prop_oneof, strategy::Strategy};
 use engine_shared::{make_array_newtype, newtypes::Blake2bHash};
 use types::{
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
-    gens, URef, KEY_LOCAL_SEED_LENGTH,
+    gens, URef,
 };
 
 use super::{HashedTrie, TestValue};
@@ -20,12 +20,10 @@ const PUBLIC_KEY_FANCY_ID: u8 = 2;
 const PUBLIC_KEY_LONG_ID: u8 = 3;
 
 pub const KEY_HASH_LENGTH: usize = 32;
-pub const KEY_LOCAL_LENGTH: usize = 32;
 
 const KEY_ACCOUNT_ID: u8 = 0;
 const KEY_HASH_ID: u8 = 1;
 const KEY_UREF_ID: u8 = 2;
-const KEY_LOCAL_ID: u8 = 3;
 
 make_array_newtype!(Basic, u8, BASIC_LENGTH);
 make_array_newtype!(Similar, u8, SIMILAR_LENGTH);
@@ -148,15 +146,6 @@ pub enum TestKey {
     Account(PublicKey),
     Hash([u8; KEY_HASH_LENGTH]),
     URef(URef),
-    Local([u8; KEY_LOCAL_LENGTH]),
-}
-
-impl TestKey {
-    pub fn local(seed: [u8; KEY_LOCAL_SEED_LENGTH], key_bytes: &[u8]) -> Self {
-        let bytes_to_hash: Vec<u8> = seed.iter().chain(key_bytes.iter()).copied().collect();
-        let hash: [u8; KEY_LOCAL_LENGTH] = Blake2bHash::new(&bytes_to_hash).into();
-        TestKey::Local(hash)
-    }
 }
 
 impl ToBytes for TestKey {
@@ -175,10 +164,6 @@ impl ToBytes for TestKey {
                 ret.push(KEY_UREF_ID);
                 ret.extend(&uref.to_bytes()?)
             }
-            TestKey::Local(local) => {
-                ret.push(KEY_LOCAL_ID);
-                ret.extend(&local.to_bytes()?)
-            }
         }
         Ok(ret)
     }
@@ -189,7 +174,6 @@ impl ToBytes for TestKey {
                 TestKey::Account(public_key) => public_key.serialized_length(),
                 TestKey::Hash(hash) => hash.serialized_length(),
                 TestKey::URef(uref) => uref.serialized_length(),
-                TestKey::Local(local) => local.serialized_length(),
             }
     }
 }
@@ -210,10 +194,6 @@ impl FromBytes for TestKey {
                 let (uref, rem): (URef, &[u8]) = FromBytes::from_bytes(rem)?;
                 Ok((TestKey::URef(uref), rem))
             }
-            KEY_LOCAL_ID => {
-                let (local, rem): ([u8; KEY_LOCAL_LENGTH], &[u8]) = FromBytes::from_bytes(rem)?;
-                Ok((TestKey::Local(local), rem))
-            }
             _ => Err(bytesrepr::Error::Formatting),
         }
     }
@@ -224,8 +204,6 @@ fn test_key_arb() -> impl Strategy<Value = TestKey> {
         public_key_arb().prop_map(TestKey::Account),
         gens::u8_slice_32().prop_map(TestKey::Hash),
         gens::uref_arb().prop_map(TestKey::URef),
-        (gens::u8_slice_32(), gens::u8_slice_32())
-            .prop_map(|(seed, key)| TestKey::local(seed, &key))
     ]
 }
 

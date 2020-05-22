@@ -35,8 +35,6 @@ const VERBOSE_ARG_HELP: &str = "Display the transforms resulting from the contra
 
 const TRANSFER_AMOUNT: u64 = 1;
 
-const STANDARD_PAYMENT_WASM: &str = "standard_payment.wasm";
-
 fn root_hash_arg() -> Arg<'static, 'static> {
     Arg::with_name(ROOT_HASH_ARG_NAME)
         .value_name(ROOT_HASH_ARG_VALUE_NAME)
@@ -101,9 +99,9 @@ fn main() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "simple_transfer.wasm",
-                runtime_args! { "target" =>account_2_public_key, "amount" => U512::from(TRANSFER_AMOUNT) }
+                runtime_args! { "target" =>account_2_public_key, "amount" => U512::from(TRANSFER_AMOUNT) },
             )
-            .with_payment_code(STANDARD_PAYMENT_WASM, (*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes( runtime_args! { "amount" => *DEFAULT_PAYMENT})
             .with_authorization_keys(&[account_1_public_key])
             .build();
 

@@ -2,6 +2,7 @@
 #![no_main]
 
 extern crate alloc;
+
 use alloc::{boxed::Box, collections::BTreeMap, string::ToString, vec};
 
 use contract::{
