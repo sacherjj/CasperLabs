@@ -507,7 +507,7 @@ object ProtoUtil {
       .withState(state)
       .withJRank(jRank)
       .withMainRank(mainRank)
-      .withValidatorPublicKeyTemp(ByteString.copyFrom(creator.publicKey))
+      .withValidatorPublicKey(ByteString.copyFrom(creator.publicKey))
       .withValidatorPublicKeyHash(ByteString.copyFrom(creator.publicKeyHash))
       .withValidatorBlockSeqNum(validatorSeqNum)
       .withValidatorPrevBlockHash(validatorPrevBlockHash)

@@ -82,8 +82,8 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
 
     override lazy val bonds = List(
       // Our validators needs to be bonded in Genesis, so the blocks created by them don't get rejected.
-      Bond(thisValidator.publicKey).withStake(state.BigInt("10000")),
-      Bond(otherValidator.publicKey).withStake(state.BigInt("5000"))
+      Bond(thisValidator.publicKeyHash).withStake(state.BigInt("10000")),
+      Bond(otherValidator.publicKeyHash).withStake(state.BigInt("5000"))
     )
 
     // Make a message producer that's supposed to make valid blocks.
@@ -158,6 +158,7 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
               .withKeyBlockHash(keyBlockHash)
               .withRoundId(roundId)
               .withJRank(nextJRank)
+              .withValidatorPublicKey(keys.publicKey)
               .withValidatorPublicKeyHash(keys.publicKeyHash)
               .withValidatorBlockSeqNum(maybePrev.map(_.validatorMsgSeqNum + 1).getOrElse(1))
               .withValidatorPrevBlockHash(maybePrev.map(_.messageHash).getOrElse(ByteString.EMPTY))
@@ -274,7 +275,6 @@ class MessageExecutorSpec extends FlatSpec with Matchers with Inspectors with Hi
                      first.getHeader.keyBlockHash,
                      first.getHeader.roundId + 2
                    )
-
           _   <- validateAndAdd(blockA)
           eff <- messageExecutor.computeEffects(blockB, false)
           _   = eff._1 shouldBe EquivocatedBlock

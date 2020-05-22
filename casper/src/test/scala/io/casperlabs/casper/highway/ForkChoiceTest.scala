@@ -235,7 +235,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
       }
   }
 
-  it should "compute fork choice across mutliple eras (with equivocators)" in testFixture {
+  it should "compute fork choice across multiple eras (with equivocators)" in testFixture {
     implicit timer =>
       implicit db =>
         // Using the same DAG as in the previous test, but this time
@@ -278,7 +278,7 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
               forkChoice   <- ForkChoice.create[Task].fromKeyBlock(childEra.keyBlockHash)
               equivocators <- MessageProducer.collectEquivocators[Task](childEra.keyBlockHash)
             } yield {
-              assert(equivocators == Set(ByteString.copyFrom(Charlie._2)))
+              assert(equivocators == Set(charlie.validatorId))
               assert(forkChoice.block.messageHash == c4)
               val justifications = forkChoice.justifications.map(_.messageHash)
               // This is non-det b/c, when creating a new message in MessageProducer,
@@ -308,7 +308,8 @@ class ForkChoiceTest extends FlatSpec with HighwayFixture {
         .map { case (keys, stake) => keys._2 -> stake }
         .map {
           case (pk, stake) =>
-            Bond(ByteString.copyFrom(pk)).withStake(state.BigInt(stake.toString))
+            val hash = Ed25519.publicKeyHash(pk)
+            Bond(ByteString.copyFrom(hash)).withStake(state.BigInt(stake.toString))
         }
         .toList
 
