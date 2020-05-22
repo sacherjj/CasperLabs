@@ -128,10 +128,10 @@ trait ArbitraryConsensus {
 
   implicit val arbBond: Arbitrary[Bond] = Arbitrary {
     for {
-      validator <- Gen.oneOf(randomValidators)
+      validator <- genHash
       stake     <- arbitrary[Long]
     } yield Bond()
-      .withValidatorPublicKeyHash(validator.publicKeyHash)
+      .withValidatorPublicKeyHash(validator)
       .withStake(state.BigInt(stake.toString, bitWidth = 512))
   }
 

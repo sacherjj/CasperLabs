@@ -469,7 +469,9 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
 
   val genesis = {
     val block = sample(arbitrary[Block])
-    val bonds = sample(Gen.listOfN(5, arbitrary[Bond]))
+    val bonds = sample(Gen.pick(5, randomValidators)).map { v =>
+      sample[Bond].withValidatorPublicKeyHash(v.publicKeyHash)
+    }
     val state = block.getHeader.getState.withBonds(bonds)
     block.withHeader(block.getHeader.withState(state))
   }
