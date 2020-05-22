@@ -117,7 +117,6 @@ impl Drop for ScopedTimer {
             }
             FunctionIndex::GetBalanceIndex => "host_function_get_balance",
             FunctionIndex::GetPhaseIndex => "host_function_get_phase",
-            FunctionIndex::UpgradeContractAtURefIndex => "host_function_upgrade_contract_at_uref",
             FunctionIndex::GetSystemContractIndex => "host_function_get_system_contract",
             FunctionIndex::GetMainPurseIndex => "host_function_get_main_purse",
             FunctionIndex::ReadHostBufferIndex => "host_function_read_host_buffer",

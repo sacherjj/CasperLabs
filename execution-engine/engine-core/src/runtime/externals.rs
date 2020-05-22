@@ -347,23 +347,6 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::UpgradeContractAtURefIndex => {
-                // args(0) = pointer to name in Wasm memory
-                // args(1) = size of name in Wasm memory
-                // args(2) = pointer to key in Wasm memory
-                // args(3) = size of key
-                let (name_ptr, name_size, key_ptr, key_size): (_, u32, _, _) = Args::parse(args)?;
-                scoped_timer.add_property("name_size", name_size.to_string());
-                let ret = self.upgrade_contract_at_uref(
-                    name_ptr,
-                    name_size,
-                    key_ptr,
-                    key_size,
-                    &mut scoped_timer,
-                )?;
-                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
-            }
-
             FunctionIndex::GetSystemContractIndex => {
                 // args(0) = system contract index
                 // args(1) = dest pointer for storing serialized result

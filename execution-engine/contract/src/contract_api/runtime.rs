@@ -131,25 +131,6 @@ fn deserialize_contract_result<T: CLTyped + FromBytes>(bytes_written: usize) -> 
     bytesrepr::deserialize(serialized_result).unwrap_or_revert()
 }
 
-/// Takes the name of a (non-mangled) `extern "C"` function to store as a contract under the given
-/// [`URef`] which should already reference a stored contract.
-///
-/// If successful, this overwrites the value under `uref` with a new contract instance containing
-/// the original contract's named_keys, the current protocol version, and the newly created bytes of
-/// the stored function.
-pub fn upgrade_contract_at_uref(_name: &str, _uref: URef) {
-    todo!("contracts are no longer stored under urefs");
-    // let (name_ptr, name_size, _bytes) = contract_api::to_ptr(name);
-    // let key: Key = uref.into();
-    // let (key_ptr, key_size, _bytes) = contract_api::to_ptr(key);
-    // let result_value =
-    //     unsafe { ext_ffi::upgrade_contract_at_uref(name_ptr, name_size, key_ptr, key_size) };
-    // match api_error::result_from(result_value) {
-    //     Ok(()) => (),
-    //     Err(error) => revert(error),
-    // }
-}
-
 fn get_named_arg_size(name: &str) -> Option<usize> {
     let mut arg_size: usize = 0;
     let ret = unsafe {

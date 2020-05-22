@@ -827,24 +827,6 @@ where
         Ok(())
     }
 
-    pub fn upgrade_contract_at_uref(
-        &mut self,
-        _key: Key,
-        _bytes: Vec<u8>,
-        _named_keys: BTreeMap<String, Key>,
-    ) -> Result<(), Error> {
-        todo!("upgrade_contract_at_uref"); /* TODO: this method should be removed */
-        //     let protocol_version = self.protocol_version();
-        //     let contract = ContractWasm::new(bytes);
-        //     let contract = StoredValue::ContractWasm(contract_wasm);
-        //
-        //     self.validate_writeable(&key)?;
-        //     self.validate_key(&key)?;
-        //
-        //     self.tracking_copy.borrow_mut().write(key, contract);
-        //     Ok(())
-    }
-
     pub fn protocol_data(&self) -> ProtocolData {
         self.protocol_data
     }

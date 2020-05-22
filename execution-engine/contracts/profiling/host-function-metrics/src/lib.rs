@@ -149,12 +149,6 @@ pub extern "C" fn call() {
         runtime_args.clone(),
     );
 
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &large_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
-
     // Store large function with 10 named keys, then execute it.
     runtime::call_contract::<BTreeMap<String, Key>>(
         store_function(entry_point_name, Some(named_keys.clone())),
@@ -171,12 +165,6 @@ pub extern "C" fn call() {
     let entry_point_name = &small_function_name;
     let runtime_args = runtime_args! {};
 
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &small_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
-
     // Store small function with no named keys, then execute it.
     runtime::call_contract::<()>(
         store_function(entry_point_name, Some(BTreeMap::new())),
@@ -184,24 +172,12 @@ pub extern "C" fn call() {
         runtime_args.clone(),
     );
 
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &large_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
-
     // Store small function with 10 named keys, then execute it.
     runtime::call_contract::<()>(
         store_function(entry_point_name, Some(named_keys)),
         entry_point_name,
         runtime_args,
     );
-
-    // TODO: upgrade at uref is dead
-    // runtime::upgrade_contract_at_uref(
-    //     &small_function_name,
-    //     contract_ref.into_uref().unwrap_or_revert(),
-    // );
 
     // ========== functions from `account` module ==================================================
 

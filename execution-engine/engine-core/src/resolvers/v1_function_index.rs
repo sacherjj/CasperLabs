@@ -34,7 +34,6 @@ pub enum FunctionIndex {
     TransferFromPurseToPurseIndex,
     GetBalanceIndex,
     GetPhaseIndex,
-    UpgradeContractAtURefIndex,
     GetSystemContractIndex,
     GetMainPurseIndex,
     ReadHostBufferIndex,

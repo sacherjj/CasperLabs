@@ -3051,43 +3051,6 @@ where
         Ok(Ok(()))
     }
 
-    /// If key is in named_keys with AccessRights::Write, processes bytes from calling contract
-    /// and writes them at the provided uref, overwriting existing value if any
-    fn upgrade_contract_at_uref(
-        &mut self,
-        _name_ptr: u32,
-        _name_size: u32,
-        _key_ptr: u32,
-        _key_size: u32,
-        _scoped_timer: &mut ScopedTimer,
-    ) -> Result<Result<(), ApiError>, Trap> {
-        todo!("upgrade_contract_at_uref"); /* TODO: this method should be removed */
-        // let key = self.key_from_mem(key_ptr, key_size)?;
-        // let named_keys = match self.context.read_gs(&key)? {
-        //     None => Err(Error::KeyNotFound(key)),
-        //     Some(StoredValue::Contract(contract)) => {
-        //         let old_contract_size =
-        //             contract.named_keys().serialized_length() + contract.bytes().len();
-        //         scoped_timer.add_property("old_contract_size", old_contract_size.to_string());
-        //         Ok(contract.named_keys().clone())
-        //     }
-        //     Some(_) => Err(Error::FunctionNotFound(format!(
-        //         "Value at {:?} is not a contract",
-        //         key
-        //     ))),
-        // }?;
-        // let bytes = self.get_function_by_name(name_ptr, name_size)?;
-        // let new_contract_size = named_keys.serialized_length() + bytes.len();
-        // scoped_timer.add_property("new_contract_size", new_contract_size.to_string());
-        // match self
-        //     .context
-        //     .upgrade_contract_at_uref(key, bytes, named_keys)
-        // {
-        //     Ok(_) => Ok(Ok(())),
-        //     Err(_) => Ok(Err(ApiError::UpgradeContractAtURef)),
-        // }
-    }
-
     fn get_system_contract(
         &mut self,
         system_contract_index: u32,
