@@ -24,8 +24,12 @@ const ARG_AMOUNT: &str = "amount";
 fn should_calling_session_and_contract_has_correct_context() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_HEADERS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_HEADERS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let exec_request_2 = {
         let args = runtime_args! {};
@@ -126,8 +130,12 @@ fn should_calling_session_and_contract_has_correct_context() {
 fn should_not_call_session_from_contract() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_HEADERS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_HEADERS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 

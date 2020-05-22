@@ -40,8 +40,12 @@ lazy_static! {
 fn should_create_and_remove_group() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -142,8 +146,12 @@ fn should_create_and_remove_group() {
 fn should_create_and_extend_user_group() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -249,8 +257,12 @@ fn should_create_and_extend_user_group() {
 fn should_create_and_remove_urefs_from_group() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 
@@ -355,8 +367,12 @@ fn should_create_and_remove_urefs_from_group() {
 fn should_limit_max_urefs_while_extending() {
     // This test runs a contract that's after every call extends the same key with
     // more data
-    let exec_request_1 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_GROUPS, ()).build();
+    let exec_request_1 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_GROUPS,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     let mut builder = InMemoryWasmTestBuilder::default();
 

@@ -9,6 +9,7 @@ use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ARG_PAYMENT_AMOUNT: &str = "payment_amount";
 
 #[ignore]
 #[test]
@@ -54,8 +55,11 @@ fn refund_tests(builder: &mut InMemoryWasmTestBuilder, public_key: PublicKey) {
         let deploy = DeployItemBuilder::new()
             .with_address(public_key)
             .with_deploy_hash([2; 32])
-            .with_session_code("do_nothing.wasm", ())
-            .with_payment_code("pos_refund_purse.wasm", (*DEFAULT_PAYMENT,))
+            .with_session_code("do_nothing.wasm", RuntimeArgs::default())
+            .with_payment_code(
+                "pos_refund_purse.wasm",
+                runtime_args! { ARG_PAYMENT_AMOUNT => *DEFAULT_PAYMENT },
+            )
             .with_authorization_keys(&[public_key])
             .build();
 

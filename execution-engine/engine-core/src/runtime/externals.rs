@@ -105,24 +105,6 @@ where
                 Ok(None)
             }
 
-            FunctionIndex::GetArgSizeFuncIndex => {
-                // args(0) = index of host runtime arg to load
-                // args(1) = pointer to a argument size (output)
-                let (index, size_ptr): (u32, u32) = Args::parse(args)?;
-                let ret = self.get_arg_size(index as usize, size_ptr)?;
-                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
-            }
-
-            FunctionIndex::GetArgFuncIndex => {
-                // args(0) = index of host runtime arg to load
-                // args(1) = pointer to destination in Wasm memory
-                // args(2) = size of destination pointer memory
-                let (index, dest_ptr, dest_size): (u32, _, u32) = Args::parse(args)?;
-                scoped_timer.add_property("dest_size", dest_size.to_string());
-                let ret = self.get_arg(index as usize, dest_ptr, dest_size as usize)?;
-                Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
-            }
-
             FunctionIndex::RetFuncIndex => {
                 // args(0) = pointer to value
                 // args(1) = size of value

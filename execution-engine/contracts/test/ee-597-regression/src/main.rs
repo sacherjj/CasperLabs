@@ -3,31 +3,17 @@
 
 extern crate alloc;
 
-use alloc::{string::ToString, vec};
-
-use contract::{
-    contract_api::{account, runtime, system},
-    unwrap_or_revert::UnwrapOrRevert,
-};
-use types::{CLValue, ContractHash, NamedArg, RuntimeArgs, URef, U512};
+use contract::contract_api::{account, runtime, system};
+use types::{runtime_args, ContractHash, RuntimeArgs, URef, U512};
 
 const ARG_AMOUNT: &str = "amount";
 const ARG_PURSE: &str = "purse";
 const BOND: &str = "bond";
 
 fn bond(contract_hash: ContractHash, bond_amount: U512, bonding_purse: URef) {
-    let runtime_args = {
-        let args = vec![
-            NamedArg::new(
-                ARG_AMOUNT.to_string(),
-                CLValue::from_t(bond_amount).unwrap_or_revert(),
-            ),
-            NamedArg::new(
-                ARG_PURSE.to_string(),
-                CLValue::from_t(bonding_purse).unwrap_or_revert(),
-            ),
-        ];
-        RuntimeArgs::Named(args)
+    let runtime_args = runtime_args! {
+        ARG_AMOUNT => bond_amount,
+        ARG_PURSE => bonding_purse,
     };
     runtime::call_contract::<()>(contract_hash, BOND, runtime_args);
 }

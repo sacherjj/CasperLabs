@@ -2,7 +2,6 @@ use std::convert::TryInto;
 
 use rand::Rng;
 
-use contract::args_parser::ArgsParser;
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::{
     account::PublicKey, contracts::ContractVersion, runtime_args, ContractHash, ProtocolVersion,
@@ -50,11 +49,7 @@ impl ExecuteRequestBuilder {
         self.execute_request
     }
 
-    pub fn standard(
-        public_key: PublicKey,
-        session_file: &str,
-        session_args: impl ArgsParser,
-    ) -> Self {
+    pub fn standard(public_key: PublicKey, session_file: &str, session_args: RuntimeArgs) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 
@@ -75,7 +70,7 @@ impl ExecuteRequestBuilder {
         sender: PublicKey,
         contract_hash: ContractHash,
         entry_point: &str,
-        args: impl ArgsParser,
+        args: RuntimeArgs,
     ) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();

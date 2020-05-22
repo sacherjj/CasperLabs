@@ -124,10 +124,10 @@ fn should_run_successful_bond_and_unbond() {
     let exec_request_3 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_POS_BONDING,
-        (
-            String::from(TEST_BOND_FROM_MAIN_PURSE),
-            U512::from(ACCOUNT_1_STAKE),
-        ),
+        runtime_args! {
+            ARG_ENTRY_POINT => String::from(TEST_BOND_FROM_MAIN_PURSE),
+            ARG_AMOUNT => U512::from(ACCOUNT_1_STAKE),
+        },
     )
     .build();
 
@@ -178,10 +178,10 @@ fn should_run_successful_bond_and_unbond() {
     let exec_request_4 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_POS_BONDING,
-        (
-            String::from(TEST_UNBOND),
-            Some(U512::from(ACCOUNT_1_UNBOND_1)),
-        ),
+        runtime_args! {
+            ARG_ENTRY_POINT => String::from(TEST_UNBOND),
+            ARG_AMOUNT => Some(U512::from(ACCOUNT_1_UNBOND_1)),
+        },
     )
     .build();
     let account_1_bal_before = builder.get_purse_balance(account_1.main_purse());
@@ -236,10 +236,10 @@ fn should_run_successful_bond_and_unbond() {
     let exec_request_5 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
-        (
-            String::from(TEST_UNBOND),
-            Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
-        ),
+        runtime_args! {
+            ARG_ENTRY_POINT => String::from(TEST_UNBOND),
+            ARG_AMOUNT => Some(U512::from(GENESIS_ACCOUNT_UNBOND_1)),
+        },
     )
     .build();
     let mut builder = InMemoryWasmTestBuilder::from_result(result);
@@ -281,10 +281,10 @@ fn should_run_successful_bond_and_unbond() {
     let exec_request_6 = ExecuteRequestBuilder::standard(
         ACCOUNT_1_ADDR,
         CONTRACT_POS_BONDING,
-        (
-            String::from(TEST_UNBOND),
-            Some(U512::from(ACCOUNT_1_UNBOND_2)),
-        ),
+        runtime_args! {
+            ARG_ENTRY_POINT => String::from(TEST_UNBOND),
+            ARG_AMOUNT => Some(U512::from(ACCOUNT_1_UNBOND_2)),
+        },
     )
     .build();
 
@@ -332,7 +332,10 @@ fn should_run_successful_bond_and_unbond() {
     let exec_request_7 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
-        (String::from(TEST_UNBOND), None as Option<U512>),
+        runtime_args! {
+            ARG_ENTRY_POINT => String::from(TEST_UNBOND),
+            ARG_AMOUNT => None as Option<U512>
+        },
     )
     .build();
 

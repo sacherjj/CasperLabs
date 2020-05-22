@@ -1478,54 +1478,6 @@ where
         Ok(self.context.validate_uref(&uref).is_ok())
     }
 
-    fn get_arg_size(&mut self, index: usize, size_ptr: u32) -> Result<Result<(), ApiError>, Trap> {
-        let arg_size = match self.context.args().get_positional(index) {
-            Some(arg) if arg.inner_bytes().len() > u32::max_value() as usize => {
-                return Ok(Err(ApiError::OutOfMemory));
-            }
-            None => return Ok(Err(ApiError::MissingArgument)),
-            Some(arg) => arg.inner_bytes().len() as u32,
-        };
-
-        let arg_size_bytes = arg_size.to_le_bytes(); // Wasm is little-endian
-
-        if let Err(e) = self.memory.set(size_ptr, &arg_size_bytes) {
-            return Err(Error::Interpreter(e.into()).into());
-        }
-
-        Ok(Ok(()))
-    }
-
-    fn get_arg(
-        &mut self,
-        index: usize,
-        output_ptr: u32,
-        output_size: usize,
-    ) -> Result<Result<(), ApiError>, Trap> {
-        log::trace!(
-            "Get positional arg {} from {:?}",
-            index,
-            self.context.args()
-        );
-        let arg = match self.context.args().get_positional(index) {
-            Some(arg) => arg,
-            None => return Ok(Err(ApiError::MissingArgument)),
-        };
-
-        if arg.inner_bytes().len() > output_size {
-            return Ok(Err(ApiError::OutOfMemory));
-        }
-
-        if let Err(e) = self
-            .memory
-            .set(output_ptr, &arg.inner_bytes()[..output_size])
-        {
-            return Err(Error::Interpreter(e.into()).into());
-        }
-
-        Ok(Ok(()))
-    }
-
     /// Load the uref known by the given name into the Wasm memory
     fn load_key(
         &mut self,
@@ -1681,16 +1633,6 @@ where
 
     pub fn is_proof_of_stake(&self, key: Key) -> bool {
         key.into_seed() == self.protocol_data().proof_of_stake()
-    }
-
-    #[allow(dead_code)] // remove once todo! corrected
-    fn get_argument<T: FromBytes + CLTyped>(args: &RuntimeArgs, index: usize) -> Result<T, Error> {
-        let arg: CLValue = args
-            .get_positional(index)
-            .cloned()
-            .ok_or_else(|| Error::Revert(ApiError::MissingArgument))?;
-        arg.into_t()
-            .map_err(|_| Error::Revert(ApiError::InvalidArgument))
     }
 
     fn get_named_argument<T: FromBytes + CLTyped>(
@@ -1865,8 +1807,6 @@ where
             runtime_context,
         );
 
-        // let method_name: String = Self::get_argument(&args, 0)?;
-
         let ret: CLValue = match entry_point_name {
             METHOD_BOND => {
                 if !self.config.enable_bonding() {
@@ -1926,11 +1866,7 @@ where
     }
 
     pub fn call_host_standard_payment(&mut self) -> Result<(), Error> {
-        let first_arg = match self.context.args().get_positional(0) {
-            Some(cl_value) => cl_value.clone(),
-            None => return Err(Error::InvalidContext),
-        };
-        let amount = first_arg.into_t()?;
+        let amount: U512 = Self::get_named_argument(&self.context.args(), "amount")?;
         self.pay(amount).map_err(Self::reverter)
     }
 

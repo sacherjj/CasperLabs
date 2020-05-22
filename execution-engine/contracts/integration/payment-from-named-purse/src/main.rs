@@ -3,16 +3,13 @@
 
 extern crate alloc;
 
-use alloc::{
-    string::{String, ToString},
-    vec,
-};
+use alloc::string::String;
 
 use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, CLValue, NamedArg, RuntimeArgs, URef, U512};
+use types::{runtime_args, ApiError, RuntimeArgs, URef, U512};
 
 const GET_PAYMENT_PURSE: &str = "get_payment_purse";
 const SET_REFUND_PURSE: &str = "set_refund_purse";
@@ -49,12 +46,8 @@ pub extern "C" fn call() {
     // set refund purse to source purse
     {
         let contract_hash = pos_contract_hash;
-        let runtime_args = {
-            let args = vec![NamedArg::new(
-                ARG_PURSE.to_string(),
-                CLValue::from_t(source).unwrap_or_revert(),
-            )];
-            RuntimeArgs::Named(args)
+        let runtime_args = runtime_args! {
+            ARG_PURSE => source,
         };
         runtime::call_contract::<()>(contract_hash, SET_REFUND_PURSE, runtime_args);
     }

@@ -3,13 +3,8 @@
 
 extern crate alloc;
 
-use alloc::{string::ToString, vec};
-
-use contract::{
-    contract_api::{runtime, system},
-    unwrap_or_revert::UnwrapOrRevert,
-};
-use types::{CLValue, NamedArg, RuntimeArgs, U512};
+use contract::contract_api::{runtime, system};
+use types::{runtime_args, RuntimeArgs, U512};
 
 const UNBOND_METHOD_NAME: &str = "unbond";
 const ARG_AMOUNT: &str = "amount";
@@ -25,12 +20,8 @@ pub extern "C" fn call() {
         runtime::get_named_arg::<Option<u64>>(ARG_AMOUNT).map(Into::into);
 
     let contract_hash = system::get_proof_of_stake();
-    let runtime_args = {
-        let args = vec![NamedArg::new(
-            ARG_AMOUNT.to_string(),
-            CLValue::from_t(unbond_amount).unwrap_or_revert(),
-        )];
-        RuntimeArgs::Named(args)
+    let args = runtime_args! {
+        ARG_AMOUNT => unbond_amount,
     };
-    runtime::call_contract(contract_hash, UNBOND_METHOD_NAME, runtime_args)
+    runtime::call_contract(contract_hash, UNBOND_METHOD_NAME, args)
 }

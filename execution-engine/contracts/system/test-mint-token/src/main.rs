@@ -3,15 +3,11 @@
 
 extern crate alloc;
 
-use alloc::{string::String, vec};
+use alloc::string::String;
 
-use alloc::string::ToString;
-use types::{CLValue, ContractHash, NamedArg, RuntimeArgs, URef, U512};
+use types::{runtime_args, ContractHash, RuntimeArgs, URef, U512};
 
-use contract::{
-    contract_api::{runtime, system},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::{runtime, system};
 
 const ARG_AMOUNT: &str = "amount";
 const ARG_PURSE: &str = "purse";
@@ -45,46 +41,24 @@ pub extern "C" fn call() {
 
 fn get_purse(mint: ContractHash, amount: u64) -> URef {
     let amount = U512::from(amount);
-    let runtime_args = {
-        let args = vec![NamedArg::new(
-            ARG_AMOUNT.to_string(),
-            CLValue::from_t(amount).unwrap_or_revert(),
-        )];
-        RuntimeArgs::Named(args)
+    let args = runtime_args! {
+            ARG_AMOUNT => amount,
     };
-
-    runtime::call_contract::<URef>(mint, ARG_CREATE, runtime_args)
+    runtime::call_contract::<URef>(mint, ARG_CREATE, args)
 }
 
 fn transfer(mint: ContractHash, source: URef, target: URef, amount: U512) -> String {
-    let runtime_args = {
-        let args = vec![
-            NamedArg::new(
-                ARG_AMOUNT.to_string(),
-                CLValue::from_t(amount).unwrap_or_revert(),
-            ),
-            NamedArg::new(
-                ARG_SOURCE.to_string(),
-                CLValue::from_t(source).unwrap_or_revert(),
-            ),
-            NamedArg::new(
-                ARG_TARGET.to_string(),
-                CLValue::from_t(target).unwrap_or_revert(),
-            ),
-        ];
-        RuntimeArgs::Named(args)
+    let args = runtime_args! {
+        ARG_AMOUNT => amount,
+        ARG_SOURCE => source,
+        ARG_TARGET => target,
     };
-
-    runtime::call_contract::<String>(mint, ARG_TRANSFER, runtime_args)
+    runtime::call_contract::<String>(mint, ARG_TRANSFER, args)
 }
 
 fn balance(mint: ContractHash, purse: URef) -> Option<U512> {
-    let runtime_args = {
-        let args = vec![NamedArg::new(
-            ARG_PURSE.to_string(),
-            CLValue::from_t(purse).unwrap_or_revert(),
-        )];
-        RuntimeArgs::Named(args)
+    let args = runtime_args! {
+        ARG_PURSE => purse,
     };
-    runtime::call_contract::<Option<U512>>(mint, ARG_BALANCE, runtime_args)
+    runtime::call_contract::<Option<U512>>(mint, ARG_BALANCE, args)
 }
