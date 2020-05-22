@@ -636,12 +636,10 @@ where
                     new_protocol_data,
                     system_contract_cache,
                 )?;
-                println!("upgraded hashes: {:?}", result);
 
                 if !new_protocol_data.update_from(result) {
                     return Err(Error::InvalidUpgradeResult);
                 } else {
-                    println!("write new protocol data {:?}", new_protocol_data);
                     self.state
                         .put_protocol_data(new_protocol_version, &new_protocol_data)
                         .map_err(Into::into)?;
@@ -953,11 +951,6 @@ where
             .borrow_mut()
             .get_contract(correlation_id, contract_hash)?;
 
-        println!(
-            "get_module_from_contract_hash: protocol version {:?} contract {:?}",
-            protocol_version,
-            contract.protocol_version()
-        );
         // A contract may only call a stored contract that has the same protocol major version
         // number.
         if !contract.is_compatible_protocol_version(*protocol_version) {

@@ -56,12 +56,6 @@ pub extern "C" fn call() {
 fn upgrade_mint() -> ContractHash {
     const HASH_KEY_NAME: &str = "mint_hash";
     const ACCESS_KEY_NAME: &str = "mint_access";
-    runtime::print(&format!(
-        "upgrade mint keys: {:?}",
-        runtime::list_named_keys()
-    ));
-
-    runtime::print(&format!("keys {:?}", runtime::list_named_keys()));
 
     let mint_package_hash: ContractHash = runtime::get_key(HASH_KEY_NAME)
         .expect("should have mint")

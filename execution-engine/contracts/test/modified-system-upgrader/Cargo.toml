@@ -15,7 +15,7 @@ test = false
 std = ["contract/std", "types/std"]
 
 [dependencies]
-contract = { path = "../../../contract", package = "casperlabs-contract", features = ["test-support"]}
+contract = { path = "../../../contract", package = "casperlabs-contract" }
 modified-mint = { path = "../modified-mint" }
 pos = { path = "../../system/pos" }
 standard-payment = { path = "../../system/standard-payment" }

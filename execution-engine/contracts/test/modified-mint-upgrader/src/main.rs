@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 
-#[macro_use]
 extern crate alloc;
 
 use alloc::collections::BTreeMap;
@@ -38,12 +37,6 @@ pub extern "C" fn transfer() {
 fn upgrade_mint() -> ContractHash {
     const HASH_KEY_NAME: &str = "mint_hash";
     const ACCESS_KEY_NAME: &str = "mint_access";
-    runtime::print(&format!(
-        "upgrade mint keys: {:?}",
-        runtime::list_named_keys()
-    ));
-
-    runtime::print(&format!("keys {:?}", runtime::list_named_keys()));
 
     let mint_package_hash: ContractHash = runtime::get_key(HASH_KEY_NAME)
         .expect("should have mint")
@@ -52,11 +45,10 @@ fn upgrade_mint() -> ContractHash {
     let mint_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
         .unwrap_or_revert()
         .into_uref()
-        .expect("shuold be uref");
+        .expect("should be uref");
 
     let entry_points = modified_mint::get_entry_points();
     let named_keys = NamedKeys::new();
-    runtime::print("before upgrading mint");
     storage::add_contract_version(mint_package_hash, mint_access_key, entry_points, named_keys)
 }
 
