@@ -281,6 +281,26 @@ class ValidationTest
     Validation.blockSignature[Task](block) shouldBeF true
   }
 
+  "Validator public key hash validation" should "return true when the signature and key matches the hash" in withoutStorage {
+    val (sk, pk)  = Ed25519.newKeyPair
+    val validator = ValidatorIdentity(pk, sk, Ed25519)
+    val sig       = validator.signature("sign this".getBytes())
+    val isValid   = Validation.publicKeyHash(sig, validator.publicKeyBS, validator.publicKeyHashBS)
+    Task.now(isValid) shouldBeF true
+  }
+
+  it should "return false when the hash doesn't match the public key" in withoutStorage {
+    val (sk, pk)  = Ed25519.newKeyPair
+    val validator = ValidatorIdentity(pk, sk, Ed25519)
+    val sig       = validator.signature("sign this".getBytes())
+    val isValid = Validation.publicKeyHash(
+      sig,
+      validator.publicKeyBS,
+      Keys.PublicKeyHash(ByteString.copyFrom("wrong hash".getBytes))
+    )
+    Task.now(isValid) shouldBeF false
+  }
+
   "Deploy signature validation" should "return true for valid signatures" in withoutStorage {
     val deploy = sample(arbitrary[consensus.Deploy])
     Validation.deploySignature[Task](deploy) shouldBeF true

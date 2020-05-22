@@ -418,6 +418,21 @@ object Validation {
       verify(d, Signature(sig.sig.toByteArray), key)
     }
 
+  def publicKeyHash(
+      sig: consensus.Signature,
+      key: Keys.PublicKeyBS,
+      hash: Keys.PublicKeyHashBS
+  ): Boolean = {
+    val pk = Keys.PublicKey(key.toByteArray)
+    val computed = sig.sigAlgorithm match {
+      case SignatureAlgorithm(sa) =>
+        sa.publicKeyHash(pk)
+      case other =>
+        Keys.publicKeyHash(other)(pk)
+    }
+    ByteString.copyFrom(computed) == hash
+  }
+
   def deploySignature[F[_]: MonadThrowable: Log](
       d: consensus.Deploy
   ): F[Boolean] =
@@ -475,6 +490,21 @@ object Validation {
         b.blockHash,
         s"signature algorithm '${b.getSignature.sigAlgorithm}' is unsupported."
       ).as(false)
+    }
+
+  def validatorPublicKeyHash[F[_]: Monad: Log](b: BlockSummary): F[Boolean] =
+    publicKeyHash(
+      b.getSignature,
+      Keys.PublicKey(b.getHeader.validatorPublicKey),
+      Keys.PublicKeyHash(b.getHeader.validatorPublicKeyHash)
+    ) match {
+      case true =>
+        true.pure[F]
+      case false =>
+        ignore[F](
+          b.blockHash,
+          s"the validator's public key hash doesn't match the key and the signature algorithm."
+        ).as(false)
     }
 
   def deployHeader[F[_]: MonadThrowable: RaiseValidationError: Log: Time](

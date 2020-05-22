@@ -27,6 +27,9 @@ final case class ValidatorIdentity(
       ByteString.copyFrom(signatureAlgorithm.sign(data, privateKey))
     )
 
+  val publicKeyBS: Keys.PublicKeyBS =
+    Keys.PublicKey(ByteString.copyFrom(publicKey))
+
   val publicKeyHashBS: Keys.PublicKeyHashBS =
     Keys.PublicKeyHash(ByteString.copyFrom(publicKeyHash))
 }

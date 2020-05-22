@@ -288,7 +288,8 @@ abstract class ValidationImpl[F[_]: Sync: FunctorRaise[*[_], InvalidBlock]: Log:
               summary,
               CasperLabsProtocol[F].versionAt(_)
             ),
-            if (!treatAsGenesis) Validation.blockSignature[F](summary) else true.pure[F]
+            if (!treatAsGenesis) Validation.blockSignature[F](summary) else true.pure[F],
+            if (!treatAsGenesis) Validation.validatorPublicKeyHash[F](summary) else true.pure[F]
           )
       _ <- Validation.summaryHash[F](summary)
       _ <- Validation.chainIdentifier[F](summary, chainName)

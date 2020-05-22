@@ -88,5 +88,9 @@ class Ed25519Test extends FunSpec with Matchers with BeforeAndAfterEach with App
 
       Ed25519.publicKeyHash(pk) shouldBe hash
     }
+
+    it("returns empty hash for an empty key") {
+      Ed25519.publicKeyHash(PublicKey(Array.empty[Byte])) shouldBe empty
+    }
   }
 }
