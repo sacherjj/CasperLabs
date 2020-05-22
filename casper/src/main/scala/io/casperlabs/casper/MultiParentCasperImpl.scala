@@ -644,7 +644,6 @@ object MultiParentCasperImpl {
           _ <- Validation[F]
                 .neglectedInvalidBlock(
                   block,
-                  dag,
                   casperState.invalidBlockTracker
                 )
           _       <- Log[F].debug(s"Checking equivocation for ${hashPrefix -> "message"}")

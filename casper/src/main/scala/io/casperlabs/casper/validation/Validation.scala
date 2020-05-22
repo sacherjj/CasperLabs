@@ -42,7 +42,6 @@ trait Validation[F[_]] {
     */
   def neglectedInvalidBlock(
       block: Block,
-      dag: DagRepresentation[F],
       invalidBlockTracker: Set[BlockHash]
   ): F[Unit]
 
