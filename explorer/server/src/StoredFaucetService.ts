@@ -73,7 +73,7 @@ export class StoredFaucetService {
       const LFB = await this.casperService.getLastFinalizedBlockInfo();
       const blockHash = LFB.getSummary()!.getBlockHash_asU8();
       const stateQuery = new StateQuery();
-      stateQuery.setKeyBase16(encodeBase16(this.faucetContract.getPublicKey()));
+      stateQuery.setKeyBase16(encodeBase16(this.contractKeys.publicKey));
       stateQuery.setKeyVariant(StateQuery.KeyVariant.ADDRESS);
       stateQuery.setPathSegmentsList(["faucet"]);
 
