@@ -1,35 +1,23 @@
 from pathlib import Path
 
 from casperlabs_client.arg_types import directory_for_write
-from casperlabs_client.utils import (
-    write_file,
-    guarded_command,
-    write_binary_file,
-    encode_base64,
-)
-from casperlabs_client.crypto import (
-    generate_validators_keys,
-    generate_key_pair,
-    generate_certificates,
-    public_address,
-)
+from casperlabs_client.io import write_file, write_binary_file
+from casperlabs_client.decorators import guarded_command
+
+from casperlabs_client.crypto import generate_keys
+from casperlabs_client.utils import encode_base64
 
 NAME: str = "keygen"
 HELP: str = """Generate keys.
 
-Usage: casperlabs-client keygen <existingOutputDirectory>
+Usage: casperlabs-client keygen <existing output directory>
 Command will override existing files!
 Generated files:
-   node-id               # node ID as in casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
-                         # derived from node.key.pem
-   node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
-                         # derived from node.key.pem
-   node.key.pem          # secp256r1 private key
-   validator-id          # validator ID in Base64 format; can be used in accounts.csv
+   account-id          # validator ID in Base64 format; can be used in accounts.csv
                          # derived from validator.public.pem
-   validator-id-hex      # validator ID in hex, derived from validator.public.pem
-   validator-private.pem # ed25519 private key
-   validator-public.pem  # ed25519 public key"""
+   account-id-hex      # validator ID in hex, derived from validator.public.pem
+   account-private.pem # ed25519 private key
+   account-public.pem  # ed25519 public key"""
 OPTIONS = [
     [
         ("directory",),
@@ -44,30 +32,15 @@ OPTIONS = [
 @guarded_command
 def method(casperlabs_client, args):
     directory = Path(args.directory).resolve()
-    validator_private_path = directory / "validator-private.pem"
-    validator_pub_path = directory / "validator-public.pem"
-    validator_id_path = directory / "validator-id"
-    validator_id_hex_path = directory / "validator-id-hex"
-    node_priv_path = directory / "node.key.pem"
-    node_cert_path = directory / "node.certificate.pem"
-    node_id_path = directory / "node-id"
+    private_path = directory / "account-private.pem"
+    public_path = directory / "account-public.pem"
+    id_path = directory / "account-id"
+    id_hex_path = directory / "account-id-hex"
 
-    (
-        validator_private_pem,
-        validator_public_pem,
-        validator_public_bytes,
-    ) = generate_validators_keys()
-    write_binary_file(validator_private_path, validator_private_pem)
-    write_binary_file(validator_pub_path, validator_public_pem)
-    write_file(validator_id_path, encode_base64(validator_public_bytes))
-    write_file(validator_id_hex_path, validator_public_bytes.hex())
+    (private_pem, public_pem, public_bytes) = generate_keys()
+    write_binary_file(private_path, private_pem)
+    write_binary_file(public_path, public_pem)
+    write_file(id_path, encode_base64(public_bytes))
+    write_file(id_hex_path, public_bytes.hex())
 
-    private_key, public_key = generate_key_pair()
-
-    node_cert, key_pem = generate_certificates(private_key, public_key)
-
-    write_binary_file(node_priv_path, key_pem)
-    write_binary_file(node_cert_path, node_cert)
-
-    write_file(node_id_path, public_address(public_key))
     print(f"Keys successfully created in directory: {str(directory.absolute())}")

@@ -1,5 +1,6 @@
 from casperlabs_client import CasperLabsClient
-from casperlabs_client.utils import guarded_command, _print_block
+from casperlabs_client.decorators import guarded_command
+from casperlabs_client.io import _print_block
 
 NAME: str = "show-block"
 HELP: str = (

@@ -1,7 +1,9 @@
 import sys
 
 from casperlabs_client.commands import deploy_cmd
-from casperlabs_client.utils import guarded_command
+from casperlabs_client.io import write_binary_file
+from casperlabs_client.decorators import guarded_command
+
 
 NAME: str = "make-deploy"
 HELP: str = "Constructs a deploy that can be signed and sent to a node."
@@ -27,5 +29,4 @@ def method(casperlabs_client, args):
     if not args.deploy_path:
         sys.stdout.buffer.write(data)
     else:
-        with open(args.deploy_path, "wb") as f:
-            f.write(data)
+        write_binary_file(args.deploy_path, data)

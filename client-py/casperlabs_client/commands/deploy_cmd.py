@@ -2,7 +2,9 @@ from casperlabs_client import consts
 from casperlabs_client.abi import ABI
 from casperlabs_client.consts import DEFAULT_PAYMENT_AMOUNT
 from casperlabs_client.crypto import read_pem_key, private_to_public_key
-from casperlabs_client.utils import guarded_command, hexify
+from casperlabs_client.utils import hexify
+from casperlabs_client.decorators import guarded_command
+
 
 NAME = "deploy"
 HELP = (
@@ -49,6 +51,7 @@ OPTIONS = [
             ),
         ),
     ],
+    # TODO - This was only for integration testing and should be removed from client.
     [
         ("--gas-price",),
         dict(
@@ -174,6 +177,14 @@ OPTIONS = [
             help="Path to the file with account public key (Ed25519)",
         ),
     ],
+    [
+        ("--account-hash",),
+        dict(
+            required=False,
+            type=str,
+            help="Account hash based on account public key. Generated with `account-hash` command.",
+        ),
+    ],
 ]
 OPTIONS_WITH_PRIVATE = [
     [
@@ -260,50 +271,3 @@ def method(casperlabs_client, args):
 # session-hash or session-name
 #   session-entry-point or 'call' will be used.
 #   session-sem-ver or latest will be used.
-
-
-# TODO: Verify that we can move to Python 3.7 to use dataclasses to clean up
-# from dataclasses import dataclass
-# from semver import VersionInfo
-#
-# from casperlabs_client.crypto import read_pem_key, private_to_public_key
-#
-# @dataclass
-# class Deploy:
-#     from_: bytes = None
-#     gas_price: int = 10
-#     payment: str = None
-#     session: str = None
-#     public_key: str = None
-#     session_args: bytes = None
-#     payment_args: bytes = None
-#     payment_amount: int = None
-#     payment_hash: bytes = None
-#     payment_name: str = None
-#     payment_sem_ver: VersionInfo = None
-#     session_hash: bytes = None
-#     session_name: str = None
-#     session_sem_ver: VersionInfo = None
-#     ttl_millis: int = 0
-#     dependencies: list = None
-#     chain_name: str = None
-#     private_key: str = None
-#
-#     @staticmethod
-#     def from_args(args) -> 'Deploy':
-#         # TODO: Parse and convert args for loaded Deploy dataclass
-#         pass
-#
-#     @property
-#     def from_addr(self):
-#         """ Attempts to guess which from account we should use for the user. """
-#         # TODO: Should this be required explicitly `from`?
-#         if self.from_:
-#             return self.from_
-#         elif self.public_key:
-#             return read_pem_key(self.public_key)
-#         elif self.private_key:
-#             return private_to_public_key(self.private_key)
-#         else:
-#             raise TypeError("Unable to generate from address using `from`, `public_key`, or `private_key`.")
-#

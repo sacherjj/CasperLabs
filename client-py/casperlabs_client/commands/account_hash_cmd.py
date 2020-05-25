@@ -3,7 +3,8 @@ import sys
 from casperlabs_client import CasperLabsClient
 from casperlabs_client.consts import SUPPORTED_KEY_ALGORITHMS
 from casperlabs_client.crypto import read_pem_key
-from casperlabs_client.utils import guarded_command
+from casperlabs_client.io import write_binary_file
+from casperlabs_client.decorators import guarded_command
 
 NAME: str = "account-hash"
 HELP: str = (
@@ -46,7 +47,6 @@ def method(casperlabs_client: CasperLabsClient, args):
     account_hash = casperlabs_client.account_hash(algorithm, public_key)
     file_path = getattr(args, "file_path")
     if file_path:
-        with open(file_path, "wb") as f:
-            f.write(account_hash)
+        write_binary_file(file_path, account_hash)
     else:
         sys.stdout.buffer.write(account_hash)

@@ -1,4 +1,5 @@
-from casperlabs_client.utils import guarded_command, hexify
+from casperlabs_client.decorators import guarded_command
+from casperlabs_client.utils import hexify
 
 NAME: str = "show-peers"
 HELP: str = "Show peers connected to the node."

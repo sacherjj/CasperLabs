@@ -1,3 +1,5 @@
+import os
+import tempfile
 from collections import defaultdict
 
 """
@@ -138,6 +140,18 @@ def lane(validator, block_infos, min_rank, max_rank, genesis_block_id):
         name=f"cluster_{validator_id}",
         label=f"{validator_id}",
     )
+
+
+def call_dot(dot_dag_description, file_name, file_format):
+    with tempfile.NamedTemporaryFile(mode="w") as f:
+        f.write(dot_dag_description)
+        f.flush()
+        cmd = f"dot -T{file_format} -o {file_name} {f.name}"
+        rc = os.system(cmd)
+        if rc:
+            raise Exception(f"Call to dot ({cmd}) failed with error code {rc}")
+    print(f"Wrote {file_name}")
+    return file_name
 
 
 def generate_dot(block_infos, show_justification_lines=False):

@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 
 from pathlib import Path
-import os
 import time
-import grpc
 import functools
-import logging
-import tempfile
 import warnings
 
+from .consts import (
+    SUPPORTED_KEY_ALGORITHMS,
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    DEFAULT_INTERNAL_PORT,
+    VISUALIZE_DAG_STREAM_DELAY,
+    BUNDLED_TRANSFER_WASM,
+)
+from .insecure_grpc_service import InsecureGRPCService
+from .secure_grpc_service import SecureGRPCService
+from .vdag import call_dot
 
 # Hack to fix the relative imports problems with grpc #
 import sys
-
-from .consts import SUPPORTED_KEY_ALGORITHMS
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
@@ -29,7 +34,10 @@ CEscape = google.protobuf.text_format.text_encoding.CEscape
 
 def _hex(text, as_utf8):
     try:
-        return (len(text) in (32, 64, 20)) and text.hex() or CEscape(text, as_utf8)
+        if len(text) in (32, 64, 20):
+            return text.hex()
+        else:
+            CEscape(text, as_utf8)
     except TypeError:
         return CEscape(text, as_utf8)
 
@@ -53,19 +61,10 @@ from . import empty_pb2
 
 from . import vdag
 from . import abi
-from casperlabs_client.utils import (
-    bundled_contract,
-    extract_common_name,
-    key_variant,
-    make_deploy,
-    sign_deploy,
-    get_public_key,
-)
 
-
-DEFAULT_HOST = "localhost"
-DEFAULT_PORT = 40401
-DEFAULT_INTERNAL_PORT = 40402
+from casperlabs_client.contract import bundled_contract
+from casperlabs_client.query_state import key_variant
+from casperlabs_client.deploy import make_deploy, sign_deploy, _select_public_key_to_use
 
 
 class InternalError(Exception):
@@ -110,111 +109,6 @@ def api(function):
     return wrapper
 
 
-NUMBER_OF_RETRIES = 5
-
-# Initial delay in seconds before an attempt to retry
-INITIAL_DELAY = 0.3
-
-
-def retry_wrapper(function, *args):
-    delay = INITIAL_DELAY
-    for i in range(NUMBER_OF_RETRIES):
-        try:
-            return function(*args)
-        except _Rendezvous as e:
-            if e.code() == grpc.StatusCode.UNAVAILABLE and i < NUMBER_OF_RETRIES - 1:
-                delay += delay
-                logging.warning(f"Retrying after {e} in {delay} seconds")
-                time.sleep(delay)
-            else:
-                raise
-
-
-def retry_unary(function):
-    @functools.wraps(function)
-    def wrapper(*args):
-        return retry_wrapper(function, *args)
-
-    return wrapper
-
-
-def retry_stream(function):
-    @functools.wraps(function)
-    def wrapper(*args):
-        yield from retry_wrapper(function, *args)
-
-    return wrapper
-
-
-class InsecureGRPCService:
-    def __init__(self, host, port, serviceStub):
-        self.address = f"{host}:{port}"
-        self.serviceStub = serviceStub
-
-    def __getattr__(self, name):
-
-        logging.debug(
-            f"Creating insecure connection to {self.address} ({self.serviceStub})"
-        )
-
-        @retry_unary
-        def unary_unary(*args):
-            logging.debug(
-                f"Insecure {self.address} ({self.serviceStub}): {name} {list(args)}"
-            )
-            with grpc.insecure_channel(self.address) as channel:
-                return getattr(self.serviceStub(channel), name)(*args)
-
-        @retry_stream
-        def unary_stream(*args):
-            logging.debug(
-                f"Insecure {self.address} ({self.serviceStub}): {name} {list(args)}"
-            )
-            with grpc.insecure_channel(self.address) as channel:
-                yield from getattr(self.serviceStub(channel), name[: -len("_stream")])(
-                    *args
-                )
-
-        return name.endswith("_stream") and unary_stream or unary_unary
-
-
-class SecureGRPCService:
-    def __init__(self, host, port, serviceStub, node_id, certificate_file):
-        self.address = f"{host}:{port}"
-        self.serviceStub = serviceStub
-        self.node_id = node_id or extract_common_name(certificate_file)
-        self.certificate_file = certificate_file
-        with open(self.certificate_file, "rb") as f:
-            self.credentials = grpc.ssl_channel_credentials(f.read())
-        self.secure_channel_options = self.node_id and (
-            ("grpc.ssl_target_name_override", self.node_id),
-            ("grpc.default_authority", self.node_id),
-        )
-
-    def __getattr__(self, name):
-        logging.debug(
-            f"Creating secure connection to {self.address} ({self.serviceStub})"
-        )
-
-        @retry_unary
-        def unary_unary(*args):
-            with grpc.secure_channel(
-                self.address, self.credentials, options=self.secure_channel_options
-            ) as channel:
-                return getattr(self.serviceStub(channel), name)(*args)
-
-        @retry_stream
-        def unary_stream(*args):
-            with grpc.secure_channel(
-                self.address, self.credentials, options=self.secure_channel_options
-            ) as channel:
-                yield from getattr(self.serviceStub(channel), name[: -len("_stream")])(
-                    *args
-                )
-
-        return name.endswith("_stream") and unary_stream or unary_unary
-
-
 class CasperLabsClient:
     """
     gRPC CasperLabs client.
@@ -231,23 +125,21 @@ class CasperLabsClient:
         """
         CasperLabs client's constructor.
 
-        :param host:            Hostname or IP of node on which gRPC service is running
-        :param port:            Port used for external gRPC API
-        :param port_internal:   Port used for internal gRPC API
-        :param certificate_file:      Certificate file for TLS
-        :param node_id:         node_id of the node, for gRPC encryption
+        :param host:                Hostname or IP of node on which gRPC service is running
+        :param port:                Port used for external gRPC API
+        :param certificate_file:    Certificate file for TLS
+        :param node_id:             node_id of the node, for gRPC encryption
         """
         self.host = host
         self.port = port
-        self.port_internal = port_internal
         self.node_id = node_id
         self.certificate_file = certificate_file
 
         if node_id:
-            self.casperService = SecureGRPCService(
+            self.casper_service = SecureGRPCService(
                 host, port, casper_pb2_grpc.CasperServiceStub, node_id, certificate_file
             )
-            self.controlService = SecureGRPCService(
+            self.control_service = SecureGRPCService(
                 # We currently assume that if node_id is given then
                 # we get certificate_file too. This is unlike in the Scala client
                 # where node_id is all that's needed for configuring secure connection.
@@ -260,7 +152,7 @@ class CasperLabsClient:
                 node_id,
                 certificate_file,
             )
-            self.diagnosticsService = SecureGRPCService(
+            self.diagnostics_service = SecureGRPCService(
                 host,
                 port,
                 diagnostics_pb2_grpc.DiagnosticsStub,
@@ -269,13 +161,13 @@ class CasperLabsClient:
             )
 
         else:
-            self.casperService = InsecureGRPCService(
+            self.casper_service = InsecureGRPCService(
                 host, port, casper_pb2_grpc.CasperServiceStub
             )
-            self.controlService = InsecureGRPCService(
+            self.control_service = InsecureGRPCService(
                 host, port_internal, control_pb2_grpc.ControlServiceStub
             )
-            self.diagnosticsService = InsecureGRPCService(
+            self.diagnostics_service = InsecureGRPCService(
                 host, port, diagnostics_pb2_grpc.DiagnosticsStub
             )
 
@@ -348,41 +240,41 @@ class CasperLabsClient:
         ttl_millis: int = 0,
         dependencies=None,
         chain_name: str = None,
-    ):
+    ) -> str:
         """
         Deploy a smart contract source file to Casper on an existing running node.
         The deploy will be packaged and sent as a block to the network depending
         on the configuration of the Casper instance.
 
-        :param from_addr:     Purse address that will be used to pay for the deployment.
-        :param gas_price:     The price of gas for this transaction in units dust/gas.
-                              Must be positive integer.
-        :param payment:       Path to the file with payment code.
-        :param session:       Path to the file with session code.
-        :param public_key:    Path to a file with public key (Ed25519)
-        :param private_key:   Path to a file with private key (Ed25519)
-        :param session_args:  List of ABI encoded arguments of session contract
-        :param payment_args:  List of ABI encoded arguments of payment contract
-        :param session-hash:  Hash of the stored contract to be called in the
-                              session; base16 encoded.
-        :param session-name:  Name of the stored contract (associated with the
-                              executing account) to be called in the session.
-        :param session-uref:  URef of the stored contract to be called in the
-                              session; base16 encoded.
-        :param payment-hash:  Hash of the stored contract to be called in the
-                              payment; base16 encoded.
-        :param payment-name:  Name of the stored contract (associated with the
-                              executing account) to be called in the payment.
-        :param payment-uref:  URef of the stored contract to be called in the
-                              payment; base16 encoded.
-        :ttl_millis:          Time to live. Time (in milliseconds) that the
-                              deploy will remain valid for.
-        :dependencies:        List of deploy hashes (base16 encoded) which
-                              must be executed before this deploy.
-        :chain_name:          Name of the chain to optionally restrict the
-                              deploy from being accidentally included
-                              anywhere else.
-        :return:              deploy hash in base16 format
+        :param from_addr:      Purse address that will be used to pay for the deployment.
+        :param gas_price:      The price of gas for this transaction in units dust/gas.
+                               Must be positive integer.
+        :param payment:        Path to the file with payment code.
+        :param session:        Path to the file with session code.
+        :param public_key:     Path to a file with public key (Ed25519)
+        :param private_key:    Path to a file with private key (Ed25519)
+        :param session_args:   List of ABI encoded arguments of session contract
+        :param payment_args:   List of ABI encoded arguments of payment contract
+        :param payment_amount: Amount to be used with standard payment
+        :param session_hash:   Hash of the stored contract to be called in the
+                               session; base16 encoded.
+        :param session_name:   Name of the stored contract (associated with the
+                               executing account) to be called in the session.
+        :param session_uref:   URef of the stored contract to be called in the
+                               session; base16 encoded.
+        :param payment_hash:   Hash of the stored contract to be called in the
+                               payment; base16 encoded.
+        :param payment_name:   Name of the stored contract (associated with the
+                               executing account) to be called in the payment.
+        :param payment_uref:   URef of the stored contract to be called in the
+                               payment; base16 encoded.
+        :param ttl_millis:     Time to live. Time (in milliseconds) that the
+                               deploy will remain valid for.
+        :param dependencies:   List of deploy hashes (base16 encoded) which
+                               must be executed before this deploy.
+        :param chain_name:     Name of the chain to optionally restrict the
+                               deploy from being accidentally included anywhere else.
+        :return:               deploy hash in base16 format
         """
 
         deploy = self.make_deploy(
@@ -406,7 +298,9 @@ class CasperLabsClient:
         )
 
         deploy = self.sign_deploy(
-            deploy, get_public_key(public_key, from_addr, private_key), private_key
+            deploy,
+            _select_public_key_to_use(public_key, from_addr, private_key),
+            private_key,
         )
         self.send_deploy(deploy)
         return deploy.deploy_hash.hex()
@@ -414,7 +308,7 @@ class CasperLabsClient:
     @api
     def transfer(self, target_account_hex, amount, **deploy_args):
         target_account_bytes = bytes.fromhex(target_account_hex)
-        deploy_args["session"] = bundled_contract("transfer_to_account_u512.wasm")
+        deploy_args["session"] = bundled_contract(BUNDLED_TRANSFER_WASM)
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", target_account_bytes),
@@ -425,7 +319,7 @@ class CasperLabsClient:
 
     @api
     def send_deploy(self, deploy):
-        self.casperService.Deploy(casper.DeployRequest(deploy=deploy))
+        self.casper_service.Deploy(casper.DeployRequest(deploy=deploy))
 
     @api
     def show_blocks(self, depth: int = 1, max_rank=0, full_view=True):
@@ -438,7 +332,7 @@ class CasperLabsClient:
         :param full_view: Full view if True, otherwise basic.
         :return:          Generator of block info objects.
         """
-        yield from self.casperService.StreamBlockInfos_stream(
+        yield from self.casper_service.StreamBlockInfos_stream(
             casper.StreamBlockInfosRequest(
                 depth=depth,
                 max_rank=max_rank,
@@ -477,7 +371,7 @@ class CasperLabsClient:
                 :param full_view:         full view if True, otherwise basic
                 :return:                  object representing the retrieved block
                 """
-        return self.casperService.GetBlockInfo(
+        return self.casper_service.GetBlockInfo(
             casper.GetBlockInfoRequest(
                 block_hash_base16=block_hash_base16,
                 view=(
@@ -512,7 +406,7 @@ class CasperLabsClient:
         :return:    response object with block_hash
         """
         warnings.warn("propose is deprecated and will be removed.", DeprecationWarning)
-        return self.controlService.Propose(control.ProposeRequest())
+        return self.control_service.Propose(control.ProposeRequest())
 
     @api
     def visualize_dag(
@@ -521,7 +415,7 @@ class CasperLabsClient:
         out: str = None,
         show_justification_lines: bool = False,
         stream: str = None,
-        delay_in_seconds=5,
+        delay_in_seconds=VISUALIZE_DAG_STREAM_DELAY,
     ):
         """
         Generate DAG in DOT format.
@@ -558,17 +452,17 @@ class CasperLabsClient:
                 iteration += 1
                 return f"{file_name_base}_{iteration}.{file_format}"
 
-        yield self._call_dot(dot_dag_description, file_name(), file_format)
+        yield call_dot(dot_dag_description, file_name(), file_format)
         previous_block_hashes = set(b.summary.block_hash for b in block_infos)
         while stream:
             time.sleep(delay_in_seconds)
-            block_infos = list(self.showBlocks(depth, full_view=False))
+            block_infos = list(self.show_blocks(depth, full_view=False))
             block_hashes = set(b.summary.block_hash for b in block_infos)
             if block_hashes != previous_block_hashes:
                 dot_dag_description = vdag.generate_dot(
                     block_infos, show_justification_lines
                 )
-                yield self._call_dot(dot_dag_description, file_name(), file_format)
+                yield call_dot(dot_dag_description, file_name(), file_format)
                 previous_block_hashes = block_hashes
 
     @api
@@ -606,35 +500,23 @@ class CasperLabsClient:
         ):
             yield output
 
-    @staticmethod
-    def _call_dot(dot_dag_description, file_name, file_format):
-        with tempfile.NamedTemporaryFile(mode="w") as f:
-            f.write(dot_dag_description)
-            f.flush()
-            cmd = f"dot -T{file_format} -o {file_name} {f.name}"
-            rc = os.system(cmd)
-            if rc:
-                raise Exception(f"Call to dot ({cmd}) failed with error code {rc}")
-        print(f"Wrote {file_name}")
-        return file_name
-
     @api
     def query_state(self, block_hash: str, key: str, path: str, key_type: str):
         """
         Query a value in the global state.
 
-        :param block_hash:         Hash of the block to query the state of
+        :param block_hash:        Hash of the block to query the state of
         :param key:               Base16 encoding of the base key
         :param path:              Path to the value to query. Must be of the form
                                   'key1/key2/.../keyn'
-        :param key_type:           Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'.
+        :param key_type:          Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'.
                                   For 'local' key type, 'key' value format is {seed}:{rest},
                                   where both parts are hex encoded."
         :return:                  QueryStateResponse object
         """
         q = casper.StateQuery(key_variant=key_variant(key_type), key_base16=key)
         q.path_segments.extend([name for name in path.split("/") if name])
-        return self.casperService.GetBlockState(
+        return self.casper_service.GetBlockState(
             casper.GetBlockStateRequest(block_hash_base16=block_hash, query=q)
         )
 
@@ -662,8 +544,12 @@ class CasperLabsClient:
 
     @api
     def balance(self, address: str, block_hash: str):
+        """ Return balance of the main purse of an account
+
+        :param address:    Public key address of account.
+        :param block_hash: Hash of block from which to return balance.
+        """
         value = self.query_state(block_hash, address, "", "address")
-        account = None
         try:
             account = value.account
         except AttributeError:
@@ -684,16 +570,16 @@ class CasperLabsClient:
         purse_addr_hex = account.main_purse.uref.hex()
         local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
 
-        balance_u_ref = self.queryState(block_hash, local_key_value, "", "local")
+        balance_u_ref = self.query_state(block_hash, local_key_value, "", "local")
         balance_u_ref_hex = balance_u_ref.cl_value.value.key.uref.uref.hex()
-        balance = self.queryState(block_hash, balance_u_ref_hex, "", "uref")
+        balance = self.query_state(block_hash, balance_u_ref_hex, "", "uref")
         balance_str_value = balance.cl_value.value.u512.value
         return int(balance_str_value)
 
     @api
     def show_deploy(
         self,
-        deploy_hash_base16: str,
+        deploy_hash: str,
         full_view: bool = False,
         wait_for_processed: bool = False,
         delay: int = consts.STATUS_CHECK_DELAY,
@@ -701,17 +587,18 @@ class CasperLabsClient:
     ):
         """
         Retrieve information about a single deploy by hash.
+
+        :param deploy_hash:         Hash of deploy in base16 (hex)
+        :param full_view:           Show full view of deploy, default false
+        :param wait_for_processed:  Block return until deploy is not pending, default false
+        :param delay:               Delay between status checks while waiting
+        :timeout_seconds:           Time to return of wait even if deploy is pending
         """
         start_time = time.time()
         while True:
-            deploy_info = self.casperService.GetDeployInfo(
+            deploy_info = self.casper_service.GetDeployInfo(
                 casper.GetDeployInfoRequest(
-                    deploy_hash_base16=deploy_hash_base16,
-                    view=(
-                        full_view
-                        and info.DeployInfo.View.FULL
-                        or info.DeployInfo.View.BASIC
-                    ),
+                    deploy_hash_base16=deploy_hash, view=self._deploy_view(full_view)
                 )
             )
             if (
@@ -720,7 +607,7 @@ class CasperLabsClient:
             ):
                 if time.time() - start_time > timeout_seconds:
                     raise Exception(
-                        f"Timed out waiting for deploy {deploy_hash_base16} to be processed"
+                        f"Timed out waiting for deploy {deploy_hash} to be processed"
                     )
                 time.sleep(delay)
                 continue
@@ -753,14 +640,9 @@ class CasperLabsClient:
         """
         Get the processed deploys within a block.
         """
-        yield from self.casperService.StreamBlockDeploys_stream(
+        yield from self.casper_service.StreamBlockDeploys_stream(
             casper.StreamBlockDeploysRequest(
-                block_hash_base16=block_hash_base16,
-                view=(
-                    full_view
-                    and info.DeployInfo.View.FULL
-                    or info.DeployInfo.View.BASIC
-                ),
+                block_hash_base16=block_hash_base16, view=self._deploy_view(full_view)
             )
         )
 
@@ -813,7 +695,7 @@ class CasperLabsClient:
             deploy_finalized = True
             deploy_orphaned = True
 
-        yield from self.casperService.StreamEvents_stream(
+        yield from self.casper_service.StreamEvents_stream(
             casper.StreamEventsRequest(
                 block_added=block_added,
                 block_finalized=block_finalized,
@@ -868,7 +750,7 @@ class CasperLabsClient:
 
     @api
     def show_peers(self):
-        return list(self.diagnosticsService.ListPeers(empty_pb2.Empty()).peers)
+        return list(self.diagnostics_service.ListPeers(empty_pb2.Empty()).peers)
 
     @api
     def account_hash(self, algorithm: str, public_key) -> bytes:

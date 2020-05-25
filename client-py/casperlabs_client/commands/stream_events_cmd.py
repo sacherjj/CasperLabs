@@ -1,7 +1,9 @@
 import argparse
 import base64
 
-from casperlabs_client.utils import guarded_command, jsonify, hexify
+from casperlabs_client.utils import jsonify, hexify
+from casperlabs_client.decorators import guarded_command
+
 
 NAME: str = "stream-events"
 HELP: str = "Stream block and deploy state transition events."

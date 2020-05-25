@@ -5,7 +5,7 @@ Command line interface for CasperLabsClient.
 import argparse
 import sys
 
-from casperlabs_client.utils import _read_version
+from casperlabs_client.io import _read_version
 
 from casperlabs_client import (
     CasperLabsClient,
@@ -14,23 +14,24 @@ from casperlabs_client import (
     DEFAULT_INTERNAL_PORT,
 )
 from casperlabs_client.commands import (
+    account_hash_cmd,
+    balance_cmd,
     deploy_cmd,
-    visualize_dag_cmd,
     keygen_cmd,
+    make_deploy_cmd,
+    propose_cmd,
     stream_events_cmd,
     transfer_cmd,
-    make_deploy_cmd,
     sign_deploy_cmd,
     send_deploy_cmd,
     query_state_cmd,
-    propose_cmd,
     show_block_cmd,
     show_deploy_cmd,
     show_blocks_cmd,
     show_deploys_cmd,
-    balance_cmd,
     show_peers_cmd,
-    account_hash_cmd,
+    validator_keygen_cmd,
+    visualize_dag_cmd,
 )
 
 
@@ -142,6 +143,7 @@ def cli(*arguments) -> int:
         sign_deploy_cmd,
         stream_events_cmd,
         transfer_cmd,
+        validator_keygen_cmd,
         visualize_dag_cmd,
     ):
         parser.add_command(command.NAME, command.method, command.HELP, command.OPTIONS)

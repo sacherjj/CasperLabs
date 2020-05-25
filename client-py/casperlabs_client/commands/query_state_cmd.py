@@ -1,5 +1,7 @@
 from casperlabs_client import CasperLabsClient
-from casperlabs_client.utils import guarded_command, hexify
+from casperlabs_client.utils import hexify
+from casperlabs_client.decorators import guarded_command
+
 
 NAME: str = "query-state"
 HELP: str = "Query a value in the global state."

@@ -1,9 +1,10 @@
 import sys
 
-from .. import consensus_pb2 as consensus
+from casperlabs_client import consensus_pb2 as consensus
 
 from casperlabs_client.crypto import read_pem_key
-from casperlabs_client.utils import guarded_command
+from casperlabs_client.decorators import guarded_command
+from casperlabs_client.io import read_binary_file, write_binary_file
 
 NAME: str = "sign-deploy"
 HELP: str = "Cryptographically signs a deploy. The signature is appended to existing approvals."
@@ -38,8 +39,8 @@ OPTIONS = [
 def method(casperlabs_client, args):
     deploy = consensus.Deploy()
     if args.deploy_path:
-        with open(args.deploy_path, "rb") as input_file:
-            deploy.ParseFromString(input_file.read())
+        file_contents = read_binary_file(args.deploy_path)
+        deploy.ParseFromString(file_contents)
     else:
         deploy.ParseFromString(sys.stdin.read())
 
@@ -50,5 +51,4 @@ def method(casperlabs_client, args):
     if not args.signed_deploy_path:
         sys.stdout.write(deploy.SerializeToString())
     else:
-        with open(args.signed_deploy_path, "wb") as output_file:
-            output_file.write(deploy.SerializeToString())
+        write_binary_file(args.signed_deploy_path, deploy.SerializeToString())

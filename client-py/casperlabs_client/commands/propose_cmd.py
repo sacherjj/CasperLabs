@@ -1,7 +1,8 @@
 import sys
 
 from casperlabs_client import CasperLabsClient
-from casperlabs_client.utils import guarded_command
+from casperlabs_client.decorators import guarded_command
+
 
 NAME: str = "propose"
 HELP: str = "[DEPRECATED] Force a node to propose a block based on its accumulated deploys."

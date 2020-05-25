@@ -1,4 +1,5 @@
-from casperlabs_client.utils import guarded_command, _print_blocks
+from casperlabs_client.decorators import guarded_command
+from casperlabs_client.io import _print_blocks
 
 NAME: str = "show-blocks"
 HELP: str = "View list of blocks in the current Casper view on an existing running node."

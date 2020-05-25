@@ -1,4 +1,4 @@
-from casperlabs_client.utils import guarded_command
+from casperlabs_client.decorators import guarded_command
 
 NAME: str = "balance"
 HELP: str = "Returns the balance of the account at the specified block."

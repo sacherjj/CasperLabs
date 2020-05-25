@@ -1,8 +1,10 @@
 import base64
 
+from casperlabs_client import bundled_contract
 from casperlabs_client.abi import ABI
 from casperlabs_client.commands import deploy_cmd
-from casperlabs_client.utils import guarded_command, bundled_contract
+from casperlabs_client.decorators import guarded_command
+
 
 TRANSFER_TO_ACCOUNT_WASM: str = "transfer_to_account_u512.wasm"
 NAME: str = "transfer"

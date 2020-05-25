@@ -1,5 +1,6 @@
 from casperlabs_client import consts
-from casperlabs_client.utils import guarded_command, hexify
+from casperlabs_client.decorators import guarded_command
+from casperlabs_client.utils import hexify
 
 NAME: str = "show-deploy"
 HELP: str = "View properties of a deploy known by Casper on an existing running node."

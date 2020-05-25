@@ -1,8 +1,9 @@
 import argparse
 
-from .. import CasperLabsClient
-from ..arg_types import natural
-from ..utils import guarded_command
+from casperlabs_client import CasperLabsClient
+from casperlabs_client.arg_types import natural
+from casperlabs_client.decorators import guarded_command
+
 
 NAME: str = "vdag"
 HELP: str = "DAG in DOT format. You need to install Graphviz from https://www.graphviz.org/ to use it."

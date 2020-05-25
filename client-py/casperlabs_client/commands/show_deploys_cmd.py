@@ -1,4 +1,5 @@
-from casperlabs_client.utils import guarded_command, _print_blocks
+from casperlabs_client.decorators import guarded_command
+from casperlabs_client.io import _print_blocks
 
 NAME: str = "show-deploys"
 HELP: str = "View deploys included in a block."
