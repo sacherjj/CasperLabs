@@ -46,7 +46,7 @@ export function makeDeploy(
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
   accountPublicKey: ByteArray,
-  dependencies?: Uint8Array[]
+  dependencies: Uint8Array[] = []
 ): Deploy {
   const sessionCode = new Deploy.Code();
   if (type === ContractType.WASM) {
@@ -74,10 +74,7 @@ export function makeDeploy(
   header.setBodyHash(protoHash(body));
   // we will remove gasPrice eventually
   header.setGasPrice(1);
-
-  if(dependencies && dependencies.length > 0){
-    header.setDependenciesList(dependencies);
-  }
+  header.setDependenciesList(dependencies);
 
   const deploy = new Deploy();
   deploy.setBody(body);

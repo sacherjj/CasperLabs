@@ -43,14 +43,14 @@ def test_create_account_key(one_node_network_with_clarity):
     faucet_public_key = one_node_network_with_clarity.clarity_node.faucet_account_public_key
     trs = find_deploys(driver, faucet_public_key)
     assert (
-        len(trs) == 2
+            len(trs) == 2
     )
 
     # There should be 3 deploys, 2 for previous faucet.
     request_token(driver, another_account_name)
     trs = find_deploys(driver, faucet_public_key)
     assert (
-        len(trs) == 3
+            len(trs) == 3
     )
 
     remove_account(driver, account_name)
@@ -98,7 +98,6 @@ def request_token(driver, account_name):
     :param account_name:
     :return:
     """
-    time.sleep(1)
     driver.find_element(By.LINK_TEXT, "Faucet").click()
     select = Select(driver.find_element(By.ID, "id-account-name"))
     select.select_by_visible_text(account_name)
@@ -126,7 +125,6 @@ def create_account(driver):
     :param driver:
     :return: name of the created account
     """
-    time.sleep(1)
     driver.find_element(By.LINK_TEXT, "Account Keys").click()
     driver.find_element(By.XPATH, "//button[contains(., 'Create Account Key')]").click()
     account_name = random_string(5)

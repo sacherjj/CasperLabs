@@ -15,7 +15,7 @@ export class StoredFaucetService {
     private faucetContract: Contracts.BoundContract,
     private contractKeys: SignKeyPair,
     private paymentAmount: bigint,
-    private transformAmount: bigint,
+    private transferAmount: bigint,
     private deployService: DeployService,
     private casperService: CasperService
   ) {
@@ -38,7 +38,7 @@ export class StoredFaucetService {
     if (this.deployHash) {
       dependencies.push(this.deployHash);
     }
-    const deployByName = DeployUtil.makeDeploy(CallFaucet.args(accountPublicKey, this.transformAmount), DeployUtil.ContractType.Name, "faucet", null, this.paymentAmount, this.contractKeys.publicKey, dependencies);
+    const deployByName = DeployUtil.makeDeploy(CallFaucet.args(accountPublicKey, this.transferAmount), DeployUtil.ContractType.Name, "faucet", null, this.paymentAmount, this.contractKeys.publicKey, dependencies);
     const signedDeploy = DeployUtil.signDeploy(deployByName, this.contractKeys);
     await this.deployService.deploy(signedDeploy);
     return signedDeploy.getDeployHash_asU8();
@@ -48,18 +48,11 @@ export class StoredFaucetService {
    * Check whether stored version faucet has been finalised every 10 seconds.
    */
   private async periodCheckState() {
-    setInterval(async () => {
+    const timeInterval = setInterval(async () => {
       const state = await this.checkState();
-      if (!state) {
-        // if we restart blockchain but forget to restart Clarity instance
-        // we need set storedFaucetFinalized false, and set deploy null
-        // so that next time we will deploy stored version faucet again.
-        if(this.storedFaucetFinalized && this.deployHash){
-          this.deployHash = null;
-        }
-        this.storedFaucetFinalized = false;
-      } else {
+      if (state) {
         this.storedFaucetFinalized = true;
+        clearInterval(timeInterval);
       }
     }, 10 * 1000);
   }
