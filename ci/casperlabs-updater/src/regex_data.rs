@@ -433,11 +433,18 @@ pub mod contract_as {
 
     lazy_static! {
         pub static ref DEPENDENT_FILES: Vec<DependentFile> = {
-            vec![DependentFile::new(
-                "contract-as/package.json",
-                PACKAGE_JSON_VERSION_REGEX.clone(),
-                replacement,
-            )]
+            vec![
+                DependentFile::new(
+                    "contract-as/package.json",
+                    PACKAGE_JSON_VERSION_REGEX.clone(),
+                    replacement,
+                ),
+                DependentFile::new(
+                    "contract-as/package-lock.json",
+                    PACKAGE_JSON_VERSION_REGEX.clone(),
+                    replacement,
+                ),
+            ]
         };
     }
 }
