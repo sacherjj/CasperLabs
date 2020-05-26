@@ -86,7 +86,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
     }
 
   override def dependencies(summary: BlockSummary) =
-    summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)
+    (summary.parentHashes ++ summary.justifications.map(_.latestBlockHash)).distinct
 }
 
 class BlockDownloadManagerImpl[F[_]](

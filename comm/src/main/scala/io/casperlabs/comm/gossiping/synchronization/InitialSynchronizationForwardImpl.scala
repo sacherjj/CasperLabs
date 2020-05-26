@@ -16,7 +16,7 @@ import io.casperlabs.comm.gossiping.synchronization.InitialSynchronization.Synch
 import io.casperlabs.models.BlockImplicits._
 import io.casperlabs.shared.IterantOps.RichIterant
 import io.casperlabs.shared.Log
-
+import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
@@ -71,6 +71,11 @@ class InitialSynchronizationForwardImpl[F[_]: Parallel: Log: Timer](
         case GossipError.MissingDependencies(_, missing) =>
           // The scheduling failed. Create another wait handle by doing a normal synchronization.
           for {
+            _ <- Log[F].info(
+                  s"Backfilling dependencies for ${summary.blockHash.show -> "block"}: ${missing
+                    .map(_.show)
+                    .mkString("[", ", ", "]") -> "missing"}"
+                )
             missingDag <- synchronizer.syncDag(peer, missing.toSet).rethrow
             missingHandles <- missingDag.traverse { dep =>
                                downloadManager.scheduleDownload(dep, peer, relay = false)

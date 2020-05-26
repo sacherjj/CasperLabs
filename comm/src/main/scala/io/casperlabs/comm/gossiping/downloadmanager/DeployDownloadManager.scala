@@ -77,7 +77,7 @@ object DeployDownloadManagerImpl extends DownloadManagerCompanion {
     }
 
   override def dependencies(summary: DeploySummary): Seq[ByteString] =
-    summary.getHeader.dependencies
+    summary.getHeader.dependencies.distinct
 }
 
 class DeployDownloadManagerImpl[F[_]](

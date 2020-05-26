@@ -375,9 +375,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
             } yield downloadFeedback
           )
         // Report any startup errors so the caller knows something's fatally wrong, then carry on.
-        start
-          .attemptAndLog("An error occurred when handling Download signal.")
-          .flatMap(scheduleFeedback.complete) >> run
+        start.attempt.flatMap(scheduleFeedback.complete) >> run
 
       case Signal.DownloadSuccess(id) =>
         val finish = for {
