@@ -75,6 +75,12 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
           .Header()
           .withMessageType(Block.MessageType.BALLOT)
           .withMessageRole(messageRole)
+          .withMainRank(target.mainRank + 1)
+          .withJRank(
+            (target.jRank +: justifications.values.flatten.map(_.jRank).toList)
+              .map(_.asInstanceOf[Long])
+              .max + 1
+          )
           .withValidatorPublicKey(validatorId)
           .withParentHashes(List(target.messageHash))
           .withJustifications(
@@ -111,6 +117,12 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
           Block
             .Header()
             .withMessageRole(messageRole)
+            .withMainRank(mainParent.mainRank + 1)
+            .withJRank(
+              (mainParent.jRank +: justifications.values.flatten.map(_.jRank).toList)
+                .map(_.asInstanceOf[Long])
+                .max + 1
+            )
             .withValidatorPublicKey(validatorId)
             .withParentHashes(List(mainParent.messageHash))
             .withJustifications(

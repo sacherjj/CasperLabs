@@ -28,12 +28,18 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
       //         \ e4 - e5
       override def test =
         for {
+          _  <- insertGenesis()
           e0 <- addGenesisEra()
-          _  <- e0.addChildEra()
-          e2 <- e0.addChildEra()
-          e3 <- e2.addChildEra()
-          e4 <- e2.addChildEra()
-          e5 <- e4.addChildEra()
+          b1 <- e0.block(messageProducer, genesis.blockSummary.blockHash)
+          b2 <- e0.block(messageProducer, genesis.blockSummary.blockHash)
+          _  <- e0.addChildEra(b1)
+          e2 <- e0.addChildEra(b2)
+          b3 <- e2.block(messageProducer, b2)
+          b4 <- e2.block(messageProducer, b2)
+          e3 <- e2.addChildEra(b3)
+          e4 <- e2.addChildEra(b4)
+          b5 <- e4.block(messageProducer, b3)
+          e5 <- e4.addChildEra(b5)
           // Wait until where e3 and e4 are voting.
           // Their parent eras will have their voting over, and
           // their children should be active.

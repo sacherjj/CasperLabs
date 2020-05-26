@@ -209,13 +209,22 @@ trait HighwayFixture
       def addChildEra(keyBlockHash: BlockHash = ByteString.EMPTY): Task[Era] = {
         val nextEndTick = conf.toTicks(conf.eraEnd(conf.toInstant(Ticks(era.endTick))))
         val randomEra   = sample[Era]
-        val childEra = randomEra
-          .withKeyBlockHash(if (keyBlockHash.isEmpty) randomEra.keyBlockHash else keyBlockHash)
-          .withParentKeyBlockHash(era.keyBlockHash)
-          .withStartTick(era.endTick)
-          .withEndTick(nextEndTick)
-          .withBonds(era.bonds)
-        db.addEra(childEra).as(childEra)
+
+        for {
+          keyBlock <- if (keyBlockHash.isEmpty) {
+                       era.block(messageProducer, era.keyBlockHash).flatMap(db.lookupUnsafe)
+                     } else {
+                       db.lookupUnsafe(keyBlockHash)
+                     }
+          childEra = randomEra
+            .withKeyBlockHash(keyBlock.messageHash)
+            .withParentKeyBlockHash(era.keyBlockHash)
+            .withStartTick(era.endTick)
+            .withEndTick(nextEndTick)
+            .withBonds(era.bonds)
+
+          _ <- db.addEra(childEra)
+        } yield childEra
       }
 
       // It's the same as in `ForkChoiceTest` :( or vice versa

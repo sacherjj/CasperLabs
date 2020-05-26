@@ -670,7 +670,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           "only cite the lambda message and validators own latest message" in {
             var forkChoiceFun: MockForkChoice.ForkChoiceFun =
-              (_, _) => sys.error("Fork choice unassigned.")
+              (_, _) => ForkChoice.Result(genesis, Set.empty)
 
             implicit val ds = defaultBlockDagStorage
             implicit val fc = MockForkChoice[Id](genesis, Some(forkChoiceFun(_, _)))
