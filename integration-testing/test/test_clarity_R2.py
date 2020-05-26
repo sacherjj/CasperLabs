@@ -133,6 +133,8 @@ def create_account(driver):
     account_name_input.click()
     account_name_input.send_keys(account_name)
     driver.find_element(By.XPATH, "//button[contains(., 'Save')]").click()
+    # waiting for downloading the keypairs
+    time.sleep(1)
     assert (
         len(driver.find_elements(By.XPATH, f"//td[contains(., '{account_name}')]")) == 1
     )
