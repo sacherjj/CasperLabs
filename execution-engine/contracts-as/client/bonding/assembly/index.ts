@@ -7,13 +7,16 @@ import {getMainPurse} from "../../../../contract-as/assembly/account";
 import {createPurse, transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
 
 const POS_ACTION = "bond";
+const ARG_AMOUNT = "amount";
+const ARG_PURSE = "purse";
+
 
 export function call(): void {
     let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
     let mainPurse = getMainPurse();
     let bondingPurse = createPurse();
 
-    let amountBytes = CL.getArg(0);
+    let amountBytes = CL.getNamedArg(ARG_AMOUNT);
     if (amountBytes === null) {
         Error.fromErrorCode(ErrorCode.MissingArgument).revert();
         return;

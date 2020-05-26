@@ -29,11 +29,11 @@ export declare function store_function_at_hash(function_name_ptr: usize, functio
 @external("env", "load_named_keys")
 export declare function load_named_keys(total_keys: usize, result_size: usize): i32;
 /** @hidden */
-@external("env", "get_arg")
-export declare function get_arg(index: u32, dest_ptr: usize, dest_size: u32): i32;
+@external("env", "get_named_arg")
+export declare function get_named_arg(index: u32, dest_ptr: usize, dest_size: u32): i32;
 /** @hidden */
-@external("env", "get_arg_size")
-export declare function get_arg_size(index: u32, dest_size: u32): i32;
+@external("env", "get_named_arg_size")
+export declare function get_named_arg_size(index: u32, dest_size: u32): i32;
 /** @hidden */
 @external("env", "ret")
 export declare function ret(value_ptr: usize, value_size: usize): void;

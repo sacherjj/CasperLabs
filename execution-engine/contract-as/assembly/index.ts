@@ -46,11 +46,11 @@ export const enum SystemContract {
  * @internal
  * @param i I-th parameter
  */
-export function getArgSize(i: u32): Ref<U32> | null {
+export function getNamedArgSize(name: String): Ref<U32> | null {
   let size = new Array<u32>(1);
   size[0] = 0;
 
-  let ret = externals.get_arg_size(i, size.dataStart);
+  let ret = externals.get_named_arg_size(name.dataStart, name.length());
   const error = Error.fromResult(ret);
   if (error !== null) {
     if (error.value() == ErrorCode.MissingArgument) {
@@ -74,14 +74,15 @@ export function getArgSize(i: u32): Ref<U32> | null {
  * @returns Array of bytes with ABI serialized argument. A null value if
  * given parameter is not present.
  */
-export function getArg(i: u32): Uint8Array | null {
-  let arg_size = getArgSize(i);
+export function getNamedArg(name: String): Uint8Array {
+  let arg_size = getNamedArgSize(name);
   if (arg_size == null) {
-    return null;
+    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
+    return <Uint8Array>unreachable();
   }
   let arg_size_u32 = changetype<u32>(arg_size.value);
   let data = new Uint8Array(arg_size_u32);
-  let ret = externals.get_arg(i, data.dataStart, arg_size_u32);
+  let ret = externals.get_named_arg(name.dataStart, name.length(), data.dataStart, arg_size_u32);
   const error = Error.fromResult(ret);
   if (error !== null) {
     error.revert();
