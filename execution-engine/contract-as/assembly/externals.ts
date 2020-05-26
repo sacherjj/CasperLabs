@@ -30,16 +30,17 @@ export declare function store_function_at_hash(function_name_ptr: usize, functio
 export declare function load_named_keys(total_keys: usize, result_size: usize): i32;
 /** @hidden */
 @external("env", "get_named_arg")
-export declare function get_named_arg(index: u32, dest_ptr: usize, dest_size: u32): i32;
+export declare function get_named_arg(name_ptr: usize, name_size: usize, dest_ptr: usize, dest_size: usize): i32;
 /** @hidden */
 @external("env", "get_named_arg_size")
-export declare function get_named_arg_size(index: u32, dest_size: u32): i32;
+export declare function get_named_arg_size(name_ptr: usize, name_size: usize, dest_size: usize): i32;
 /** @hidden */
 @external("env", "ret")
 export declare function ret(value_ptr: usize, value_size: usize): void;
 /** @hidden */
 @external("env", "call_contract")
-export declare function call_contract(key_ptr: usize, key_size: u32, args_ptr: usize, args_size: u32, result_size: usize): i32;
+export declare function call_contract(contract_hash_ptr: usize, contract_hash_size: usize, entry_point_name_ptr: usize, entry_point_name_size: usize, runtime_args_ptr: usize, runtime_args_size: usize, result_size: usize): i32;
+
 /** @hidden */
 @external("env", "get_key")
 export declare function get_key(

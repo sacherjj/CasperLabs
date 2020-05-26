@@ -553,6 +553,11 @@ export class U512 {
         }
 
         const lengthPrefix = <i32>bytes[0];
+        if (lengthPrefix > bytes.length) {
+            return new Result<U512>(null, Error.EarlyEndOfStream, 0);
+        }
+
+
         let res = new U512();
 
         // Creates a buffer so individual bytes can be placed there

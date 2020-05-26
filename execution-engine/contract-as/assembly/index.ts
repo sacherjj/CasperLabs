@@ -11,6 +11,8 @@ import {toBytesString,
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH} from "./constants";
 import {Pair} from "./pair";
+import {RuntimeArgs} from "./runtime_args";
+import {encodeUTF8} from "./utils";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -50,7 +52,8 @@ export function getNamedArgSize(name: String): Ref<U32> | null {
   let size = new Array<u32>(1);
   size[0] = 0;
 
-  let ret = externals.get_named_arg_size(name.dataStart, name.length());
+  const nameBuf = encodeUTF8(name);
+  let ret = externals.get_named_arg_size(nameBuf.dataStart, nameBuf.length, size.dataStart);
   const error = Error.fromResult(ret);
   if (error !== null) {
     if (error.value() == ErrorCode.MissingArgument) {
@@ -80,9 +83,11 @@ export function getNamedArg(name: String): Uint8Array {
     Error.fromErrorCode(ErrorCode.MissingArgument).revert();
     return <Uint8Array>unreachable();
   }
+  let nameBytes = encodeUTF8(name);
+
   let arg_size_u32 = changetype<u32>(arg_size.value);
   let data = new Uint8Array(arg_size_u32);
-  let ret = externals.get_named_arg(name.dataStart, name.length(), data.dataStart, arg_size_u32);
+  let ret = externals.get_named_arg(nameBytes.dataStart, nameBytes.length, data.dataStart, arg_size_u32);
   const error = Error.fromResult(ret);
   if (error !== null) {
     error.revert();
@@ -184,9 +189,10 @@ export function storeFunctionAtHash(name: String, namedKeysBytes: u8[]): Key {
  * @param args A list of values
  * @returns Bytes of the contract's return value.
  */
-export function callContract(key: Key, args: CLValue[]): Uint8Array {
+export function callContract(key: Key, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
   let keyBytes = key.toBytes();
   let argBytes = toBytesVecT(args);
+  let entryPointNameBytes = toBytesString(entryPointName);
 
   let resultSize = new Uint32Array(1);
   resultSize.fill(0);
