@@ -52,6 +52,8 @@ export class StoredFaucetService {
       const state = await this.checkState();
       if (state) {
         this.storedFaucetFinalized = true;
+        // we don't need to set dependency anymore
+        this.deployHash = null;
         clearInterval(timeInterval);
       }
     }, 10 * 1000);
