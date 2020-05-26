@@ -18,7 +18,12 @@ import io.casperlabs.metrics.implicits._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
+import io.casperlabs.storage.dag.{
+  AncestorsStorage,
+  DagRepresentation,
+  DagStorage,
+  FinalityStorageReader
+}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.shared.SemaphoreMap
 
@@ -80,6 +85,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   val endTick   = Ticks(era.endTick)
   val start     = conf.toInstant(startTick)
   val end       = conf.toInstant(endTick)
+
+  val isBonded = maybeMessageProducer.isDefined
 
   val bookingBoundaries =
     conf.criticalBoundaries(start, end, delayDuration = conf.bookingDuration)
@@ -751,7 +758,7 @@ object EraRuntime {
     bonds = genesis.getHeader.getState.bonds
   )
 
-  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice: AncestorsStorage](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -763,7 +770,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromEra[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice: AncestorsStorage](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -776,6 +783,7 @@ object EraRuntime {
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
       dag              <- DagStorage[F].getRepresentation
       semaphoreMap     <- SemaphoreMap[F, PublicKeyBS](1)
+      isOrphanEra      <- isOrphanEra[F](era.keyBlockHash)
     } yield {
       new EraRuntime[F](
         conf,
@@ -785,7 +793,7 @@ object EraRuntime {
         // Whether the validator is bonded depends on the booking block. Only bonded validators
         // have to produce blocks and ballots in the era.
         maybeMessageProducer.filter { mp =>
-          era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
+          !isOrphanEra && era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
         },
         semaphoreMap,
         isSynced,
@@ -923,4 +931,23 @@ object EraRuntime {
           false.pure[F]
       }
       .map(_.isDefined)
+
+  /** Check if a given era is one which is still viable according to the last finalized block.
+    * We don't want to produce messages in eras which were completely bypassed by the LFB, which
+    * is possible if the validator(s) producing messages in the era don't see the same messages
+    * as we do. We still validate their incoming messages, although it's possible that we could
+    * just drop them as invalids, since these eras will never be referenced by siblings.
+    * By not dropping we do extra work but at least it's visible in the Explorer, rather than
+    * fill logs with error messages.
+    */
+  def isOrphanEra[F[_]: MonadThrowable: DagStorage: AncestorsStorage: ForkChoice](
+      keyBlockHash: BlockHash
+  ): F[Boolean] =
+    for {
+      dag      <- DagStorage[F].getRepresentation
+      keyBlock <- dag.lookupUnsafe(keyBlockHash)
+      choice   <- ForkChoice[F].fromKeyBlock(keyBlockHash)
+      relation <- DagOperations.relation[F](keyBlock, choice.block)
+    } yield relation.isEmpty
+
 }

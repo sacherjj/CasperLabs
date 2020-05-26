@@ -4,6 +4,7 @@ import cats.{Applicative, Id, Show}
 import cats.syntax.show._
 import cats.syntax.option._
 import cats.syntax.applicative._
+import cats.syntax.flatMap._
 import cats.effect.{Clock, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
@@ -32,11 +33,13 @@ import org.scalactic.source
 import org.scalactic.Prettifier
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll => forAllGen}
 import org.scalacheck._
-
+import scala.annotation.tailrec
 import scala.concurrent.duration._
 import java.time.temporal.ChronoUnit
 
 import io.casperlabs.casper.highway.HighwayEvent.HandledLambdaMessage
+import io.casperlabs.storage.dag.AncestorsStorage
+import io.casperlabs.storage.dag.DagLookup
 
 class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
   import EraRuntimeSpec._
@@ -166,6 +169,34 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     new MockMessageProducer[Id](validator)
   }
 
+  implicit def defaultAncestorStorage(implicit ds: DagStorage[Id]): AncestorsStorage[Id] =
+    new AncestorsStorage[Id] with DagLookup[Id] {
+      override implicit val MT: MonadThrowable[Id] = syncId
+
+      override def findAncestor(block: BlockHash, distance: Long): Id[Option[BlockHash]] =
+        lookupUnsafe(block).flatMap(loop(_, distance))
+
+      override def lookup(blockHash: BlockHash): Id[Option[Message]] =
+        ds.getRepresentation.flatMap(_.lookup(blockHash))
+
+      override def contains(blockHash: BlockHash): Id[Boolean] =
+        ds.getRepresentation.flatMap(_.contains(blockHash))
+
+      @tailrec private def loop(
+          msg: Message,
+          distance: Long
+      ): Option[BlockHash] =
+        if (distance == 0) Some(msg.messageHash)
+        else {
+          lookup(msg.parentBlock) match {
+            case Some(parent) =>
+              loop(parent, distance - 1)
+            case None =>
+              None
+          }
+        }
+    }
+
   val messageProducerWithPendingDeploys: String => BlockDagStorage[Id] => MessageProducer[Id] = {
     validator => implicit bds =>
       new MockMessageProducer[Id](validator) {
@@ -198,7 +229,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC)
+    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC, defaultAncestorStorage)
 
   /** Create a runtime given an era that's supposedly the child era of another one;
     * otherwise we should be using `genesisEraRuntime` instead. For the same reason
@@ -230,7 +261,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC)
+    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC, defaultAncestorStorage)
 
   // Make it easier to share common dependencies.
   // TODO (NODE-1199): Use HighwayFixture instead for all tests.
