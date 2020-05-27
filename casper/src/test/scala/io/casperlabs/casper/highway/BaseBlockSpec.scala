@@ -7,12 +7,15 @@ import org.scalatest._
 import scala.concurrent.duration._
 import scala.collection.concurrent.TrieMap
 import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
+import io.casperlabs.casper.consensus.{Bond, Era}
+import io.casperlabs.casper.consensus.state
 import io.casperlabs.models.Message
 import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.storage.dag.AncestorsStorage.Relation
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import io.casperlabs.shared.Log
+import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 
 class BaseBlockSpec
     extends FlatSpec
@@ -23,7 +26,7 @@ class BaseBlockSpec
 
   behavior of "EraRuntime"
 
-  it should "not participate in eras that aren't part of the main chain" in testFixture {
+  it should "not participate in eras that aren't part of the main chain" ignore testFixture {
     implicit timer => implicit db =>
       new Fixture(
         length = 3 * eraDuration,
@@ -73,20 +76,33 @@ class BaseBlockSpec
   }
 
   it should "not join a longer streak of eras produced by an output-only validator" in testFixtures(
-    validators = List("Alice", "Bob", "Charlie")
+    validators = List("Alice", "Bob", "Charlie", "Dave"),
+    timeout = 30.seconds
   ) { timer => validatorDatabases =>
     new NetworkFixture(validatorDatabases) {
 
       override val start = genesisEraStart
 
-      // The hypotheses is that if Charlie builds a more isolated eras than the the lookback
+      val conf = defaultConf.copy(
+        postEraVotingDuration = HighwayConf.VotingDuration.FixedLength(postEraVotingDuration)
+      )
+
+      // The hypotheses is that if Alice builds more isolated eras than the the lookback
       // of the fork choice then the other validators will join them:
       //
       // e0 - e1 - e2 - e3 - e4
       //    \
       //     e1' - e2' - e3' - e4'
       //
-      override val length = eraDuration * 2 + eraDuration * 3 + eraDuration / 2
+      override val length = eraDuration * 2 + eraDuration * 4
+
+      val validators        = validatorDatabases.unzip._1.toSet
+      val isolatedValidator = "No"
+      //val nonIsolatedValidator = "Bob"
+      val routing = validators.map { v =>
+        val peers = if (v == isolatedValidator) validators else validators - isolatedValidator
+        v -> peers
+      }.toMap
 
       override def makeRelayFixture(
           validator: String,
@@ -97,21 +113,55 @@ class BaseBlockSpec
         new RelayFixture(
           length,
           validator = validator,
-          initRoundExponent = 15, // ~ 8 hours
+          // Low enough exponent so that the isolated validator can keep producing eras.
+          initRoundExponent = 14,
           supervisorsRef,
           isSyncedRef,
+          conf = conf,
+          routing = routing,
           printLevel = Log.Level.Warn
         ) (timer, db) {
+
+          override def bonds: List[Bond] = List(
+            Bond("Alice").withStake(state.BigInt("3000")),
+            Bond("Bob").withStake(state.BigInt("4000")),
+            Bond("Charlie").withStake(state.BigInt("5000")),
+            Bond("Dave").withStake(state.BigInt("5000"))
+          )
 
           override val test = for {
             _           <- sleepUntil(start plus length)
             supervisors <- supervisorsRef.get
-            supervisor  = supervisors(validator)
-            activeEras  <- supervisor.activeEras
+            activeEras <- validators.toList
+                           .traverse { v =>
+                             supervisors(v).activeEras.map(v -> _.map(_.keyBlockHash))
+                           }
+                           .map(_.toMap)
+            eras <- if (activeEras(validator).isEmpty) Task.now(Nil)
+                   else eraTree(activeEras(validator).head)
           } yield {
-            activeEras should have size (1)
+            println(
+              s"$validator: ${activeEras(validator).map(_.show).mkString(", ")} "
+            )
+            println(s"era tree: ${eras.map(_.keyBlockHash.show).mkString(", ")}")
+            //activeEras(validator) should have size (1)
+            // if (validator == isolatedValidator) {
+            //   activeEras(validator) should not be activeEras(nonIsolatedValidator)
+            // } else {
+            //   activeEras(validator) shouldBe activeEras(nonIsolatedValidator)
+            // }
+          }
+
+          def eraTree(keyBlockHash: BlockHash) = {
+            def loop(keyBlockHash: BlockHash, eras: List[Era]): Task[List[Era]] =
+              db.getEraUnsafe(keyBlockHash).flatMap { era =>
+                if (era.parentKeyBlockHash.isEmpty) Task.now(era :: eras)
+                else loop(era.parentKeyBlockHash, era :: eras)
+              }
+            loop(keyBlockHash, Nil)
           }
         }
+
     }
   }
 }

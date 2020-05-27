@@ -39,12 +39,12 @@ trait HighwayFixture
     with ArbitraryConsensus { self: Suite =>
 
   /** Create multiple databases, one for each validator. */
-  def testFixtures(validators: List[String])(
+  def testFixtures(validators: List[String], timeout: FiniteDuration = 10.seconds)(
       f: Timer[Task] => List[(String, SQLiteStorage.CombinedStorage[Task])] => FixtureLike
   ): Unit = {
     val ctx   = TestScheduler()
     val timer = SchedulerEffect.timer[Task](ctx)
-    withCombinedStorages(numStorages = validators.size) { dbs =>
+    withCombinedStorages(numStorages = validators.size, timeout = timeout) { dbs =>
       Task.async[Unit] { cb =>
         val fix = f(timer)(validators zip dbs)
         // TestScheduler allows us to manually forward time.
@@ -73,14 +73,15 @@ trait HighwayFixture
   import HighwayConf.{EraDuration, VotingDuration}
 
   val genesisEraStart       = date(2019, 12, 30)
-  val eraDuration           = days(10)
+  val eraDuration           = days(7)
+  val bookingDuration       = days(10)
   val postEraVotingDuration = days(2)
 
   val defaultConf = HighwayConf(
     tickUnit = TimeUnit.SECONDS,
     genesisEraStart = genesisEraStart,
-    eraDuration = EraDuration.FixedLength(days(7)),
-    bookingDuration = eraDuration,
+    eraDuration = EraDuration.FixedLength(eraDuration),
+    bookingDuration = bookingDuration,
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
@@ -103,7 +104,7 @@ trait HighwayFixture
       val validator: String = "Alice",
       val initRoundExponent: Int = 0,
       val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(true),
-      protected val printLevel: Log.Level = Log.Level.Error
+      printLevel: Log.Level = Log.Level.Error
   )(
       implicit
       timer: Timer[Task],

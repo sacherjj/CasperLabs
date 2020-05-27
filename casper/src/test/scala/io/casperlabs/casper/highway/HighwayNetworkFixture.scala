@@ -20,6 +20,9 @@ trait HighwayNetworkFixture { self: HighwayFixture =>
       initRoundExponent: Int,
       supervisorsRef: Ref[Task, Map[String, EraSupervisor[Task]]],
       isSyncedRef: Ref[Task, Boolean],
+      conf: HighwayConf = defaultConf,
+      // Optionally restrict validator communication channels.
+      routing: Map[String, Set[String]] = Map.empty,
       printLevel: Log.Level = Log.Level.Error
   )(
       implicit
@@ -29,6 +32,7 @@ trait HighwayNetworkFixture { self: HighwayFixture =>
         length = length,
         validator = validator,
         initRoundExponent = initRoundExponent,
+        conf = conf,
         isSyncedRef = isSyncedRef,
         printLevel = printLevel
       ) (timer, db) {
@@ -41,12 +45,15 @@ trait HighwayNetworkFixture { self: HighwayFixture =>
           _           <- relayedRef.update(_ ++ hashes)
           blocks      <- hashes.traverse(h => db.getBlockMessage(h).map(_.get))
           supervisors <- supervisorsRef.get
+          mask        = routing.getOrElse(validator, supervisors.keySet) - validator
           // Notify other supervisors. Doing it on a fiber because when done
           // synchronously it caused an unexplicable error in the first era
           // after genesis where validators didn't find the blocks they clearly
           // saved into the DAG, ones they created themselves for example.
+          // It seemed thought that with fibers and low round exponents there
+          // are race conditions between handling incoming messages vs creating own.
           fiber <- supervisors
-                    .filterKeys(v => v != validator)
+                    .filterKeys(mask)
                     .values
                     .toList
                     .traverse(s => blocks.traverse(b => s.validateAndAddBlock(b)))
