@@ -1,21 +1,15 @@
 #!/usr/bin/env python3
-
+import base64
+import functools
 from pathlib import Path
 import time
-import functools
 import warnings
+from typing import List, Union
 
-from .consts import (
-    SUPPORTED_KEY_ALGORITHMS,
-    DEFAULT_HOST,
-    DEFAULT_PORT,
-    DEFAULT_INTERNAL_PORT,
-    VISUALIZE_DAG_STREAM_DELAY,
-    BUNDLED_TRANSFER_WASM,
-)
+from casperlabs_client.deploy import DeployData
+from casperlabs_client import io, utils
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
-from .vdag import call_dot
 
 # Hack to fix the relative imports problems with grpc #
 import sys
@@ -62,9 +56,9 @@ from . import empty_pb2
 from . import vdag
 from . import abi
 
-from casperlabs_client.contract import bundled_contract
+from casperlabs_client.contract import bundled_contract_path
 from casperlabs_client.query_state import key_variant
-from casperlabs_client.deploy import make_deploy, sign_deploy, _select_public_key_to_use
+from casperlabs_client.deploy import sign_deploy
 
 
 class InternalError(Exception):
@@ -116,9 +110,9 @@ class CasperLabsClient:
 
     def __init__(
         self,
-        host: str = DEFAULT_HOST,
-        port: int = DEFAULT_PORT,
-        port_internal: int = DEFAULT_INTERNAL_PORT,
+        host: str = consts.DEFAULT_HOST,
+        port: int = consts.DEFAULT_PORT,
+        port_internal: int = consts.DEFAULT_INTERNAL_PORT,
         node_id: str = None,
         certificate_file: str = None,
     ):
@@ -195,35 +189,42 @@ class CasperLabsClient:
         """
         Create a protobuf deploy object. See deploy for description of parameters.
         """
-        return make_deploy(
-            from_addr=from_addr,
-            gas_price=gas_price,
-            payment=payment,
-            session=session,
-            public_key=public_key,
-            session_args=session_args,
-            payment_args=payment_args,
-            payment_amount=payment_amount,
-            payment_hash=payment_hash,
-            payment_name=payment_name,
-            payment_uref=payment_uref,
-            session_hash=session_hash,
-            session_name=session_name,
-            session_uref=session_uref,
-            ttl_millis=ttl_millis,
-            dependencies=dependencies,
-            chain_name=chain_name,
+        deploy_data = DeployData.from_args(
+            dict(
+                from_addr=from_addr,
+                gas_price=gas_price,
+                payment=payment,
+                session=session,
+                public_key=public_key,
+                session_args=session_args,
+                payment_args=payment_args,
+                payment_amount=payment_amount,
+                payment_hash=payment_hash,
+                payment_name=payment_name,
+                payment_uref=payment_uref,
+                session_hash=session_hash,
+                session_name=session_name,
+                session_uref=session_uref,
+                ttl_millis=ttl_millis,
+                dependencies=dependencies,
+                chain_name=chain_name,
+            )
         )
+        print(deploy_data)
+        return deploy_data.make_protobuf()
 
     @api
-    def sign_deploy(self, deploy, public_key, private_key_file):
+    def sign_deploy(self, deploy, public_key, private_key_file, deploy_file=None):
+        if deploy is None:
+            if deploy_file is None:
+                raise ValueError("Must have either deploy or deploy_file")
+            deploy = io.read_deploy_file(deploy_file)
         return sign_deploy(deploy, public_key, private_key_file)
 
     @api
     def deploy(
         self,
         from_addr: bytes = None,
-        gas_price: int = 10,
         payment: str = None,
         session: str = None,
         public_key: str = None,
@@ -247,8 +248,6 @@ class CasperLabsClient:
         on the configuration of the Casper instance.
 
         :param from_addr:      Purse address that will be used to pay for the deployment.
-        :param gas_price:      The price of gas for this transaction in units dust/gas.
-                               Must be positive integer.
         :param payment:        Path to the file with payment code.
         :param session:        Path to the file with session code.
         :param public_key:     Path to a file with public key (Ed25519)
@@ -277,52 +276,98 @@ class CasperLabsClient:
         :return:               deploy hash in base16 format
         """
 
-        deploy = self.make_deploy(
+        # Using from_args to get validation on build of object
+        deploy_data = DeployData.from_args(
+            dict(
+                from_addr=from_addr,
+                payment=payment,
+                session=session,
+                public_key=public_key,
+                session_args=session_args,
+                payment_args=payment_args,
+                payment_amount=payment_amount,
+                payment_hash=payment_hash,
+                payment_name=payment_name,
+                payment_uref=payment_uref,
+                session_hash=session_hash,
+                session_name=session_name,
+                session_uref=session_uref,
+                ttl_millis=ttl_millis,
+                dependencies=dependencies,
+                chain_name=chain_name,
+                private_key=private_key,
+            )
+        )
+
+        deploy_proto = deploy_data.make_protobuf()
+
+        signed_deploy = self.sign_deploy(
+            deploy_proto, deploy_data.public_key_to_use, deploy_data.private_key
+        )
+        self.send_deploy(signed_deploy)
+        return signed_deploy.deploy_hash.hex()
+
+    @api
+    def transfer(
+        self,
+        target_account,
+        amount,
+        from_addr: bytes = None,
+        payment: str = None,
+        public_key: str = None,
+        private_key: str = None,
+        payment_args: bytes = None,
+        payment_amount: int = None,
+        payment_hash: bytes = None,
+        payment_name: str = None,
+        payment_uref: bytes = None,
+        ttl_millis: int = 0,
+        dependencies=None,
+        chain_name: str = None,
+    ):
+        target_account_bytes = base64.b64decode(target_account)
+        if len(target_account_bytes) != 32:
+            target_account_bytes = bytes.fromhex(target_account)
+            if len(target_account_bytes) != 32:
+                raise ValueError(
+                    "--target_account must be 32 bytes base64 or base16 encoded"
+                )
+
+        session_args = abi.ABI.args(
+            [
+                abi.ABI.account("account", target_account_bytes),
+                abi.ABI.u512("amount", amount),
+            ]
+        )
+        return self.deploy(
             from_addr=from_addr,
-            gas_price=gas_price,
             payment=payment,
-            session=session,
             public_key=public_key,
+            private_key=private_key,
+            session=bundled_contract_path(consts.BUNDLED_TRANSFER_WASM),
             session_args=session_args,
             payment_args=payment_args,
             payment_amount=payment_amount,
             payment_hash=payment_hash,
             payment_name=payment_name,
             payment_uref=payment_uref,
-            session_hash=session_hash,
-            session_name=session_name,
-            session_uref=session_uref,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
         )
 
-        deploy = self.sign_deploy(
-            deploy,
-            _select_public_key_to_use(public_key, from_addr, private_key),
-            private_key,
-        )
-        self.send_deploy(deploy)
+    @api
+    def send_deploy(self, deploy=None, deploy_file=None) -> str:
+        """  """
+        if deploy is None:
+            if deploy_file is None:
+                raise ValueError("Must have either deploy or deploy_file.")
+            deploy = io.read_deploy_file(deploy_file)
+        self.casper_service.Deploy(casper.DeployRequest(deploy=deploy))
         return deploy.deploy_hash.hex()
 
     @api
-    def transfer(self, target_account_hex, amount, **deploy_args):
-        target_account_bytes = bytes.fromhex(target_account_hex)
-        deploy_args["session"] = bundled_contract(BUNDLED_TRANSFER_WASM)
-        deploy_args["session_args"] = abi.ABI.args(
-            [
-                abi.ABI.account("account", target_account_bytes),
-                abi.ABI.u512("amount", amount),
-            ]
-        )
-        return self.deploy(**deploy_args)
-
-    @api
-    def send_deploy(self, deploy):
-        self.casper_service.Deploy(casper.DeployRequest(deploy=deploy))
-
-    @api
-    def show_blocks(self, depth: int = 1, max_rank=0, full_view=True):
+    def show_blocks(self, depth: int = 1, max_rank: int = 0, full_view: bool = True):
         """
         Get slices of the DAG, going backwards, rank by rank.
 
@@ -415,7 +460,7 @@ class CasperLabsClient:
         out: str = None,
         show_justification_lines: bool = False,
         stream: str = None,
-        delay_in_seconds=VISUALIZE_DAG_STREAM_DELAY,
+        delay_in_seconds=consts.VISUALIZE_DAG_STREAM_DELAY,
     ):
         """
         Generate DAG in DOT format.
@@ -452,7 +497,7 @@ class CasperLabsClient:
                 iteration += 1
                 return f"{file_name_base}_{iteration}.{file_format}"
 
-        yield call_dot(dot_dag_description, file_name(), file_format)
+        yield vdag.call_dot(dot_dag_description, file_name(), file_format)
         previous_block_hashes = set(b.summary.block_hash for b in block_infos)
         while stream:
             time.sleep(delay_in_seconds)
@@ -462,7 +507,7 @@ class CasperLabsClient:
                 dot_dag_description = vdag.generate_dot(
                     block_infos, show_justification_lines
                 )
-                yield call_dot(dot_dag_description, file_name(), file_format)
+                yield vdag.call_dot(dot_dag_description, file_name(), file_format)
                 previous_block_hashes = block_hashes
 
     @api
@@ -542,6 +587,33 @@ class CasperLabsClient:
         )
         return self.query_state(blockHash, key, path, keyType)
 
+    @staticmethod
+    @api
+    def keygen(directory: str) -> None:
+        """ Generates account keys into existing directory.
+            Existing files in directory will be overwritten
+
+        :param directory:       # existing output directory
+
+        Generated files:
+           account-id           # validator ID in Base64 format; can be used in accounts.csv
+                                # derived from validator.public.pem
+           account-id-hex       # validator ID in hex, derived from validator.public.pem
+           account-private.pem  # ed25519 private key
+           account-public.pem   # ed25519 public key"""
+
+        directory = Path(directory).resolve()
+        private_path = directory / consts.ACCOUNT_PRIVATE_KEY_FILENAME
+        public_path = directory / consts.ACCOUNT_PUBLIC_KEY_FILENAME
+        id_path = directory / consts.ACCOUNT_ID_FILENAME
+        id_hex_path = directory / consts.ACCOUNT_ID_HEX_FILENAME
+
+        (private_pem, public_pem, public_bytes) = crypto.generate_keys()
+        io.write_binary_file(private_path, private_pem)
+        io.write_binary_file(public_path, public_pem)
+        io.write_file(id_path, utils.encode_base64(public_bytes))
+        io.write_file(id_hex_path, public_bytes.hex())
+
     @api
     def balance(self, address: str, block_hash: str):
         """ Return balance of the main purse of an account
@@ -592,7 +664,7 @@ class CasperLabsClient:
         :param full_view:           Show full view of deploy, default false
         :param wait_for_processed:  Block return until deploy is not pending, default false
         :param delay:               Delay between status checks while waiting
-        :timeout_seconds:           Time to return of wait even if deploy is pending
+        :param timeout_seconds:    S Time to return of wait even if deploy is pending
         """
         start_time = time.time()
         while True:
@@ -685,6 +757,21 @@ class CasperLabsClient:
         Note, you must subscribe to some events (pass True to some keywords other than account_public_keys or deploy_hashes)
         otherwise this generator will block forever.
         """
+        if not any(
+            (
+                all,
+                block_added,
+                block_finalized,
+                deploy_added,
+                deploy_discarded,
+                deploy_requeued,
+                deploy_processed,
+                deploy_finalized,
+                deploy_orphaned,
+            )
+        ):
+            raise ValueError("No events given to subscribe.")
+
         if all:
             block_added = True
             block_finalized = True
@@ -694,6 +781,18 @@ class CasperLabsClient:
             deploy_processed = True
             deploy_finalized = True
             deploy_orphaned = True
+
+        if account_public_keys is None:
+            account_public_keys = []
+        if deploy_hashes is None:
+            deploy_hashes = []
+
+        deploy_filter = (
+            casper.StreamEventsRequest.DeployFilter(
+                account_public_keys=[bytes.fromhex(pk) for pk in account_public_keys],
+                deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes],
+            ),
+        )
 
         yield from self.casper_service.StreamEvents_stream(
             casper.StreamEventsRequest(
@@ -705,16 +804,59 @@ class CasperLabsClient:
                 deploy_processed=deploy_processed,
                 deploy_finalized=deploy_finalized,
                 deploy_orphaned=deploy_orphaned,
-                deploy_filter=casper.StreamEventsRequest.DeployFilter(
-                    account_public_keys=[
-                        bytes.fromhex(pk) for pk in account_public_keys or []
-                    ],
-                    deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes or []],
-                ),
+                deploy_filter=deploy_filter,
                 min_event_id=min_event_id,
                 max_event_id=max_event_id,
             )
         )
+
+    @staticmethod
+    @api
+    def validator_keygen(directory: Union[Path, str]) -> None:
+        """Generate validator and node keys.
+
+        :param directory: Directory in which to create files. Must exist.
+
+        Generated files:
+           node-id               # node ID as in casperlabs://c0a6c82062461c9b7f9f5c3120f44589393edf31@<NODE ADDRESS>?protocol=40400&discovery=40404
+                                 # derived from node.key.pem
+           node.certificate.pem  # TLS certificate used for node-to-node interaction encryption
+                                 # derived from node.key.pem
+           node.key.pem          # secp256r1 private key
+           validator-id          # validator ID in Base64 format; can be used in accounts.csv
+                                 # derived from validator.public.pem
+           validator-id-hex      # validator ID in hex, derived from validator.public.pem
+           validator-private.pem # ed25519 private key
+           validator-public.pem  # ed25519 public key"""
+        directory = Path(directory)
+        if not directory.exists():
+            raise ValueError(f"Destination directory: {directory} does not exists.")
+
+        validator_private_path = directory / consts.VALIDATOR_PRIVATE_KEY_FILENAME
+        validator_public_path = directory / consts.VALIDATOR_PUBLIC_KEY_FILENAME
+        validator_id_path = directory / consts.VALIDATOR_ID_FILENAME
+        validator_id_hex_path = directory / consts.VALIDATOR_ID_HEX_FILENAME
+        node_private_path = directory / consts.NODE_PRIVATE_KEY_FILENAME
+        node_cert_path = directory / consts.NODE_CERTIFICATE_FILENAME
+        node_id_path = directory / consts.NODE_ID_FILENAME
+
+        (
+            validator_private_pem,
+            validator_public_pem,
+            validator_public_bytes,
+        ) = crypto.generate_keys()
+
+        io.write_binary_file(validator_private_path, validator_private_pem)
+        io.write_binary_file(validator_public_path, validator_public_pem)
+        io.write_file(validator_id_path, utils.encode_base64(validator_public_bytes))
+        io.write_file(validator_id_hex_path, validator_public_bytes.hex())
+
+        private_key, public_key = crypto.generate_key_pair()
+        node_cert, key_pem = crypto.generate_certificates(private_key, public_key)
+
+        io.write_binary_file(node_private_path, key_pem)
+        io.write_binary_file(node_cert_path, node_cert)
+        io.write_file(node_id_path, crypto.public_address(public_key))
 
     @api
     def wait_for_deploy_processed(
@@ -724,8 +866,19 @@ class CasperLabsClient:
         delay=consts.STATUS_CHECK_DELAY,
         timeout_seconds=consts.STATUS_TIMEOUT,
     ):
+        """
+        Block up to `timeout_seconds` while `info.DeployInfo.State` is PENDING.
+
+
+        :param deploy_hash: base16 (hex) deploy hash to wait for processing
+        :param on_error_raise: raise and exception if the execution of the deploy is_error
+        :param delay: delay between checks in milliseconds
+        :param timeout_seconds: time to raise exception to exit if state is still PENDING
+        :return: result of deploy
+
+
+        """
         start_time = time.time()
-        result = None
         while True:
             if time.time() - start_time > timeout_seconds:
                 raise Exception(
@@ -749,12 +902,27 @@ class CasperLabsClient:
         return result
 
     @api
-    def show_peers(self):
+    def show_peers(self) -> List:
+        """ Return list of nodes connected to current node. """
         return list(self.diagnostics_service.ListPeers(empty_pb2.Empty()).peers)
 
     @api
-    def account_hash(self, algorithm: str, public_key) -> bytes:
-        """ Create account hash based on algorithm and public key """
-        if algorithm not in SUPPORTED_KEY_ALGORITHMS:
-            raise ValueError(f"algorithm must be one of {SUPPORTED_KEY_ALGORITHMS}.")
+    def account_hash(
+        self, algorithm: str, public_key: bytes = None, public_key_path: str = None
+    ) -> bytes:
+        """ Create account hash based on algorithm and public key or public_key_path
+
+        :param algorithm:       Algorithm used for key generation. See consts.SUPPORTED_KEY_ALGORITHMS
+        :param public_key:      Public Key as bytes
+        :param public_key_path: File path to public_key pem file
+        """
+        if algorithm not in consts.SUPPORTED_KEY_ALGORITHMS:
+            raise ValueError(
+                f"algorithm must be one of {consts.SUPPORTED_KEY_ALGORITHMS}."
+            )
+        if len(list(filter(None, [public_key, public_key_path]))) != 1:
+            raise ValueError("Must have either 'public_key' or 'public_key_path'")
+        if public_key_path:
+            public_key = io.read_pem_key(public_key_path)
+
         return crypto.blake2b_hash(algorithm.encode("UTF-8") + b"0x00" + public_key)

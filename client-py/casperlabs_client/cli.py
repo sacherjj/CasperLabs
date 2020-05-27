@@ -5,14 +5,9 @@ Command line interface for CasperLabsClient.
 import argparse
 import sys
 
-from casperlabs_client.io import _read_version
+from casperlabs_client.io import read_version
 
-from casperlabs_client import (
-    CasperLabsClient,
-    DEFAULT_HOST,
-    DEFAULT_PORT,
-    DEFAULT_INTERNAL_PORT,
-)
+from casperlabs_client import CasperLabsClient, consts
 from casperlabs_client.commands import (
     account_hash_cmd,
     balance_cmd,
@@ -57,7 +52,7 @@ def cli(*arguments) -> int:
                 "-h",
                 "--host",
                 required=False,
-                default=DEFAULT_HOST,
+                default=consts.DEFAULT_HOST,
                 type=str,
                 help="Hostname or IP of node on which gRPC service is running.",
             )
@@ -65,14 +60,14 @@ def cli(*arguments) -> int:
                 "-p",
                 "--port",
                 required=False,
-                default=DEFAULT_PORT,
+                default=consts.DEFAULT_PORT,
                 type=int,
                 help="Port used for external gRPC API.",
             )
             self.parser.add_argument(
                 "--port-internal",
                 required=False,
-                default=DEFAULT_INTERNAL_PORT,
+                default=consts.DEFAULT_INTERNAL_PORT,
                 type=int,
                 help="Port used for internal gRPC API.",
             )
@@ -89,7 +84,7 @@ def cli(*arguments) -> int:
                 help="Certificate file for TLS connection",
             )
             self.parser.add_argument(
-                "--version", action="version", version=_read_version()
+                "--version", action="version", version=read_version()
             )
             self.sp = self.parser.add_subparsers(help="Choose a request")
 
@@ -112,14 +107,15 @@ def cli(*arguments) -> int:
                 command_parser.add_argument(*args, **options)
 
         def run(self, argv):
-            args = self.parser.parse_args(argv)
-            return args.function(
+            # Using dict rather than namespace to allow dual interface with library
+            args = vars(self.parser.parse_args(argv))
+            return args["function"](
                 CasperLabsClient(
-                    args.host,
-                    args.port,
-                    args.port_internal,
-                    args.node_id,
-                    args.certificate_file,
+                    args.get("host"),
+                    args.get("port"),
+                    args.get("port_internal"),
+                    args.get("node_id"),
+                    args.get("certificate_file"),
                 ),
                 args,
             )

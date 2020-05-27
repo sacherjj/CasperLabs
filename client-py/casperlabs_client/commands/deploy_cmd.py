@@ -1,13 +1,10 @@
-from casperlabs_client import consts
-from casperlabs_client.abi import ABI
-from casperlabs_client.consts import DEFAULT_PAYMENT_AMOUNT
-from casperlabs_client.crypto import read_pem_key, private_to_public_key
-from casperlabs_client.utils import hexify
+from typing import Dict
+
+from casperlabs_client import consts, utils, CasperLabsClient
 from casperlabs_client.decorators import guarded_command
 
-
-NAME = "deploy"
-HELP = (
+NAME: str = "deploy"
+HELP: str = (
     "Deploy a smart contract source file to Casper on an existing running node. "
     "The deploy will be packaged and sent as a block to the network depending "
     "on the configuration of the Casper instance."
@@ -17,7 +14,7 @@ OPTIONS = [
     [
         ("-f", "--from"),
         dict(
-            required=False,
+            required=True,
             type=str,
             help="The public key of the account which is the context of this deployment, base16 encoded.",
         ),
@@ -49,16 +46,6 @@ OPTIONS = [
                 "Standard payment amount. Use this with the default payment, or override with --payment-args "
                 "if custom payment code is used. By default --payment-amount is set to 10000000"
             ),
-        ),
-    ],
-    # TODO - This was only for integration testing and should be removed from client.
-    [
-        ("--gas-price",),
-        dict(
-            required=False,
-            type=int,
-            default=10,
-            help="The price of gas for this transaction in units dust/gas. Must be positive integer.",
         ),
     ],
     [
@@ -199,75 +186,33 @@ OPTIONS_WITH_PRIVATE = [
 ] + OPTIONS
 
 
-# TODO: Replace with staticmethod constructor in commands/deploy_cmd.py
-def process_kwargs(args, private_key_accepted=True):
-    from_addr = (
-        getattr(args, "from")
-        and bytes.fromhex(getattr(args, "from"))
-        or getattr(args, "public_key")
-        and read_pem_key(args.public_key)
-        or private_to_public_key(args.private_key)
-    )
-    if from_addr and len(from_addr) != 32:
-        raise Exception(
-            "--from must be 32 bytes encoded as 64 characters long hexadecimal"
-        )
-
-    if not (args.payment_amount or args.payment_args):
-        args.payment_amount = DEFAULT_PAYMENT_AMOUNT
-
-    if args.payment_amount:
-        args.payment_args = ABI.args_to_json(
-            ABI.args([ABI.big_int("amount", int(args.payment_amount))])
-        )
-
-    d = dict(
-        from_addr=from_addr,
-        gas_price=args.gas_price,
-        payment=args.payment,
-        session=args.session,
-        public_key=args.public_key or None,
-        session_args=args.session_args
-        and ABI.args_from_json(args.session_args)
-        or None,  # TODO: Why would args_from_json ever return None or False?
-        payment_args=args.payment_args
-        and ABI.args_from_json(args.payment_args)
-        or None,  # TODO: Why would args_from_json ever return None or False?
-        payment_hash=args.payment_hash and bytes.fromhex(args.payment_hash),
-        payment_name=args.payment_name,
-        payment_uref=args.payment_uref and bytes.fromhex(args.payment_uref),
-        session_hash=args.session_hash and bytes.fromhex(args.session_hash),
-        session_name=args.session_name,
-        session_uref=args.session_uref and bytes.fromhex(args.session_uref),
-        ttl_millis=args.ttl_millis,
-        dependencies=args.dependencies,
-        chain_name=args.chain_name,
-    )
-    if private_key_accepted:
-        d["private_key"] = args.private_key or None
-    return d
-
-
 @guarded_command
-def method(casperlabs_client, args):
-    # TODO: args should be replaced with dataclass
-    kwargs = process_kwargs(args)
-    deploy_hash = casperlabs_client.deploy(**kwargs)
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    deploy_hash = casperlabs_client.deploy(
+        from_addr=args.get("from"),
+        payment=args.get("payment"),
+        session=args.get("session"),
+        public_key=args.get("public_key"),
+        private_key=args.get("private_key"),
+        session_args=args.get("session_args"),
+        payment_args=args.get("payment_args"),
+        payment_amount=args.get("payment_amount"),
+        payment_hash=args.get("payment_hash"),
+        payment_name=args.get("payment_name"),
+        payment_uref=args.get("payment_uref"),
+        session_hash=args.get("session_hash"),
+        session_name=args.get("session_name"),
+        session_uref=args.get("session_uref"),
+        ttl_millis=args.get("ttl_millis"),
+        dependencies=args.get("dependencies"),
+        chain_name=args.get("chain_name"),
+    )
     print(f"Success! Deploy {deploy_hash} deployed")
-    if args.wait_for_processed:
+    if args.get("wait_for_processed", False):
         deploy_info = casperlabs_client.show_deploy(
             deploy_hash,
             full_view=False,
-            wait_for_processed=args.wait_for_processed,
-            timeout_seconds=args.timeout_seconds,
+            wait_for_processed=True,
+            timeout_seconds=args.get("timeout_seconds", consts.STATUS_TIMEOUT),
         )
-        print(hexify(deploy_info))
-
-
-# TODO: Encode proper logic for required arguments and testing of arguments at first parsing of dataclass
-# Argument dependency tree to represent in help
-# session (WASM file)
-#   or
-# session-hash or session-name
-#   session-entry-point or 'call' will be used.
-#   session-sem-ver or latest will be used.
+        print(utils.hexify(deploy_info))

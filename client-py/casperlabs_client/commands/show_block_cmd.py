@@ -1,6 +1,7 @@
-from casperlabs_client import CasperLabsClient
+from typing import Dict
+
+from casperlabs_client import CasperLabsClient, io
 from casperlabs_client.decorators import guarded_command
-from casperlabs_client.io import _print_block
 
 NAME: str = "show-block"
 HELP: str = (
@@ -11,6 +12,6 @@ OPTIONS = [[("hash",), dict(type=str, help="the hash value of the block")]]
 
 
 @guarded_command
-def method(casperlabs_client: CasperLabsClient, args):
-    response = casperlabs_client.show_block(args.hash, full_view=True)
-    return _print_block(response)
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    response = casperlabs_client.show_block(args.get("hash"), full_view=True)
+    return io.print_block(response)

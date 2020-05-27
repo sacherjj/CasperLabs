@@ -1,5 +1,5 @@
 import asyncio
-
+import warnings
 from grpclib.client import Channel
 from grpclib.protocol import H2Protocol
 from ssl import create_default_context, Purpose, CERT_REQUIRED
@@ -16,8 +16,8 @@ from .consts import (
     STATUS_CHECK_DELAY,
 )
 from casperlabs_client.query_state import key_variant
-from casperlabs_client.deploy import make_deploy, _select_public_key_to_use, sign_deploy
-from .contract import bundled_contract
+from casperlabs_client.deploy import DeployData, sign_deploy
+from .contract import bundled_contract_path
 from . import abi
 from .crypto import extract_common_name
 
@@ -113,6 +113,9 @@ class CasperLabsClientAIO(object):
         self.casper_service = CasperService(
             host, port, certificate_file, private_key_file
         )
+        warnings.warn(
+            "Object not fully stable yet and should not be used in current state."
+        )
 
     async def deploy(
         self,
@@ -135,31 +138,29 @@ class CasperLabsClientAIO(object):
         dependencies=None,
         chain_name: str = None,
     ):
-        deploy = make_deploy(
-            from_addr=from_addr,
-            gas_price=gas_price,
-            payment=payment,
-            session=session,
-            public_key=public_key,
-            session_args=session_args,
-            payment_args=payment_args,
-            payment_amount=payment_amount,
-            payment_hash=payment_hash,
-            payment_name=payment_name,
-            payment_uref=payment_uref,
-            session_hash=session_hash,
-            session_name=session_name,
-            session_uref=session_uref,
-            ttl_millis=ttl_millis,
-            dependencies=dependencies,
-            chain_name=chain_name,
+        deploy_data = DeployData.from_args(
+            dict(
+                from_addr=from_addr,
+                gas_price=gas_price,
+                payment=payment,
+                session=session,
+                public_key=public_key,
+                session_args=session_args,
+                payment_args=payment_args,
+                payment_amount=payment_amount,
+                payment_hash=payment_hash,
+                payment_name=payment_name,
+                payment_uref=payment_uref,
+                session_hash=session_hash,
+                session_name=session_name,
+                session_uref=session_uref,
+                ttl_millis=ttl_millis,
+                dependencies=dependencies,
+                chain_name=chain_name,
+            )
         )
-
-        deploy = sign_deploy(
-            deploy,
-            _select_public_key_to_use(public_key, from_addr, private_key),
-            private_key,
-        )
+        deploy = deploy_data.make_protobuf()
+        deploy = sign_deploy(deploy, deploy_data.public_key_to_use, private_key)
         await self.send_deploy(deploy)
         return deploy.deploy_hash.hex()
 
@@ -206,7 +207,7 @@ class CasperLabsClientAIO(object):
         )
 
     async def transfer(self, target_account_hex, amount, **deploy_args):
-        deploy_args["session"] = bundled_contract(BUNDLED_TRANSFER_WASM)
+        deploy_args["session"] = bundled_contract_path(BUNDLED_TRANSFER_WASM)
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", bytes.fromhex(target_account_hex)),

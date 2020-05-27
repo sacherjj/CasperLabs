@@ -1,4 +1,5 @@
 import argparse
+from typing import Dict
 
 from casperlabs_client import CasperLabsClient
 from casperlabs_client.arg_types import natural
@@ -61,10 +62,13 @@ OPTIONS = [
 
 
 @guarded_command
-def method(casperlabs_client: CasperLabsClient, args):
+def method(casperlabs_client: CasperLabsClient, args: Dict):
     for o in casperlabs_client.visualize_dag(
-        args.depth, args.out, args.show_justification_lines, args.stream
+        args.get("depth"),
+        args.get("out"),
+        args.get("show_justification_lines"),
+        args.get("stream"),
     ):
-        if not args.out:
+        if not args.get("out"):
             print(o)
             break

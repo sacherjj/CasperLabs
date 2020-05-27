@@ -1,7 +1,7 @@
-import argparse
 import base64
+from typing import Dict, List
 
-from casperlabs_client.utils import jsonify, hexify
+from casperlabs_client import CasperLabsClient, utils
 from casperlabs_client.decorators import guarded_command
 
 
@@ -61,33 +61,40 @@ OPTIONS = [
 ]
 
 
-@guarded_command
-def method(casperlabs_client, args):
-    subscribed_events = dict(
-        all=args.all,
-        block_added=args.block_added,
-        block_finalized=args.block_finalized,
-        deploy_added=args.deploy_added,
-        deploy_discarded=args.deploy_discarded,
-        deploy_requeued=args.deploy_requeued,
-        deploy_processed=args.deploy_processed,
-        deploy_finalized=args.deploy_finalized,
-        deploy_orphaned=args.deploy_orphaned,
-    )
-    if not any(subscribed_events.values()):
-        raise argparse.ArgumentTypeError("No events chosen")
+def _add_to_list(maybe_value) -> List:
+    if maybe_value:
+        return [maybe_value]
+    else:
+        return []
 
-    stream = casperlabs_client.stream_events(
-        account_public_keys=args.account_public_key,
-        deploy_hashes=args.deploy_hash,
-        min_event_id=args.min_event_id,
-        max_event_id=args.max_event_id,
-        **subscribed_events,
+
+@guarded_command
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    kwargs = dict(
+        account_public_keys=_add_to_list(args.get("account_public_key")),
+        deploy_hashes=_add_to_list(args.get("deploy_hash")),
     )
+    for key in (
+        "all",
+        "block_added",
+        "block_finalized",
+        "deploy_added",
+        "deploy_discarded",
+        "deploy_requeued",
+        "deploy_processed",
+        "deploy_finalized",
+        "deploy_orphaned",
+        "min_event_id",
+        "max_event_id",
+    ):
+        kwargs[key] = args.get(key)
+    stream = casperlabs_client.stream_events(**kwargs)
+
+    output_format = args.get("format")
     for event in stream:
-        if args.format == "binary":
+        if output_format == "binary":
             print(base64.b64encode(event.SerializeToString()).decode())
-        elif args.format == "json":
-            print(jsonify(event))
+        elif output_format == "json":
+            print(utils.jsonify(event))
         else:
-            print(hexify(event))
+            print(utils.hexify(event))

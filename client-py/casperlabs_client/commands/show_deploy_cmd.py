@@ -1,6 +1,7 @@
-from casperlabs_client import consts
+from typing import Dict
+
+from casperlabs_client import consts, CasperLabsClient, utils
 from casperlabs_client.decorators import guarded_command
-from casperlabs_client.utils import hexify
 
 NAME: str = "show-deploy"
 HELP: str = "View properties of a deploy known by Casper on an existing running node."
@@ -18,11 +19,11 @@ OPTIONS = [
 
 
 @guarded_command
-def method(casperlabs_client, args):
-    response = casperlabs_client.showDeploy(
-        args.hash,
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    response = casperlabs_client.show_deploy(
+        args.get("hash"),
         full_view=False,
-        wait_for_processed=args.wait_for_processed,
-        timeout_seconds=args.timeout_seconds,
+        wait_for_processed=args.get("wait_for_processed", False),
+        timeout_seconds=args.get("timeout_seconds", consts.STATUS_TIMEOUT),
     )
-    print(hexify(response))
+    print(utils.hexify(response))

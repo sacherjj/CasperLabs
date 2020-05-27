@@ -1,14 +1,11 @@
 from pathlib import Path
 
+from casperlabs_client import CasperLabsClient
 from casperlabs_client.arg_types import directory_for_write
-from casperlabs_client.io import write_file, write_binary_file
 from casperlabs_client.decorators import guarded_command
 
-from casperlabs_client.crypto import generate_keys
-from casperlabs_client.utils import encode_base64
-
 NAME: str = "keygen"
-HELP: str = """Generate keys.
+HELP: str = """Generates account keys into existing directory
 
 Usage: casperlabs-client keygen <existing output directory>
 Command will override existing files!
@@ -30,17 +27,7 @@ OPTIONS = [
 
 
 @guarded_command
-def method(casperlabs_client, args):
-    directory = Path(args.directory).resolve()
-    private_path = directory / "account-private.pem"
-    public_path = directory / "account-public.pem"
-    id_path = directory / "account-id"
-    id_hex_path = directory / "account-id-hex"
-
-    (private_pem, public_pem, public_bytes) = generate_keys()
-    write_binary_file(private_path, private_pem)
-    write_binary_file(public_path, public_pem)
-    write_file(id_path, encode_base64(public_bytes))
-    write_file(id_hex_path, public_bytes.hex())
-
+def method(casperlabs_client: CasperLabsClient, args):
+    directory = Path(args.get("directory")).resolve()
+    casperlabs_client.keygen(directory)
     print(f"Keys successfully created in directory: {str(directory.absolute())}")

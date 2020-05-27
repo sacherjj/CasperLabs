@@ -1,7 +1,8 @@
 import sys
+from typing import Dict
 
+from casperlabs_client import io, CasperLabsClient
 from casperlabs_client.commands import deploy_cmd
-from casperlabs_client.io import write_binary_file
 from casperlabs_client.decorators import guarded_command
 
 
@@ -22,11 +23,10 @@ OPTIONS = [
 
 
 @guarded_command
-def method(casperlabs_client, args):
-    kwargs = deploy_cmd.process_kwargs(args, private_key_accepted=False)
-    deploy = casperlabs_client.make_deploy(**kwargs)
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    deploy = casperlabs_client.make_deploy(**args)
     data = deploy.SerializeToString()
-    if not args.deploy_path:
+    if not args.get("deploy_path"):
         sys.stdout.buffer.write(data)
     else:
-        write_binary_file(args.deploy_path, data)
+        io.write_binary_file(args.get("deploy_path"), data)

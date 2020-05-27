@@ -1,9 +1,7 @@
 import sys
+from typing import Dict
 
-from casperlabs_client import CasperLabsClient
-from casperlabs_client.consts import SUPPORTED_KEY_ALGORITHMS
-from casperlabs_client.crypto import read_pem_key
-from casperlabs_client.io import write_binary_file
+from casperlabs_client import consts, CasperLabsClient, io
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "account-hash"
@@ -17,7 +15,7 @@ OPTIONS = (
         dict(
             required=True,
             type=str,
-            choices=SUPPORTED_KEY_ALGORITHMS,
+            choices=consts.SUPPORTED_KEY_ALGORITHMS,
             help="Algorithm used for public key generation.",
         ),
     ),
@@ -39,14 +37,13 @@ OPTIONS = (
 
 
 @guarded_command
-def method(casperlabs_client: CasperLabsClient, args):
-    print(args)
-    algorithm = getattr(args, "algorithm")
-    public_key_path = getattr(args, "public_key")
-    public_key = read_pem_key(public_key_path)
-    account_hash = casperlabs_client.account_hash(algorithm, public_key)
-    file_path = getattr(args, "file_path")
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    algorithm = args.get("algorithm")
+    public_key_path = args.get("public_key")
+    account_hash = casperlabs_client.account_hash(algorithm, public_key_path)
+
+    file_path = args.get("file_path")
     if file_path:
-        write_binary_file(file_path, account_hash)
+        io.write_binary_file(file_path, account_hash)
     else:
         sys.stdout.buffer.write(account_hash)

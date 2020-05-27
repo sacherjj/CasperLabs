@@ -1,8 +1,8 @@
-from casperlabs_client import consensus_pb2 as consensus
+from typing import Dict
 
+from casperlabs_client import CasperLabsClient
 from casperlabs_client.decorators import guarded_command
 
-from casperlabs_client.io import read_binary_file
 
 NAME: str = "send-deploy"
 HELP: str = (
@@ -19,9 +19,6 @@ OPTIONS = [
 
 
 @guarded_command
-def method(casperlabs_client, args):
-    deploy = consensus.Deploy()
-    file_contents = read_binary_file(args.deploy_path)
-    deploy.ParseFromString(file_contents)
-    casperlabs_client.send_deploy(deploy)
-    print(f"Success! Deploy {deploy.deploy_hash.hex()} deployed")
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    deploy_hash = casperlabs_client.send_deploy(deploy_file=args.get("deploy_path"))
+    print(f"Success! Deploy {deploy_hash} deployed")

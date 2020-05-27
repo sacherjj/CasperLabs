@@ -8,3 +8,16 @@ VISUALIZE_DAG_STREAM_DELAY = 5
 SUPPORTED_KEY_ALGORITHMS = ("ed25519", "bn2254")
 
 BUNDLED_TRANSFER_WASM: str = "transfer_to_account_u512.wasm"
+
+ACCOUNT_PRIVATE_KEY_FILENAME: str = "account-private.pem"
+ACCOUNT_PUBLIC_KEY_FILENAME: str = "account-public.pem"
+ACCOUNT_ID_FILENAME: str = "account-id"
+ACCOUNT_ID_HEX_FILENAME: str = "account-id-hex"
+
+VALIDATOR_PRIVATE_KEY_FILENAME = "validator-private.pem"
+VALIDATOR_PUBLIC_KEY_FILENAME = "validator-public.pem"
+VALIDATOR_ID_FILENAME = "validator-id"
+VALIDATOR_ID_HEX_FILENAME = "validator-id-hex"
+NODE_PRIVATE_KEY_FILENAME = "node.key.pem"
+NODE_CERTIFICATE_FILENAME = "node.certificate.pem"
+NODE_ID_FILENAME = "node-id"

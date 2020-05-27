@@ -1,3 +1,6 @@
+from typing import Dict
+
+from casperlabs_client import CasperLabsClient
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "balance"
@@ -15,6 +18,6 @@ OPTIONS = [
 
 
 @guarded_command
-def method(casperlabs_client, args):
-    response = casperlabs_client.balance(args.address, args.block_hash)
+def method(casperlabs_client: CasperLabsClient, args: Dict):
+    response = casperlabs_client.balance(args.get("address"), args.get("block_hash"))
     print(response)

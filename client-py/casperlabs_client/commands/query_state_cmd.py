@@ -1,5 +1,6 @@
-from casperlabs_client import CasperLabsClient
-from casperlabs_client.utils import hexify
+from typing import Dict
+
+from casperlabs_client import CasperLabsClient, utils
 from casperlabs_client.decorators import guarded_command
 
 
@@ -38,8 +39,8 @@ OPTIONS = [
 
 
 @guarded_command
-def method(casperlabs_client: CasperLabsClient, args):
+def method(casperlabs_client: CasperLabsClient, args: Dict):
     response = casperlabs_client.query_state(
-        args.block_hash, args.key, args.path or "", getattr(args, "type")
+        args.get("block_hash"), args.get("key"), args.get("path", ""), args.get("type")
     )
-    print(hexify(response))
+    print(utils.hexify(response))
