@@ -128,6 +128,7 @@ def create_account(driver):
     driver.find_element(By.LINK_TEXT, "Account Keys").click()
     driver.find_element(By.XPATH, "//button[contains(., 'Create Account Key')]").click()
     account_name = random_string(5)
+    # waiting for showing the modal of the form where to create account keys.
     time.sleep(1)
     account_name_input = driver.find_element(By.ID, "id-account-name")
     account_name_input.click()
