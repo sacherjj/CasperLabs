@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Dict
 
 from . import consensus_pb2 as consensus
 import time
@@ -39,25 +40,28 @@ class DeployData:
     private_key: str = None
 
     @staticmethod
-    def from_args(args) -> "DeployData":
+    def from_args(args: Dict) -> "DeployData":
         """
         Build Deploy data class from command line arguments, this includes testing for combinations of args
         that are allowed or required.
         """
-        from_ = getattr(args, "from", None)
-        from_ = bytes.fromhex(from_) if from_ else None
+
+        # `from` isn't good for dict creation, but used from CLI, so handle both `from` and `from_addr`
+        from_ = args.get("from", args.get("from_addr"))
+        if from_ and not isinstance(from_, bytes):
+            from_ = bytes.fromhex(from_)
 
         payment_code = PaymentCode.from_args(args)
         session_code = SessionCode.from_args(args)
 
-        public_key = args.public_key
-        ttl_millis = args.ttl_millis
-        dependencies = args.dependencies
+        public_key = args.get("public_key")
+        ttl_millis = args.get("ttl_millis")
+        dependencies = args.get("dependencies")
         if dependencies:
             dependencies = [bytes.fromhex(d) for d in dependencies]
         else:
             dependencies = []
-        chain_name = args.chain_name or ""
+        chain_name = args.get("chain_name", "")
 
         deploy = DeployData(
             from_,

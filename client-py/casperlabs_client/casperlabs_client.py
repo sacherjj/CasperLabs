@@ -210,7 +210,6 @@ class CasperLabsClient:
                 chain_name=chain_name,
             )
         )
-        print(deploy_data)
         return deploy_data.make_protobuf()
 
     @api
@@ -224,7 +223,7 @@ class CasperLabsClient:
     @api
     def deploy(
         self,
-        from_addr: bytes = None,
+        from_addr: Union[bytes, str] = None,
         payment: str = None,
         session: str = None,
         public_key: str = None,
@@ -310,8 +309,8 @@ class CasperLabsClient:
     @api
     def transfer(
         self,
-        target_account,
-        amount,
+        target_account: Union[str, bytes],
+        amount: int,
         from_addr: bytes = None,
         payment: str = None,
         public_key: str = None,

@@ -1,6 +1,7 @@
 import os
 import abc
 from dataclasses import dataclass, field
+from typing import Dict, Union, Optional
 
 from casperlabs_client.io import read_binary_file
 from . import consensus_pb2 as consensus
@@ -31,15 +32,19 @@ class ContractCode(abc.ABC):
     contract_args: list = field(default_factory=list)
 
     @staticmethod
-    def _maybe_args_from_json(args):
+    def _maybe_args_from_json(args: Union[str, bytes]) -> Optional[bytes]:
         """ Parses args from JSON format if exists """
         if args:
-            return ABI.args_from_json(args)
+            # Encode args if still as str
+            if isinstance(args, str):
+                return ABI.args_from_json(args)
+            else:
+                return args
         return None
 
     @staticmethod
     @abc.abstractmethod
-    def from_args(args) -> "ContractCode":
+    def from_args(args: Dict) -> "ContractCode":
         pass
 
     @abc.abstractmethod
@@ -90,7 +95,7 @@ class SessionCode(ContractCode):
             self.wasm_file_path,
             self.contract_name,
             self.contract_hash,
-            self.contract_args,
+            self.contract_uref,
         )
         options_count = len(list(filter(None, session_options)))
         if options_count != 1:
@@ -99,13 +104,13 @@ class SessionCode(ContractCode):
             )
 
     @staticmethod
-    def from_args(args) -> "SessionCode":
+    def from_args(args: Dict) -> "SessionCode":
         """ Creates SessionCode from CLI args """
-        wasm_file_path = args.session
-        contract_hash = args.session_hash
-        contract_name = args.session_name
-        contract_uref = args.session_uref
-        contract_args = SessionCode._maybe_args_from_json(args.session_args)
+        wasm_file_path = args.get("session")
+        contract_hash = args.get("session_hash")
+        contract_name = args.get("session_name")
+        contract_uref = args.get("session_uref")
+        contract_args = SessionCode._maybe_args_from_json(args.get("session_args"))
         session_code = SessionCode(
             wasm_file_path, contract_hash, contract_name, contract_uref, contract_args
         )
@@ -140,13 +145,23 @@ class PaymentCode(ContractCode):
             raise ValueError("No payment options were found.")
 
     @staticmethod
-    def from_args(args) -> "PaymentCode":
-        wasm_file_path = args.payment
-        contract_hash = args.payment_hash
-        contract_name = args.payment_name
-        contract_uref = args.payment_uref
-        contract_args = PaymentCode._maybe_args_from_json(args.payment_args)
-        payment_amount = args.payment_amount
+    def from_args(args: Dict) -> "PaymentCode":
+        wasm_file_path = args.get("payment")
+        contract_hash = args.get("payment_hash")
+        contract_name = args.get("payment_name")
+        contract_uref = args.get("payment_uref")
+        contract_args = PaymentCode._maybe_args_from_json(args.get("payment_args"))
+        payment_amount = args.get("payment_amount")
+        if not any(
+            (
+                wasm_file_path,
+                contract_hash,
+                contract_name,
+                contract_uref,
+                payment_amount,
+            )
+        ):
+            payment_amount = DEFAULT_PAYMENT_AMOUNT
         payment_code = PaymentCode(
             wasm_file_path,
             contract_hash,
@@ -164,7 +179,5 @@ class PaymentCode(ContractCode):
             return consensus.Deploy.Code(args=self.contract_args)
         else:
             payment_amount = self.payment_amount or DEFAULT_PAYMENT_AMOUNT
-            payment_args = ABI.args_to_json(
-                ABI.args([ABI.big_int("amount", int(payment_amount))])
-            )
+            payment_args = ABI.args([ABI.big_int("amount", int(payment_amount))])
             return consensus.Deploy.Code(args=payment_args)
