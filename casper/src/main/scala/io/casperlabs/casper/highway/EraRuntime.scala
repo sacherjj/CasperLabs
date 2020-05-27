@@ -940,14 +940,15 @@ object EraRuntime {
     * By not dropping we do extra work but at least it's visible in the Explorer, rather than
     * fill logs with error messages.
     */
-  def isOrphanEra[F[_]: MonadThrowable: DagStorage: AncestorsStorage: ForkChoice](
+  def isOrphanEra[F[_]: MonadThrowable: DagStorage: AncestorsStorage: FinalityStorageReader](
       keyBlockHash: BlockHash
   ): F[Boolean] =
     for {
       dag      <- DagStorage[F].getRepresentation
+      lfbHash  <- FinalityStorageReader[F].getLastFinalizedBlock
+      lfb      <- dag.lookupUnsafe(lfbHash)
       keyBlock <- dag.lookupUnsafe(keyBlockHash)
-      choice   <- ForkChoice[F].fromKeyBlock(keyBlockHash)
-      relation <- DagOperations.relation[F](keyBlock, choice.block)
+      relation <- DagOperations.relation[F](keyBlock, lfb)
     } yield relation.isEmpty
 
 }

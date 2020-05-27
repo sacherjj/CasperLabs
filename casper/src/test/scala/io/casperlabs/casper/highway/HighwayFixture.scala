@@ -277,7 +277,12 @@ trait HighwayFixture
       )
 
     def insertGenesis(): Task[Unit] =
-      db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock))
+      db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock)) *>
+        db.markAsFinalized(
+          genesis.messageHash,
+          Set.empty,
+          Set.empty
+        )
 
     def makeSupervisor(): Resource[Task, EraSupervisor[Task]] =
       for {

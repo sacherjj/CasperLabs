@@ -49,6 +49,7 @@ class BaseBlockSpec
             // Set the fork choice to go towards k1.
             fc <- db.lookupUnsafe(b1)
             _  <- forkchoice.set(fc.asInstanceOf[Message.Block])
+            _  <- db.markAsFinalized(k1, Set.empty, orphaned = Set(k2))
 
             _ <- EraRuntime.isOrphanEra[Task](k1) shouldBeF false
             _ <- EraRuntime.isOrphanEra[Task](k2) shouldBeF true
