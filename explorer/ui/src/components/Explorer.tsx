@@ -8,7 +8,6 @@ import {
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import $ from 'jquery';
 import { DagStepButtons, Props } from './BlockList';
 import { Link, withRouter } from 'react-router-dom';
 import Pages from './Pages';

@@ -18,6 +18,12 @@ class DockerClarity(LoggingDockerBase):
         return Path(self.host_mount_dir) / "faucet-account"
 
     @property
+    def faucet_account_public_key(self) -> str:
+        public_key_path = self.faucet_account_path / "account-id-hex"
+        with public_key_path.open() as f:
+            return f.readline()
+
+    @property
     def volumes(self) -> dict:
         account_public_key = self.faucet_account_path / "account-public.pem"
         account_private_key = self.faucet_account_path / "account-private.pem"

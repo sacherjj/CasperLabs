@@ -1,4 +1,4 @@
-import { action, IObservableArray, observable, reaction, runInAction } from 'mobx';
+import { action, IObservableArray, observable, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';

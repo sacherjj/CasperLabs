@@ -1,10 +1,9 @@
-import React, { Component } from 'react';
+import React from 'react';
 import { observer } from 'mobx-react';
 import DagContainer, { DagStep } from '../containers/DagContainer';
 import {
   IconButton,
   ListInline,
-  RefreshableComponent,
   shortHash
 } from './Utils';
 import DataTable from './DataTable';
