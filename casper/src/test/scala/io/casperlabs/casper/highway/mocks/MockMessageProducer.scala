@@ -16,6 +16,7 @@ import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.models.Message
 import scala.util.control.NonFatal
 import io.casperlabs.shared.ByteStringPrettyPrinter._
+import io.casperlabs.shared.Log
 
 class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     val validatorId: PublicKeyBS

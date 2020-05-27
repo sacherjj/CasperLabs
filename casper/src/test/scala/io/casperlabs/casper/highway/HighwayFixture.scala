@@ -103,7 +103,7 @@ trait HighwayFixture
       val validator: String = "Alice",
       val initRoundExponent: Int = 0,
       val isSyncedRef: Ref[Task, Boolean] = Ref.unsafe(true),
-      printLevel: Log.Level = Log.Level.Error
+      protected val printLevel: Log.Level = Log.Level.Error
   )(
       implicit
       timer: Timer[Task],

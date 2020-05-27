@@ -110,7 +110,7 @@ class EraSupervisorSpec
 
   it should "relay created messages to other nodes" in testFixtures(
     validators = List("Alice", "Bob", "Charlie")
-  ) { implicit timer => validatorDatabases =>
+  ) { timer => validatorDatabases =>
     new NetworkFixture(validatorDatabases) {
 
       override val start  = genesisEraStart

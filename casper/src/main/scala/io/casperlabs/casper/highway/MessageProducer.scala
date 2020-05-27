@@ -36,6 +36,7 @@ import io.casperlabs.models.Message.{asMainRank, JRank, MainRank}
 import io.casperlabs.shared.Sorting._
 import scala.concurrent.duration._
 import io.casperlabs.casper.consensus.info.DeployInfo
+import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 
 /** Produce a signed message, persisted message.
   * The producer should the thread safe, so that when it's

@@ -10,6 +10,7 @@ import io.casperlabs.crypto.Keys.PublicKeyBS
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
+import io.casperlabs.shared.Log
 
 trait HighwayNetworkFixture { self: HighwayFixture =>
 
@@ -18,7 +19,8 @@ trait HighwayNetworkFixture { self: HighwayFixture =>
       validator: String,
       initRoundExponent: Int,
       supervisorsRef: Ref[Task, Map[String, EraSupervisor[Task]]],
-      isSyncedRef: Ref[Task, Boolean]
+      isSyncedRef: Ref[Task, Boolean],
+      printLevel: Log.Level = Log.Level.Error
   )(
       implicit
       timer: Timer[Task],
@@ -27,7 +29,8 @@ trait HighwayNetworkFixture { self: HighwayFixture =>
         length = length,
         validator = validator,
         initRoundExponent = initRoundExponent,
-        isSyncedRef = isSyncedRef
+        isSyncedRef = isSyncedRef,
+        printLevel = printLevel
       ) (timer, db) {
 
     val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
@@ -38,13 +41,18 @@ trait HighwayNetworkFixture { self: HighwayFixture =>
           _           <- relayedRef.update(_ ++ hashes)
           blocks      <- hashes.traverse(h => db.getBlockMessage(h).map(_.get))
           supervisors <- supervisorsRef.get
-          // Notify other supervisors.
-          _ <- supervisors
-                .filterKeys(_ != validator)
-                .values
-                .toList
-                .traverse(s => blocks.traverse(b => s.validateAndAddBlock(b)))
-        } yield ().pure[Task]
+          // Notify other supervisors. Doing it on a fiber because when done
+          // synchronously it caused an unexplicable error in the first era
+          // after genesis where validators didn't find the blocks they clearly
+          // saved into the DAG, ones they created themselves for example.
+          fiber <- supervisors
+                    .filterKeys(v => v != validator)
+                    .values
+                    .toList
+                    .traverse(s => blocks.traverse(b => s.validateAndAddBlock(b)))
+                    .void
+                    .start
+        } yield fiber.join
     }
   }
 

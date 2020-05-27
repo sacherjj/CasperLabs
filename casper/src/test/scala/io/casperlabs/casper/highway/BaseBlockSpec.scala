@@ -1,18 +1,25 @@
 package io.casperlabs.casper.highway
 
 import cats.implicits._
+import cats.effect.concurrent.Ref
 import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration._
+import scala.collection.concurrent.TrieMap
 import io.casperlabs.casper.highway.mocks.{MockForkChoice, MockMessageProducer}
 import io.casperlabs.models.Message
 import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.storage.dag.AncestorsStorage.Relation
 import io.casperlabs.casper.scalatestcontrib._
-import io.casperlabs.storage.BlockHash
-import scala.collection.concurrent.TrieMap
+import io.casperlabs.storage.{BlockHash, SQLiteStorage}
+import io.casperlabs.shared.Log
 
-class BaseBlockSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
+class BaseBlockSpec
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with HighwayFixture
+    with HighwayNetworkFixture {
 
   behavior of "EraRuntime"
 
@@ -63,5 +70,48 @@ class BaseBlockSpec extends FlatSpec with Matchers with Inspectors with HighwayF
 
           } yield {}
       }
+  }
+
+  it should "not join a longer streak of eras produced by an output-only validator" in testFixtures(
+    validators = List("Alice", "Bob", "Charlie")
+  ) { timer => validatorDatabases =>
+    new NetworkFixture(validatorDatabases) {
+
+      override val start = genesisEraStart
+
+      // The hypotheses is that if Charlie builds a more isolated eras than the the lookback
+      // of the fork choice then the other validators will join them:
+      //
+      // e0 - e1 - e2 - e3 - e4
+      //    \
+      //     e1' - e2' - e3' - e4'
+      //
+      override val length = eraDuration * 2 + eraDuration * 3 + eraDuration / 2
+
+      override def makeRelayFixture(
+          validator: String,
+          db: SQLiteStorage.CombinedStorage[Task],
+          supervisorsRef: Ref[Task, Map[String, EraSupervisor[Task]]],
+          isSyncedRef: Ref[Task, Boolean]
+      ) =
+        new RelayFixture(
+          length,
+          validator = validator,
+          initRoundExponent = 15, // ~ 8 hours
+          supervisorsRef,
+          isSyncedRef,
+          printLevel = Log.Level.Warn
+        ) (timer, db) {
+
+          override val test = for {
+            _           <- sleepUntil(start plus length)
+            supervisors <- supervisorsRef.get
+            supervisor  = supervisors(validator)
+            activeEras  <- supervisor.activeEras
+          } yield {
+            activeEras should have size (1)
+          }
+        }
+    }
   }
 }
