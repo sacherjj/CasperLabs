@@ -169,20 +169,6 @@ fn test_check_transfer_success_with_target_error() {
         .into_uref()
         .expect("uref");
 
-    // OR with query, your choice.
-    // let account = test_context
-    //     .query(DEFAULT_ACCOUNT_ADDR, &[] as &[String])
-    //     .expect("should get a value")
-    //     .into_account()
-    //     .expect("should get an account");
-    //
-    // let new_purse_address = account
-    //     .named_keys()
-    //     .get(NEW_PURSE_NAME)
-    //     .expect("value")
-    //     .into_uref()
-    //     .expect("uref");
-
     let maybe_target_purse = Some(new_purse_address); // TODO: Put valid URef here
     let source_and_target_session_transfer_info = SessionTransferInfo::new(
         source_purse,
