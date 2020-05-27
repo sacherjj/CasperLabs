@@ -157,23 +157,32 @@ fn test_check_transfer_success_with_target_error() {
         .build();
     test_context.run(session);
 
-    // retrieve SECOND_PURSE_NAME URef
-    // This should be a query, but I can't get query below to not return Unit type.
+    // get account purse by name via get_account()
     let account = test_context
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("account");
+
     let new_purse_address = account
         .named_keys()
         .get(NEW_PURSE_NAME)
         .expect("value")
         .into_uref()
         .expect("uref");
-    // let new_purse_address = match test_context.query(DEFAULT_ACCOUNT_ADDR, &[NEW_PURSE_NAME]) {
-    //     Err(_) => panic!("Unable to query {} value", NEW_PURSE_NAME),
-    //     Ok(maybe_value) => maybe_value
-    //         .into_t()
-    //         .unwrap_or_else(|_| panic!("{} is not expected type.", NEW_PURSE_NAME)),
-    // };
+
+    // OR with query, your choice.
+    // let account = test_context
+    //     .query(DEFAULT_ACCOUNT_ADDR, &[] as &[String])
+    //     .expect("should get a value")
+    //     .into_account()
+    //     .expect("should get an account");
+    //
+    // let new_purse_address = account
+    //     .named_keys()
+    //     .get(NEW_PURSE_NAME)
+    //     .expect("value")
+    //     .into_uref()
+    //     .expect("uref");
+
     let maybe_target_purse = Some(new_purse_address); // TODO: Put valid URef here
     let source_and_target_session_transfer_info = SessionTransferInfo::new(
         source_purse,

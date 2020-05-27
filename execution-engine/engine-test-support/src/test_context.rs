@@ -6,12 +6,12 @@ use engine_core::engine_state::{
     CONV_RATE,
 };
 
-use engine_shared::{account::Account, motes::Motes};
+use engine_shared::motes::Motes;
 use types::{AccessRights, Key, URef, U512};
 
 use crate::{
     internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_GENESIS_CONFIG_HASH},
-    Error, PublicKey, Result, Session, URefAddr, Value,
+    Account, Error, PublicKey, Result, Session, URefAddr, Value,
 };
 
 /// Context in which to run a test of a Wasm smart contract.
@@ -122,15 +122,18 @@ impl TestContext {
     /// Gets the main purse [`URef`] from an [`Account`] stored under a [`PublicKey`], or `None`
     pub fn main_purse_address(&self, account_key: PublicKey) -> Option<URef> {
         match self.inner.get_account(account_key) {
-            None => None,
             Some(account) => Some(account.main_purse()),
+            None => None,
         }
     }
 
     // TODO: Remove this once test can use query
     /// Gets an [`Account`] stored under a [`PublicKey`], or `None`
     pub fn get_account(&self, account_key: PublicKey) -> Option<Account> {
-        self.inner.get_account(account_key)
+        match self.inner.get_account(account_key) {
+            Some(account) => Some(account.into()),
+            None => None,
+        }
     }
 }
 

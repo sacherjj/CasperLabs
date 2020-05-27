@@ -62,6 +62,7 @@
 )]
 #![warn(missing_docs)]
 
+mod account;
 mod code;
 mod error;
 // This module is not intended to be used by third party crates.
@@ -71,6 +72,7 @@ mod session;
 mod test_context;
 mod value;
 
+pub use account::Account;
 pub use code::Code;
 pub use error::{Error, Result};
 pub use session::{Session, SessionBuilder, SessionTransferInfo};
