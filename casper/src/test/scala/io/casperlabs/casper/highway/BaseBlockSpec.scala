@@ -26,7 +26,7 @@ class BaseBlockSpec
 
   behavior of "EraRuntime"
 
-  it should "not participate in eras that aren't part of the main chain" ignore testFixture {
+  it should "not participate in eras that aren't part of the main chain" in testFixture {
     implicit timer => implicit db =>
       new Fixture(
         length = 3 * eraDuration,
@@ -75,7 +75,11 @@ class BaseBlockSpec
       }
   }
 
-  it should "not join a longer streak of eras produced by an output-only validator" in testFixtures(
+  // NOTE: This test is ignored because once there's an isolated validator it looks like everyone's
+  // eras diverge, yet there are no duplicates. Maybe it's a limitation of the test scheduler and the fibers,
+  // but it's difficult to figure out why the 3 connected validators disagree. Also saw some validators
+  // running out of eras completely, but switching to summit based finality yielded just 2 eras instead of 4+.
+  it should "not join a longer streak of eras produced by an output-only validator" ignore testFixtures(
     validators = List("Alice", "Bob", "Charlie", "Dave"),
     timeout = 30.seconds
   ) { timer => validatorDatabases =>
@@ -94,13 +98,13 @@ class BaseBlockSpec
       //    \
       //     e1' - e2' - e3' - e4'
       //
-      override val length = eraDuration * 2 + eraDuration * 4
+      override val length = eraDuration * 8
 
-      val validators        = validatorDatabases.unzip._1.toSet
-      val isolatedValidator = "No"
-      //val nonIsolatedValidator = "Bob"
+      val validators          = validatorDatabases.unzip._1.toSet
+      val normalValidator     = "Alice"
+      val outputOnlyValidator = "Bob"
       val routing = validators.map { v =>
-        val peers = if (v == isolatedValidator) validators else validators - isolatedValidator
+        val peers = if (v == outputOnlyValidator) validators else validators - outputOnlyValidator
         v -> peers
       }.toMap
 
@@ -144,12 +148,12 @@ class BaseBlockSpec
               s"$validator: ${activeEras(validator).map(_.show).mkString(", ")} "
             )
             println(s"era tree: ${eras.map(_.keyBlockHash.show).mkString(", ")}")
-            //activeEras(validator) should have size (1)
-            // if (validator == isolatedValidator) {
-            //   activeEras(validator) should not be activeEras(nonIsolatedValidator)
-            // } else {
-            //   activeEras(validator) shouldBe activeEras(nonIsolatedValidator)
-            // }
+            activeEras(validator) should have size (1)
+            if (validator == outputOnlyValidator) {
+              activeEras(validator) should not be activeEras(normalValidator)
+            } else {
+              activeEras(validator) shouldBe activeEras(normalValidator)
+            }
           }
 
           def eraTree(keyBlockHash: BlockHash) = {
