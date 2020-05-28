@@ -306,10 +306,10 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
           Field(
             "validator",
             OptionType(blockTypes.ValidatorType),
-            arguments = blocks.arguments.PublicKey :: Nil,
+            arguments = blocks.arguments.PublicKeyHash :: Nil,
             resolve = { c =>
-              val key = c.arg(blocks.arguments.PublicKey)
-              key.tryBase64AndBase16Decode.map(ByteString.copyFrom)
+              val key = c.arg(blocks.arguments.PublicKeyHash)
+              key.tryBase64AndBase16Decode.map(ByteString.copyFrom).map(PublicKeyHash)
             }
           ),
           Field(

@@ -5,14 +5,13 @@ import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus.{Block, Deploy}
 import io.casperlabs.casper.consensus.info.DeployInfo
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.Keys.PublicKeyHash
+import io.casperlabs.crypto.Keys.{PublicKeyHash, PublicKeyHashBS}
 import io.casperlabs.models.ArbitraryConsensus
 import monix.eval.Task
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import org.scalacheck.Arbitrary.arbBool
 import org.scalatest._
 import org.scalatest.prop.GeneratorDrivenPropertyChecks
-import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.shared.Sorting.byteStringOrdering
 
 import scala.concurrent.duration._
@@ -467,7 +466,7 @@ trait DeployStorageSpec
   private def chooseHash(deploys: List[Deploy]): ByteString =
     deploys(Random.nextInt(deploys.size)).deployHash
 
-  private def chooseAccount(deploys: List[Deploy]): PublicKeyHash =
+  private def chooseAccount(deploys: List[Deploy]): PublicKeyHashBS =
     PublicKeyHash(deploys(Random.nextInt(deploys.size)).getHeader.accountHash)
 
   private implicit class DeployStorageWriterOps(writer: DeployStorageWriter[Task]) {

@@ -68,7 +68,7 @@ class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
 
       forAll(bonds.toList) { bond =>
         val w = bond.getStake.value.toDouble / total
-        counts(bond.validatorPublicKey).toDouble / rounds shouldBe (w +- 0.05)
+        counts(bond.validatorPublicKeyHash).toDouble / rounds shouldBe (w +- 0.05)
       }
     }
 

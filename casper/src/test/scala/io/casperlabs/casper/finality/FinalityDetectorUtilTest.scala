@@ -47,7 +47,7 @@ class FinalityDetectorUtilTest
       // When B gets finalized A1 gets finalized indirectly.
 
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         a       <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         a1      <- createAndStoreBlockFull[Task](v2, Seq(a), Seq.empty, bonds)
         b       <- createAndStoreBlockFull[Task](v1, Seq(a, a1), Seq.empty, bonds)
@@ -88,7 +88,7 @@ class FinalityDetectorUtilTest
         *  i.e. since A is finalized with C, `finalizedIndirectly(F)` should not visit that node.
         */
       for {
-        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        genesis <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         a       <- createAndStoreBlockFull[Task](v1, Seq(genesis), Seq.empty, bonds)
         b       <- createAndStoreBlockFull[Task](v1, Seq(a), Seq.empty, bonds)
         c       <- createAndStoreBlockFull[Task](v1, Seq(genesis, a), Seq.empty, bonds)
@@ -155,7 +155,7 @@ class FinalityDetectorUtilTest
       //     \\  /
       //       D
       for {
-        g   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        g   <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
         a   <- createAndStoreBlockFull[Task](v1, Seq(g), Seq.empty, bonds)
         b   <- createAndStoreBlockFull[Task](v2, Seq(g), Seq.empty, bonds)
         c   <- createAndStoreBlockFull[Task](v2, Seq(b), Seq(b), bonds)
@@ -187,7 +187,7 @@ class FinalityDetectorUtilTest
     //  \\     |  \\
     //    B    |    C*
     for {
-      g   <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+      g   <- createAndStoreMessage[Task](Seq(), EmptyValidator, bonds)
       a   <- createAndStoreBlockFull[Task](v1, Seq(g), Seq.empty, bonds, keyBlockHash = g.blockHash)
       b   <- createAndStoreBlockFull[Task](v2, Seq(g), Seq.empty, bonds, keyBlockHash = g.blockHash)
       s   <- createAndStoreBlockFull[Task](v1, Seq(a), Seq(a), bonds, keyBlockHash = a.blockHash)

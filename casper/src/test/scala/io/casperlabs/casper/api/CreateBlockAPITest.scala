@@ -26,6 +26,7 @@ import io.casperlabs.casper.validation.{NCBValidationImpl, Validation}
 import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.crypto.Keys
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Weight
 import io.casperlabs.p2p.EffectsTestInstances._
@@ -62,7 +63,11 @@ class CreateBlockAPITest
   implicit val validationEff  = new NCBValidationImpl[Task]
   implicit val deployRelaying = new NoOpsDeployRelaying[Task]
 
-  private val (validatorKeys, validators)             = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+  private val (validatorKeys, validators) = {
+    val (sks, pks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val hs         = pks.map(pk => Keys.PublicKeyHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk))))
+    sks -> hs
+  }
   private val bonds                                   = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), _) = createGenesis(bonds)
 

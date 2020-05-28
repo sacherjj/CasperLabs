@@ -160,6 +160,7 @@ message Block {
         string chain_name = 8;
         uint32 validator_block_seq_num = 9;
         bytes validator_public_key = 10;
+        bytes validator_public_key_hash = 20;
         // The hash of the previous block (or ballot) from this validator.
         // It has to be stated even if it's part of the justifications directly,
         // and it must be part of the j-past-cone of the block, in case transitive
@@ -212,7 +213,7 @@ message Block {
     }
 
     message Justification {
-        bytes validator_public_key = 1;
+        bytes validator_public_key_hash = 1;
         bytes latest_block_hash = 2;
     }
 
@@ -237,7 +238,7 @@ message Block {
 
 message Bond {
     reserved 2; // Original bond was uint64.
-    bytes validator_public_key = 1;
+    bytes validator_public_key_hash = 1;
     state.BigInt stake = 3;
 }
 

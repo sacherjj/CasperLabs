@@ -16,7 +16,7 @@ import io.casperlabs.casper.helper._
 import io.casperlabs.casper.scalatestcontrib._
 import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
-import io.casperlabs.crypto.Keys.PublicKey
+import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base16
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
@@ -83,10 +83,14 @@ abstract class HashSetCasperTest
 
   implicit val timeEff = new LogicalTime[Task]
 
-  private val (otherSk, _)                = Ed25519.newKeyPair
-  private val (validatorKeys, validators) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-  private val wallets                     = validators.map(key => (key, 10001L)).toMap
-  private val bonds                       = createBonds(validators)
+  private val (otherSk, _) = Ed25519.newKeyPair
+  private val (validatorKeys, validators) = {
+    val (sks, pks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
+    val hs         = pks.map(pk => Keys.PublicKeyHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk))))
+    (sks, hs)
+  }
+  private val wallets = validators.map(key => (key, 10001L)).toMap
+  private val bonds   = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), _) =
     buildGenesis(wallets, bonds, 0L)
 
@@ -349,8 +353,8 @@ abstract class HashSetCasperTest
     } yield result
   }
 
-  def assertCreator(b: Block, validator: ByteString): Unit =
-    assert(b.getHeader.validatorPublicKey == validator)
+  def assertCreator(b: Block, validator: Keys.PublicKeyHashBS): Unit =
+    assert(b.getHeader.validatorPublicKeyHash == validator)
 
   def assertValidatorSeqNum(b: Block, seqNum: Int): Unit =
     assert(
@@ -365,7 +369,7 @@ abstract class HashSetCasperTest
   ): Unit =
     assert(
       b.getHeader.justifications
-        .find(_.validatorPublicKey == validator)
+        .find(_.validatorPublicKeyHash == validator)
         .map(_.latestBlockHash) == maybeMsg
     )
 
@@ -376,7 +380,7 @@ abstract class HashSetCasperTest
         validatorKeys.head,
         faultToleranceThreshold = 0.1
       )
-    val validator = ByteString.copyFrom(validators.head)
+    val validator = validators.head
 
     for {
       block1 <- node.randomDeployAndPropose()
@@ -396,8 +400,8 @@ abstract class HashSetCasperTest
   }
 
   it should "not treat Genesis block as validator's latest message if it hasn't produced any" in effectTest {
-    val validatorA = (ByteString.copyFrom(validators(0)), validatorKeys(0))
-    val validatorB = (ByteString.copyFrom(validators(1)), validatorKeys(1))
+    val validatorA = (validators(0), validatorKeys(0))
+    val validatorB = (validators(1), validatorKeys(1))
     for {
       nodes <- networkEff(
                 IndexedSeq(validatorA._2, validatorB._2),
@@ -513,10 +517,21 @@ abstract class HashSetCasperTest
 
   it should "not fail if the forkchoice changes after a bonding event" in {
     val localValidators = validatorKeys.take(3)
+
     val localBonds =
-      localValidators.map(Ed25519.tryToPublic(_).get).zip(List(10L, 30L, 5000L)).toMap
+      localValidators
+        .map(
+          sk =>
+            Keys.PublicKeyHash(
+              ByteString.copyFrom(Ed25519.publicKeyHash(Ed25519.tryToPublic(sk).get))
+            )
+        )
+        .zip(List(10L, 30L, 5000L))
+        .toMap
+
     val BlockMsgWithTransform(Some(localGenesis), _) =
       buildGenesis(Map.empty, localBonds, 0L)
+
     for {
       nodes <- networkEff(
                 localValidators,
@@ -1327,7 +1342,10 @@ abstract class HashSetCasperTest
       Block.GlobalState().withBonds(ProtoUtil.bonds(genesis))
     val serializedJustifications =
       Seq(
-        Justification(signedInvalidBlock.getHeader.validatorPublicKey, signedInvalidBlock.blockHash)
+        Justification(
+          signedInvalidBlock.getHeader.validatorPublicKeyHash,
+          signedInvalidBlock.blockHash
+        )
       )
     val body = Block.Body().withDeploys(deploys)
     val header = Block
@@ -1352,15 +1370,15 @@ abstract class HashSetCasperTest
 }
 
 object HashSetCasperTest {
-  def createBonds(validators: Seq[PublicKey]): Map[PublicKey, Long] =
+  def createBonds(validators: Seq[Keys.PublicKeyHashBS]): Map[Keys.PublicKeyHashBS, Long] =
     validators.zipWithIndex.map { case (v, i) => v -> (2L * i.toLong + 1L) }.toMap
 
-  def createGenesis(bonds: Map[PublicKey, Long]): BlockMsgWithTransform =
+  def createGenesis(bonds: Map[Keys.PublicKeyHashBS, Long]): BlockMsgWithTransform =
     buildGenesis(Map.empty, bonds, 0L)
 
   def buildGenesis(
-      wallets: Map[PublicKey, Long],
-      bonds: Map[PublicKey, Long],
+      wallets: Map[Keys.PublicKeyHashBS, Long],
+      bonds: Map[Keys.PublicKeyHashBS, Long],
       timestamp: Long
   ): BlockMsgWithTransform = {
     implicit val metricsEff              = new Metrics.MetricsNOP[Task]
@@ -1378,7 +1396,7 @@ object HashSetCasperTest {
           .withAccounts((bonds.keySet ++ wallets.keySet).toSeq.map { key =>
             ipc.ChainSpec.GenesisConfig.ExecConfig
               .GenesisAccount()
-              .withPublicKey(ByteString.copyFrom(key))
+              .withPublicKeyHash(key)
               .withBalance(state.BigInt(wallets.getOrElse(key, 0L).toString, bitWidth = 512))
               .withBondedAmount(state.BigInt(bonds.getOrElse(key, 0L).toString, bitWidth = 512))
           })

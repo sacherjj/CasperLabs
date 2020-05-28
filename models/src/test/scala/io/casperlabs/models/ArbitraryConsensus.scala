@@ -5,7 +5,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.consensus._
 import io.casperlabs.models.BlockImplicits._
-import io.casperlabs.crypto.Keys.PrivateKey
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
 import io.casperlabs.crypto.hash.Blake2b256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.shared.Sorting.jRankOrdering
@@ -13,6 +13,7 @@ import org.scalacheck.{Arbitrary, Gen, Shrink}
 
 import scala.collection.JavaConverters._
 import io.casperlabs.casper.consensus.state.ProtocolVersion
+import io.casperlabs.crypto.Keys
 
 trait ArbitraryConsensus {
   import Arbitrary.arbitrary
@@ -68,13 +69,19 @@ trait ArbitraryConsensus {
 
   protected case class AccountKeys(
       privateKey: ByteString,
-      publicKey: ByteString,
-      publicKeyHash: ByteString
+      publicKey: ByteString
   ) {
+    val publicKeyHash: Keys.PublicKeyHashBS =
+      Keys.PublicKeyHash(
+        ByteString.copyFrom(Ed25519.publicKeyHash(PublicKey(publicKey.toByteArray)))
+      )
+
     def sign(data: ByteString): Signature = {
       val sig = Ed25519.sign(data.toByteArray, PrivateKey(privateKey.toByteArray))
       Signature(Ed25519.name, ByteString.copyFrom(sig))
     }
+
+    val sigAlgorithm = Ed25519.name
   }
 
   protected val genAccountKeys: Gen[AccountKeys] =
@@ -82,8 +89,7 @@ trait ArbitraryConsensus {
       case (privateKey, publicKey) =>
         AccountKeys(
           privateKey = ByteString.copyFrom(privateKey),
-          publicKey = ByteString.copyFrom(publicKey),
-          publicKeyHash = ByteString.copyFrom(Ed25519.publicKeyHash(publicKey))
+          publicKey = ByteString.copyFrom(publicKey)
         )
     }))
 
@@ -92,7 +98,7 @@ trait ArbitraryConsensus {
   def numValidators: Int = 10
 
   protected lazy val randomAccounts   = sample(Gen.listOfN(numAccounts, genAccountKeys))
-  protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genKey))
+  protected lazy val randomValidators = sample(Gen.listOfN(numValidators, genAccountKeys))
 
   implicit val arbProtocolVersion: Arbitrary[ProtocolVersion] = Arbitrary {
     for {
@@ -122,10 +128,10 @@ trait ArbitraryConsensus {
 
   implicit val arbBond: Arbitrary[Bond] = Arbitrary {
     for {
-      pk    <- genKey
-      stake <- arbitrary[Long]
+      validator <- genHash
+      stake     <- arbitrary[Long]
     } yield Bond()
-      .withValidatorPublicKey(pk)
+      .withValidatorPublicKeyHash(validator)
       .withStake(state.BigInt(stake.toString, bitWidth = 512))
   }
 
@@ -140,7 +146,7 @@ trait ArbitraryConsensus {
     for {
       blockHash <- genHash
       validator <- Gen.oneOf(randomValidators)
-    } yield Block.Justification(validator, blockHash)
+    } yield Block.Justification(validator.publicKeyHash, blockHash)
   }
 
   implicit val arbBlockHeader: Arbitrary[Block.Header] = Arbitrary {
@@ -153,7 +159,7 @@ trait ArbitraryConsensus {
       bodyHash           <- genHash
       preStateHash       <- genHash
       postStateHash      <- genHash
-      validatorPublicKey <- Gen.oneOf(randomValidators)
+      validator          <- Gen.oneOf(randomValidators)
       protocolVersion    <- arbitrary[ProtocolVersion]
     } yield {
       Block
@@ -161,7 +167,8 @@ trait ArbitraryConsensus {
         .withParentHashes(parentHashes)
         .withState(Block.GlobalState(preStateHash, postStateHash, Seq.empty))
         .withDeployCount(deployCount)
-        .withValidatorPublicKey(validatorPublicKey)
+        .withValidatorPublicKey(validator.publicKey)
+        .withValidatorPublicKeyHash(validator.publicKeyHash)
         .withBodyHash(bodyHash)
         .withProtocolVersion(protocolVersion)
         .withJustifications(justifications)
@@ -271,7 +278,7 @@ trait ArbitraryConsensus {
             .withJustifications(justifications.toSeq.map { j =>
               Block.Justification(
                 latestBlockHash = j.blockHash,
-                validatorPublicKey = j.validatorPublicKey
+                validatorPublicKeyHash = j.validatorPublicKeyHash
               )
             })
             .withJRank((parents ++ justifications).map(_.jRank).max + 1)
@@ -305,6 +312,7 @@ trait ArbitraryConsensus {
         .update(_.header.justifications := Seq.empty)
         .update(_.header.jRank := 0)
         .update(_.header.mainRank := 0)
+        .update(_.header.validatorPublicKeyHash := ByteString.EMPTY)
         .update(_.header.validatorPublicKey := ByteString.EMPTY)
         .clearSignature
     } flatMap { genesis =>
@@ -336,7 +344,7 @@ trait ArbitraryConsensus {
           .withJustifications(parents.map { j =>
             Block.Justification(
               latestBlockHash = j.blockHash,
-              validatorPublicKey = j.validatorPublicKey
+              validatorPublicKeyHash = j.validatorPublicKeyHash
             )
           })
       )
