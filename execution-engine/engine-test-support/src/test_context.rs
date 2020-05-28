@@ -133,7 +133,7 @@ impl TestContext {
     }
 
     // TODO: Remove this once test can use query
-    /// Gets an [`Account`] stored under a [`PublicKey`], or `None`
+    /// Gets an [`Account`] stored under a [`PublicKey`], or `None`.
     pub fn get_account(&self, account_key: PublicKey) -> Option<Account> {
         match self.inner.get_account(account_key) {
             Some(account) => Some(account.into()),
