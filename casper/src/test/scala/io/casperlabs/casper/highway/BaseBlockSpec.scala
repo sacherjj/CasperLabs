@@ -92,7 +92,7 @@ class BaseBlockSpec
         postEraVotingDuration = HighwayConf.VotingDuration.FixedLength(postEraVotingDuration)
       )
 
-      // The hypotheses is that if Alice builds more isolated eras than the the lookback
+      // The hypotheses is that if Alice builds more isolated eras than the lookback
       // of the fork choice then the other validators will join them:
       //
       // e0 - e1 - e2 - e3 - e4
