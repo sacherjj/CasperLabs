@@ -7,7 +7,7 @@ import warnings
 from typing import List, Union
 
 from casperlabs_client.deploy import DeployData
-from casperlabs_client import io, utils
+from casperlabs_client import io, utils, common
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
 
@@ -669,7 +669,8 @@ class CasperLabsClient:
         while True:
             deploy_info = self.casper_service.GetDeployInfo(
                 casper.GetDeployInfoRequest(
-                    deploy_hash_base16=deploy_hash, view=self._deploy_view(full_view)
+                    deploy_hash_base16=deploy_hash,
+                    view=common.deploy_info_view(full_view),
                 )
             )
             if (
@@ -713,7 +714,8 @@ class CasperLabsClient:
         """
         yield from self.casper_service.StreamBlockDeploys_stream(
             casper.StreamBlockDeploysRequest(
-                block_hash_base16=block_hash_base16, view=self._deploy_view(full_view)
+                block_hash_base16=block_hash_base16,
+                view=common.deploy_info_view(full_view),
             )
         )
 

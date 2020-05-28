@@ -17,7 +17,9 @@ pytest = ">=4.4"
 in-place = ">=0.4.0"
 grpc-tools = "*"
 semver = "*"
-protobuf = "==3.12.2"
+protobuf = "==3.11.3"
+tox = "*"
+pre-commit = "*"
 
 [requires]
 python_version = "3.7"
