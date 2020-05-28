@@ -124,7 +124,7 @@ impl TestContext {
         self.inner.get_purse_balance(purse)
     }
 
-    /// Gets the main purse [`URef`] from an [`Account`] stored under a [`PublicKey`], or `None`
+    /// Gets the main purse [`URef`] from an [`Account`] stored under a [`PublicKey`], or `None`.
     pub fn main_purse_address(&self, account_key: PublicKey) -> Option<URef> {
         match self.inner.get_account(account_key) {
             Some(account) => Some(account.main_purse()),
