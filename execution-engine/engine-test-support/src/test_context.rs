@@ -30,15 +30,20 @@ impl TestContext {
         }
     }
 
-    /// Runs the supplied [`Session`], return Result of executing the contained deploy
+    /// Runs the supplied [`Session`] checking specified expectations of the execution and
+    /// subsequent commit of transforms are met.
     ///
-    /// if Session.expect_success (default) will err if failure.  (Allows cases where failure is
-    /// expected)
+    /// If `session` was built without
+    /// [`without_expect_success()`](crate::SessionBuilder::without_expect_success) (the default)
+    /// then `run()` will panic if execution of the deploy fails.
     ///
-    /// if Session.check_transfer_success is given, will verify transfer balances
-    /// including gas used.
+    /// If `session` was built with
+    /// [`with_check_transfer_success()`](crate::SessionBuilder::with_check_transfer_success), (not
+    /// the default) then `run()` will verify transfer balances including gas used.
     ///
-    /// if Session.commit (default) will commit resulting transforms.
+    /// If `session` was built without
+    /// [`without_commit()`](crate::SessionBuilder::without_commit) (the default), then `run()` will
+    /// commit the resulting transforms.
     pub fn run(&mut self, session: Session) -> &mut Self {
         match session.check_transfer_success {
             Some(session_transfer_info) => {
