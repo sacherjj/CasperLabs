@@ -21,8 +21,8 @@ pub extern "C" fn transfer_batch() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    for (public_key, amount) in transfers {
-        system::transfer_to_account(public_key, amount).unwrap_or_revert();
+    for (account_hash, amount) in transfers {
+        system::transfer_to_account(account_hash, amount).unwrap_or_revert();
     }
 }
 

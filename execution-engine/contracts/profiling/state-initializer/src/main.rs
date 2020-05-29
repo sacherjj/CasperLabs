@@ -32,16 +32,16 @@ fn create_account_with_amount(account: AccountHash, amount: U512) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key1: AccountHash = runtime::get_arg(Arg::Account1Hash as u32)
+    let account_hash1: AccountHash = runtime::get_arg(Arg::Account1Hash as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let amount: U512 = runtime::get_arg(Arg::Account1Amount as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    create_account_with_amount(public_key1, amount);
+    create_account_with_amount(account_hash1, amount);
 
-    let public_key2: AccountHash = runtime::get_arg(Arg::Account2Hash as u32)
+    let account_hash2: AccountHash = runtime::get_arg(Arg::Account2Hash as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    create_account_with_amount(public_key2, U512::zero());
+    create_account_with_amount(account_hash2, U512::zero());
 }

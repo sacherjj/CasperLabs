@@ -13,7 +13,7 @@ const GET_CALLER_KEY: &str = "get_caller";
 
 fn test_get_caller() {
     // Assumes that will be called using test framework genesis account with
-    // public key == 'ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393'
+    // account hash == 'ae7cd84d61ff556806691be61e6ab217791905677adbbe085b8c540d916e8393'
     // Will fail if we ever change that.
     let caller = runtime::get_caller();
     let expected_caller = AccountHash::new([

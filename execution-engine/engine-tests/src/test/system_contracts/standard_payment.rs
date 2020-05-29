@@ -509,7 +509,7 @@ fn should_correctly_charge_when_session_code_fails() {
 #[ignore]
 #[test]
 fn should_correctly_charge_when_session_code_succeeds() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -519,7 +519,7 @@ fn should_correctly_charge_when_session_code_succeeds() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -588,7 +588,7 @@ fn get_pos_rewards_purse_balance(builder: &InMemoryWasmTestBuilder) -> U512 {
 #[ignore]
 #[test]
 fn should_finalize_to_rewards_purse() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -597,7 +597,7 @@ fn should_finalize_to_rewards_purse() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -623,7 +623,7 @@ fn should_finalize_to_rewards_purse() {
 #[ignore]
 #[test]
 fn independent_standard_payments_should_not_write_the_same_keys() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transfer_amount = 10_000_000;
 
@@ -634,7 +634,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(transfer_amount)),
+                (account_1_account_hash, U512::from(transfer_amount)),
             )
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -668,7 +668,7 @@ fn independent_standard_payments_should_not_write_the_same_keys() {
             .with_address(ACCOUNT_1_ADDR)
             .with_session_code(DO_NOTHING_WASM, ())
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
-            .with_authorization_keys(&[account_1_public_key])
+            .with_authorization_keys(&[account_1_account_hash])
             .with_deploy_hash([1; 32])
             .build();
 

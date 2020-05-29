@@ -201,9 +201,9 @@ impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result = bytesrepr::unchecked_allocate_buffer(self);
         match self {
-            Key::Account(public_key) => {
+            Key::Account(account_hash) => {
                 result.push(ACCOUNT_ID);
-                result.append(&mut public_key.to_bytes()?);
+                result.append(&mut account_hash.to_bytes()?);
             }
             Key::Hash(hash) => {
                 result.push(HASH_ID);
@@ -224,7 +224,9 @@ impl ToBytes for Key {
 
     fn serialized_length(&self) -> usize {
         match self {
-            Key::Account(public_key) => KEY_ID_SERIALIZED_LENGTH + public_key.serialized_length(),
+            Key::Account(account_hash) => {
+                KEY_ID_SERIALIZED_LENGTH + account_hash.serialized_length()
+            }
             Key::Hash(_) => KEY_HASH_SERIALIZED_LENGTH,
             Key::URef(_) => KEY_UREF_SERIALIZED_LENGTH,
             Key::Local { .. } => KEY_LOCAL_SERIALIZED_LENGTH,
@@ -237,8 +239,8 @@ impl FromBytes for Key {
         let (id, remainder) = u8::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (public_key, rem) = AccountHash::from_bytes(remainder)?;
-                Ok((Key::Account(public_key), rem))
+                let (account_hash, rem) = AccountHash::from_bytes(remainder)?;
+                Ok((Key::Account(account_hash), rem))
             }
             HASH_ID => {
                 let (hash, rem) = <[u8; KEY_HASH_LENGTH]>::from_bytes(remainder)?;

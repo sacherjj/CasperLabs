@@ -11,12 +11,12 @@ enum CustomError {
     AlreadyFunded = 1,
 }
 
-/// Executes token transfer to supplied public key.
+/// Executes token transfer to supplied account hash.
 /// Revert status codes:
-/// 1 - requested transfer to already funded public key.
+/// 1 - requested transfer to already funded account hash.
 #[no_mangle]
 pub fn delegate() {
-    let public_key: AccountHash = runtime::get_arg(0)
+    let account_hash: AccountHash = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
@@ -25,15 +25,15 @@ pub fn delegate() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     // Maybe we will decide to allow multiple funds up until some maximum value.
-    let already_funded = storage::read_local::<AccountHash, U512>(&public_key)
+    let already_funded = storage::read_local::<AccountHash, U512>(&account_hash)
         .unwrap_or_default()
         .is_some();
 
     if already_funded {
         runtime::revert(ApiError::User(CustomError::AlreadyFunded as u16));
     } else {
-        system::transfer_to_account(public_key, amount).unwrap_or_revert();
+        system::transfer_to_account(account_hash, amount).unwrap_or_revert();
         // Transfer successful; Store the fact of funding in the local state.
-        storage::write_local(public_key, amount);
+        storage::write_local(account_hash, amount);
     }
 }

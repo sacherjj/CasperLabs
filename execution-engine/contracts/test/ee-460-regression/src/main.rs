@@ -13,7 +13,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    let public_key = AccountHash::new([42; 32]);
-    let result = system::transfer_to_account(public_key, amount);
+    let account_hash = AccountHash::new([42; 32]);
+    let result = system::transfer_to_account(account_hash, amount);
     assert_eq!(result, Err(ApiError::Transfer))
 }

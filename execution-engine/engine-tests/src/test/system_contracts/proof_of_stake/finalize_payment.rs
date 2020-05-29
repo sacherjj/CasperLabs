@@ -106,14 +106,14 @@ fn finalize_payment_should_refund_to_specified_purse() {
     );
 
     let exec_request = {
-        let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
+        let genesis_account_hash = DEFAULT_ACCOUNT_ADDR;
 
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code("do_nothing.wasm", ())
             .with_payment_code(FINALIZE_PAYMENT, args)
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[genesis_account_hash])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()

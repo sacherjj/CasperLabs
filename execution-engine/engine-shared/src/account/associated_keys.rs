@@ -99,8 +99,8 @@ impl AssociatedKeys {
     }
 
     /// Calculates total weight of all authorization keys excluding a given key
-    pub fn total_keys_weight_excluding(&self, public_key: AccountHash) -> Weight {
-        self.calculate_any_keys_weight(self.0.keys().filter(|&&element| element != public_key))
+    pub fn total_keys_weight_excluding(&self, account_hash: AccountHash) -> Weight {
+        self.calculate_any_keys_weight(self.0.keys().filter(|&&element| element != account_hash))
     }
 }
 

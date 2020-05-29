@@ -52,7 +52,7 @@ fn should_exec_non_stored_code() {
     // using the new execute logic, passing code for both payment and session
     // should work exactly as it did with the original exec logic
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -61,7 +61,7 @@ fn should_exec_non_stored_code() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
@@ -146,7 +146,7 @@ fn should_exec_stored_code_by_hash() {
 
     let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
 
     // next make another deploy that USES stored payment logic
@@ -155,7 +155,7 @@ fn should_exec_stored_code_by_hash() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_stored_payment_hash(
                 stored_payment_contract_hash.to_vec(),
@@ -237,7 +237,7 @@ fn should_exec_stored_code_by_named_hash() {
         .expect("should get genesis account");
     let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
 
     // next make another deploy that USES stored payment logic
@@ -246,7 +246,7 @@ fn should_exec_stored_code_by_named_hash() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_session_code(
                 &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_stored_payment_named_key(
                 STANDARD_PAYMENT_CONTRACT_NAME,
@@ -343,7 +343,7 @@ fn should_exec_stored_code_by_named_uref() {
         .expect("should get genesis account");
     let modified_balance_alpha: U512 = builder.get_purse_balance(default_account.main_purse());
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
 
     // next make another deploy that USES stored session logic
@@ -352,7 +352,7 @@ fn should_exec_stored_code_by_named_uref() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_named_key(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
@@ -461,7 +461,7 @@ fn should_exec_payment_and_session_stored_code() {
     let gas = result.cost();
     let motes_bravo = Motes::from_gas(gas, CONV_RATE).expect("should have motes");
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let transferred_amount = 1;
 
     // next make another deploy that USES stored payment logic & stored transfer
@@ -471,7 +471,7 @@ fn should_exec_payment_and_session_stored_code() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_named_key(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_stored_payment_named_key(
                 STANDARD_PAYMENT_CONTRACT_NAME,
@@ -520,7 +520,7 @@ fn should_exec_payment_and_session_stored_code() {
 fn should_produce_same_transforms_by_uref_or_named_uref() {
     // get transforms for direct uref and named uref and compare them
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 100_000_000;
     let transferred_amount = 1;
 
@@ -565,7 +565,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_uref(
                 stored_payment_contract_uref,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
@@ -610,7 +610,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_session_named_key(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_payment_code(
                 &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),
@@ -635,7 +635,7 @@ fn should_produce_same_transforms_by_uref_or_named_uref() {
 #[ignore]
 #[test]
 fn should_have_equivalent_transforms_with_stored_contract_pointers() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 100_000_000;
     let transferred_amount = 1;
 
@@ -707,7 +707,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_stored_session_named_key(
                     TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                    (account_1_public_key, U512::from(transferred_amount)),
+                    (account_1_account_hash, U512::from(transferred_amount)),
                 )
                 .with_stored_payment_hash(
                     stored_payment_contract_hash.to_vec(),
@@ -749,7 +749,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                    (account_1_public_key, U512::from(transferred_amount)),
+                    (account_1_account_hash, U512::from(transferred_amount)),
                 )
                 .with_payment_code(
                     &format!("{}.wasm", STANDARD_PAYMENT_CONTRACT_NAME),

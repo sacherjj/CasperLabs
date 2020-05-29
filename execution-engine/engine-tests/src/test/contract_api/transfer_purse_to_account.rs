@@ -21,18 +21,18 @@ lazy_static! {
 #[ignore]
 #[test]
 fn should_run_purse_to_account_transfer() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
-    let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
+    let genesis_account_hash = DEFAULT_ACCOUNT_ADDR;
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (account_1_public_key, *ACCOUNT_1_INITIAL_FUND),
+        (account_1_account_hash, *ACCOUNT_1_INITIAL_FUND),
     )
     .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
-        account_1_public_key,
+        account_1_account_hash,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        (genesis_public_key, U512::from(1)),
+        (genesis_account_hash, U512::from(1)),
     )
     .build();
     let mut builder = InMemoryWasmTestBuilder::default();

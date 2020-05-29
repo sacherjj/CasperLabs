@@ -11,7 +11,7 @@ enum Args {
     Amount = 1,
 }
 
-/// Executes mote transfer to supplied public key.
+/// Executes mote transfer to supplied account hash.
 /// Transfers the requested amount.
 pub fn delegate() {
     let account_hash: AccountHash = runtime::get_arg(Args::AccountHash as u32)

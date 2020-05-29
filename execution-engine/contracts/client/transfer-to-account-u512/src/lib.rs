@@ -20,7 +20,7 @@ enum CustomError {
     InvalidAmount = 4,
 }
 
-/// Executes mote transfer to supplied public key.
+/// Executes mote transfer to supplied account hash.
 /// Transfers the requested amount.
 #[no_mangle]
 pub fn delegate() {

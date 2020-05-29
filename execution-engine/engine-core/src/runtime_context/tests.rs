@@ -714,7 +714,7 @@ fn manage_associated_keys() {
         };
         account
             .get_associated_key_weight(account_hash)
-            .expect("Public key wasn't added to associated keys");
+            .expect("Account hash wasn't added to associated keys");
 
         let new_weight = Weight::new(100);
         runtime_context
@@ -729,7 +729,7 @@ fn manage_associated_keys() {
         };
         let value = account
             .get_associated_key_weight(account_hash)
-            .expect("Public key wasn't added to associated keys");
+            .expect("Account hash wasn't added to associated keys");
 
         assert_eq!(value, &new_weight, "value was not updated");
 

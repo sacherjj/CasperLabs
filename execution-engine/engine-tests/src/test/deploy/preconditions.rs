@@ -84,7 +84,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let nonexistent_account_addr = AccountHash::new([99u8; 32]);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
@@ -95,7 +95,7 @@ fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
             // invalid authorization key to force error

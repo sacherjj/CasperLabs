@@ -347,8 +347,8 @@ proptest! {
         v in stored_value_arb(), // value in account state
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
-        pk in account_hash_arb(), // account public key
-        address in account_hash_arb(), // address for account key
+        pk in account_hash_arb(), // account hash
+        address in account_hash_arb(), // address for account hash
     ) {
         let correlation_id = CorrelationId::new();
         let named_keys = iter::once((name.clone(), k)).collect();

@@ -32,10 +32,10 @@ fn should_list_named_keys() {
     };
 
     let new_named_keys = {
-        let public_key = AccountHash::new([1; 32]);
+        let account_hash = AccountHash::new([1; 32]);
         let mut named_keys = BTreeMap::new();
         assert!(named_keys
-            .insert(NEW_NAME_ACCOUNT.to_string(), Key::Account(public_key))
+            .insert(NEW_NAME_ACCOUNT.to_string(), Key::Account(account_hash))
             .is_none());
         assert!(named_keys
             .insert(NEW_NAME_HASH.to_string(), Key::Hash([2; 32]))

@@ -2332,21 +2332,21 @@ where
 
     fn add_associated_key(
         &mut self,
-        public_key_ptr: u32,
+        account_hash_ptr: u32,
         account_hash_size: usize,
         weight_value: u8,
     ) -> Result<i32, Trap> {
-        let public_key = {
-            // Public key as serialized bytes
-            let source_serialized = self.bytes_from_mem(public_key_ptr, account_hash_size)?;
-            // Public key deserialized
+        let account_hash = {
+            // Account hash as serialized bytes
+            let source_serialized = self.bytes_from_mem(account_hash_ptr, account_hash_size)?;
+            // Account hash deserialized
             let source: AccountHash =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
         let weight = Weight::new(weight_value);
 
-        match self.context.add_associated_key(public_key, weight) {
+        match self.context.add_associated_key(account_hash, weight) {
             Ok(_) => Ok(0),
             // This relies on the fact that `AddKeyFailure` is represented as
             // i32 and first variant start with number `1`, so all other variants
@@ -2363,15 +2363,15 @@ where
         account_hash_ptr: u32,
         account_hash_size: usize,
     ) -> Result<i32, Trap> {
-        let public_key = {
-            // Public key as serialized bytes
+        let account_hash = {
+            // Account hash as serialized bytes
             let source_serialized = self.bytes_from_mem(account_hash_ptr, account_hash_size)?;
-            // Public key deserialized
+            // Account hash deserialized
             let source: AccountHash =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
-        match self.context.remove_associated_key(public_key) {
+        match self.context.remove_associated_key(account_hash) {
             Ok(_) => Ok(0),
             Err(Error::RemoveKeyFailure(e)) => Ok(e as i32),
             Err(e) => Err(e.into()),
@@ -2384,17 +2384,17 @@ where
         account_hash_size: usize,
         weight_value: u8,
     ) -> Result<i32, Trap> {
-        let public_key = {
-            // Public key as serialized bytes
+        let account_hash = {
+            // Account hash as serialized bytes
             let source_serialized = self.bytes_from_mem(account_hash_ptr, account_hash_size)?;
-            // Public key deserialized
+            // Account hash deserialized
             let source: AccountHash =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
         let weight = Weight::new(weight_value);
 
-        match self.context.update_associated_key(public_key, weight) {
+        match self.context.update_associated_key(account_hash, weight) {
             Ok(_) => Ok(0),
             // This relies on the fact that `UpdateKeyFailure` is represented as
             // i32 and first variant start with number `1`, so all other variants

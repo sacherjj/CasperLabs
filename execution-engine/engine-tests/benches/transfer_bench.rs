@@ -37,7 +37,7 @@ fn make_deploy_hash(i: u64) -> [u8; 32] {
 fn bootstrap(data_dir: &Path, accounts: &[AccountHash], amount: U512) -> LmdbWasmTestBuilder {
     let accounts_bytes: Vec<Vec<u8>> = accounts
         .iter()
-        .map(|public_key| public_key.as_bytes().to_vec())
+        .map(|account_hash| account_hash.as_bytes().to_vec())
         .collect();
 
     let exec_request = ExecuteRequestBuilder::standard(
