@@ -25,8 +25,12 @@ enum CustomError {
 #[no_mangle]
 pub fn delegate() {
     let account_hash: AccountHash = runtime::get_arg(Args::AccountHash as u32)
-        .unwrap_or_revert_with(ApiError::User(CustomError::MissingAccountAccountHash as u16))
-        .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAccountAccountHash as u16));
+        .unwrap_or_revert_with(ApiError::User(
+            CustomError::MissingAccountAccountHash as u16,
+        ))
+        .unwrap_or_revert_with(ApiError::User(
+            CustomError::InvalidAccountAccountHash as u16,
+        ));
     let transfer_amount: U512 = runtime::get_arg(Args::Amount as u32)
         .unwrap_or_revert_with(ApiError::User(CustomError::MissingAmount as u16))
         .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAmount as u16));
