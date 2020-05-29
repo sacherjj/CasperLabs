@@ -11,8 +11,8 @@ use contract::{
 };
 use proof_of_stake::Stakes;
 use types::{
-    account::PublicKey, system_contract_errors::mint, AccessRights, ApiError, CLValue, ContractRef,
-    Key, URef, U512,
+    account::AccountHash, system_contract_errors::mint, AccessRights, ApiError, CLValue,
+    ContractRef, Key, URef, U512,
 };
 
 const PLACEHOLDER_KEY: Key = Key::Hash([0u8; 32]);
@@ -39,7 +39,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let mint = ContractRef::URef(URef::new(mint_uref.addr(), AccessRights::READ));
 
-    let genesis_validators: BTreeMap<PublicKey, U512> =
+    let genesis_validators: BTreeMap<AccountHash, U512> =
         runtime::get_arg(Args::GenesisValidators as u32)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);

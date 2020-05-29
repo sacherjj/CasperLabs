@@ -8,7 +8,7 @@ use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, Key, U512};
+use types::{account::AccountHash, ApiError, Key, U512};
 
 const FN_NAME: &str = "transfer_batch";
 
@@ -17,7 +17,7 @@ const FN_NAME: &str = "transfer_batch";
 /// sending the specified amount to the specified key.
 #[no_mangle]
 pub extern "C" fn transfer_batch() {
-    let transfers: Vec<(PublicKey, U512)> = runtime::get_arg(0)
+    let transfers: Vec<(AccountHash, U512)> = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 

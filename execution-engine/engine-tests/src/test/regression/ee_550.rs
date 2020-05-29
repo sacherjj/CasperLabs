@@ -5,7 +5,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::account::PublicKey;
+use types::account::AccountHash;
 
 const PASS_INIT_REMOVE: &str = "init_remove";
 const PASS_TEST_REMOVE: &str = "test_remove";
@@ -34,7 +34,7 @@ fn should_run_ee_550_remove_with_saturated_threshold_regression() {
                 (String::from(PASS_TEST_REMOVE),),
             )
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR, PublicKey::ed25519_from(KEY_2_ADDR)])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR, AccountHash::new(KEY_2_ADDR)])
             .with_deploy_hash(DEPLOY_HASH)
             .build();
 
@@ -71,7 +71,7 @@ fn should_run_ee_550_update_with_saturated_threshold_regression() {
                 (String::from(PASS_TEST_UPDATE),),
             )
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR, PublicKey::ed25519_from(KEY_2_ADDR)])
+            .with_authorization_keys(&[DEFAULT_ACCOUNT_ADDR, AccountHash::new(KEY_2_ADDR)])
             .with_deploy_hash(DEPLOY_HASH)
             .build();
 

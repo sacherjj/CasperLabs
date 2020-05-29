@@ -299,7 +299,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use types::{account::PublicKey, AccessRights, ProtocolVersion, URef, U128, U256, U512};
+    use types::{account::AccountHash, AccessRights, ProtocolVersion, URef, U128, U256, U512};
 
     use super::*;
     use crate::{
@@ -308,7 +308,7 @@ mod tests {
     };
 
     const ZERO_ARRAY: [u8; 32] = [0; 32];
-    const ZERO_PUBLIC_KEY: PublicKey = PublicKey::ed25519_from(ZERO_ARRAY);
+    const ZERO_PUBLIC_KEY: AccountHash = AccountHash::new(ZERO_ARRAY);
     const TEST_STR: &str = "a";
     const TEST_BOOL: bool = true;
 

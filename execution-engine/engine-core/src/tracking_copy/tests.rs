@@ -12,7 +12,7 @@ use engine_shared::{
 };
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 use types::{
-    account::{PublicKey, Weight, ED25519_LENGTH},
+    account::{AccountHash, Weight, ACCOUNT_HASH_LENGTH},
     gens::*,
     AccessRights, CLValue, Key, ProtocolVersion, URef,
 };
@@ -175,12 +175,12 @@ fn tracking_copy_add_i32() {
 
 #[test]
 fn tracking_copy_add_named_key() {
-    let zero_public_key = PublicKey::ed25519_from([0u8; ED25519_LENGTH]);
+    let zero_account_hash = AccountHash::new([0u8; ACCOUNT_HASH_LENGTH]);
     let correlation_id = CorrelationId::new();
     // DB now holds an `Account` so that we can test adding a `NamedKey`
-    let associated_keys = AssociatedKeys::new(zero_public_key, Weight::new(1));
+    let associated_keys = AssociatedKeys::new(zero_account_hash, Weight::new(1));
     let account = Account::new(
-        zero_public_key,
+        zero_account_hash,
         BTreeMap::new(),
         URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
         associated_keys,
@@ -347,8 +347,8 @@ proptest! {
         v in stored_value_arb(), // value in account state
         name in "\\PC*", // human-readable name for state
         missing_name in "\\PC*",
-        pk in public_key_arb(), // account public key
-        address in public_key_arb(), // address for account key
+        pk in account_hash_arb(), // account public key
+        address in account_hash_arb(), // address for account key
     ) {
         let correlation_id = CorrelationId::new();
         let named_keys = iter::once((name.clone(), k)).collect();
@@ -388,8 +388,8 @@ proptest! {
         v in stored_value_arb(), // value in contract state
         state_name in "\\PC*", // human-readable name for state
         contract_name in "\\PC*", // human-readable name for contract
-        pk in public_key_arb(), // account public key
-        address in public_key_arb(), // address for account key
+        pk in account_hash_arb(), // account hash
+        address in account_hash_arb(), // address for account hash
         body in vec(any::<u8>(), 1..1000), //contract body
         hash in u8_slice_32(), // hash for contract key
     ) {

@@ -18,7 +18,7 @@ use engine_shared::{
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
     account::{
-        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
+        AccountHash, ActionType, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, ToBytes},
@@ -41,7 +41,7 @@ mod tests;
 /// System account transfers given URefs into READ_ADD_WRITE access rights,
 /// and any other URef is transformed into READ only URef.
 pub(crate) fn attenuate_uref_for_account(account: &Account, uref: URef) -> URef {
-    if account.public_key() == SYSTEM_ACCOUNT_ADDR {
+    if account.account_hash() == SYSTEM_ACCOUNT_ADDR {
         // If the system account calls this function, it is given READ_ADD_WRITE access.
         uref.into_read_add_write()
     } else {
@@ -60,7 +60,7 @@ pub struct RuntimeContext<'a, R> {
     // Original account for read only tasks taken before execution
     account: &'a Account,
     args: Vec<CLValue>,
-    authorization_keys: BTreeSet<PublicKey>,
+    authorization_keys: BTreeSet<AccountHash>,
     // Key pointing to the entity we are currently running
     //(could point at an account or contract in the global state)
     base_key: Key,
@@ -87,7 +87,7 @@ where
         named_keys: &'a mut BTreeMap<String, Key>,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
         args: Vec<CLValue>,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         account: &'a Account,
         base_key: Key,
         blocktime: BlockTime,
@@ -122,7 +122,7 @@ where
         }
     }
 
-    pub fn authorization_keys(&self) -> &BTreeSet<PublicKey> {
+    pub fn authorization_keys(&self) -> &BTreeSet<AccountHash> {
         &self.authorization_keys
     }
 
@@ -164,15 +164,15 @@ where
     /// TrackingCopy/GlobalState).
     pub fn remove_key(&mut self, name: &str) -> Result<(), Error> {
         match self.base_key() {
-            public_key @ Key::Account(_) => {
+            account_hash @ Key::Account(_) => {
                 let account: Account = {
-                    let mut account: Account = self.read_gs_typed(&public_key)?;
+                    let mut account: Account = self.read_gs_typed(&account_hash)?;
                     account.named_keys_mut().remove(name);
                     account
                 };
                 self.named_keys.remove(name);
                 let account_value = self.account_to_validated_value(account)?;
-                self.state.borrow_mut().write(public_key, account_value);
+                self.state.borrow_mut().write(account_hash, account_value);
                 Ok(())
             }
             contract_uref @ Key::URef(_) => {
@@ -203,8 +203,8 @@ where
         }
     }
 
-    pub fn get_caller(&self) -> PublicKey {
-        self.account.public_key()
+    pub fn get_caller(&self) -> AccountHash {
+        self.account.account_hash()
     }
 
     pub fn get_blocktime(&self) -> BlockTime {
@@ -257,7 +257,7 @@ where
 
     pub fn seed(&self) -> [u8; KEY_LOCAL_SEED_LENGTH] {
         match self.base_key {
-            Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
+            Key::Account(account_hash) => account_hash.value(),
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
             Key::Local { seed, .. } => seed,
@@ -651,7 +651,7 @@ where
 
     pub fn add_associated_key(
         &mut self,
-        public_key: PublicKey,
+        account_hash: AccountHash,
         weight: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
@@ -670,14 +670,14 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().public_key());
+        let key = Key::Account(self.account().account_hash());
 
         // Take an account out of the global state
         let account = {
             let mut account: Account = self.read_gs_typed(&key)?;
             // Exit early in case of error without updating global state
             account
-                .add_associated_key(public_key, weight)
+                .add_associated_key(account_hash, weight)
                 .map_err(Error::from)?;
             account
         };
@@ -689,7 +689,7 @@ where
         Ok(())
     }
 
-    pub fn remove_associated_key(&mut self, public_key: PublicKey) -> Result<(), Error> {
+    pub fn remove_associated_key(&mut self, account_hash: AccountHash) -> Result<(), Error> {
         // Check permission to modify associated keys
         if !self.is_valid_context() {
             // Exit early with error to avoid mutations
@@ -706,14 +706,14 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().public_key());
+        let key = Key::Account(self.account().account_hash());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
 
         // Exit early in case of error without updating global state
         account
-            .remove_associated_key(public_key)
+            .remove_associated_key(account_hash)
             .map_err(Error::from)?;
 
         let account_value = self.account_to_validated_value(account)?;
@@ -725,7 +725,7 @@ where
 
     pub fn update_associated_key(
         &mut self,
-        public_key: PublicKey,
+        account_hash: AccountHash,
         weight: Weight,
     ) -> Result<(), Error> {
         // Check permission to modify associated keys
@@ -744,14 +744,14 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().public_key());
+        let key = Key::Account(self.account().account_hash());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
 
         // Exit early in case of error without updating global state
         account
-            .update_associated_key(public_key, weight)
+            .update_associated_key(account_hash, weight)
             .map_err(Error::from)?;
 
         let account_value = self.account_to_validated_value(account)?;
@@ -782,7 +782,7 @@ where
         }
 
         // Converts an account's public key into a URef
-        let key = Key::Account(self.account().public_key());
+        let key = Key::Account(self.account().account_hash());
 
         // Take an account out of the global state
         let mut account: Account = self.read_gs_typed(&key)?;
@@ -837,7 +837,7 @@ where
 
     /// Checks if the account context is valid.
     fn is_valid_context(&self) -> bool {
-        self.base_key() == Key::Account(self.account().public_key())
+        self.base_key() == Key::Account(self.account().account_hash())
     }
 
     /// Gets main purse id

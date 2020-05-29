@@ -7,12 +7,12 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, U512};
+use types::{account::AccountHash, U512};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT_NAME: &str = "transfer_to_account";
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const STORE_AT_HASH: &str = "hash";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 
 #[ignore]
 #[test]

@@ -22,7 +22,7 @@ use engine_storage::global_state::{
 };
 use types::{
     account::{
-        ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
+        AccountHash, ActionType, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
     AccessRights, BlockTime, CLValue, Key, Phase, ProtocolVersion, URef, KEY_LOCAL_SEED_LENGTH,
 };
@@ -61,29 +61,29 @@ fn mock_tc(init_key: Key, init_account: Account) -> TrackingCopy<InMemoryGlobalS
     TrackingCopy::new(reader)
 }
 
-fn mock_account_with_purse(public_key: PublicKey, purse: [u8; 32]) -> (Key, Account) {
-    let associated_keys = AssociatedKeys::new(public_key, Weight::new(1));
+fn mock_account_with_purse(account_hash: AccountHash, purse: [u8; 32]) -> (Key, Account) {
+    let associated_keys = AssociatedKeys::new(account_hash, Weight::new(1));
     let account = Account::new(
-        public_key,
+        account_hash,
         BTreeMap::new(),
         URef::new(purse, AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
     );
-    let key = Key::Account(public_key);
+    let key = Key::Account(account_hash);
 
     (key, account)
 }
 
-fn mock_account(public_key: PublicKey) -> (Key, Account) {
-    mock_account_with_purse(public_key, [0; 32])
+fn mock_account(account_hash: AccountHash) -> (Key, Account) {
+    mock_account_with_purse(account_hash, [0; 32])
 }
 
 // create random account key.
 fn random_account_key<G: RngCore>(entropy_source: &mut G) -> Key {
     let mut key = [0u8; 32];
     entropy_source.fill_bytes(&mut key);
-    Key::Account(PublicKey::ed25519_from(key))
+    Key::Account(AccountHash::new(key))
 }
 
 // create random contract key.
@@ -118,7 +118,7 @@ fn mock_runtime_context<'a>(
         named_keys,
         access_rights,
         Vec::new(),
-        BTreeSet::from_iter(vec![PublicKey::ed25519_from([0; 32])]),
+        BTreeSet::from_iter(vec![AccountHash::new([0; 32])]),
         &account,
         base_key,
         BlockTime::new(0),
@@ -158,7 +158,7 @@ where
     F: FnOnce(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
     let base_acc_addr = [0u8; 32];
-    let base_acc = PublicKey::ed25519_from(base_acc_addr);
+    let base_acc = AccountHash::new(base_acc_addr);
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc);
     let mut uref_map = BTreeMap::new();
@@ -426,7 +426,7 @@ fn contract_key_addable_valid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let base_acc = PublicKey::ed25519_from(base_acc_addr);
+    let base_acc = AccountHash::new(base_acc_addr);
     let (account_key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
@@ -449,7 +449,7 @@ fn contract_key_addable_valid() {
         &mut uref_map,
         access_rights,
         Vec::new(),
-        BTreeSet::from_iter(vec![PublicKey::ed25519_from(base_acc_addr)]),
+        BTreeSet::from_iter(vec![AccountHash::new(base_acc_addr)]),
         &account,
         contract_key,
         BlockTime::new(0),
@@ -488,7 +488,7 @@ fn contract_key_addable_invalid() {
     // Contract key is addable if it is a "base" key - current context of the
     // execution.
     let base_acc_addr = [0u8; 32];
-    let base_acc = PublicKey::ed25519_from(base_acc_addr);
+    let base_acc = AccountHash::new(base_acc_addr);
     let (account_key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(&DEPLOY_HASH, PHASE);
     let mut rng = rand::thread_rng();
@@ -511,7 +511,7 @@ fn contract_key_addable_invalid() {
         &mut uref_map,
         access_rights,
         Vec::new(),
-        BTreeSet::from_iter(vec![PublicKey::ed25519_from(base_acc_addr)]),
+        BTreeSet::from_iter(vec![AccountHash::new(base_acc_addr)]),
         &account,
         other_contract_key,
         BlockTime::new(0),
@@ -697,13 +697,13 @@ fn manage_associated_keys() {
     // making sure `account_dirty` mutated
     let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
-        let public_key = PublicKey::ed25519_from([42; 32]);
+        let account_hash = AccountHash::new([42; 32]);
         let weight = Weight::new(155);
 
         // Add a key (this doesn't check for all invariants as `add_key`
         // is already tested in different place)
         runtime_context
-            .add_associated_key(public_key, weight)
+            .add_associated_key(account_hash, weight)
             .expect("Unable to add key");
 
         let effect = runtime_context.effect();
@@ -713,12 +713,12 @@ fn manage_associated_keys() {
             _ => panic!("Invalid transform operation found"),
         };
         account
-            .get_associated_key_weight(public_key)
+            .get_associated_key_weight(account_hash)
             .expect("Public key wasn't added to associated keys");
 
         let new_weight = Weight::new(100);
         runtime_context
-            .update_associated_key(public_key, new_weight)
+            .update_associated_key(account_hash, new_weight)
             .expect("Unable to update key");
 
         let effect = runtime_context.effect();
@@ -728,14 +728,14 @@ fn manage_associated_keys() {
             _ => panic!("Invalid transform operation found"),
         };
         let value = account
-            .get_associated_key_weight(public_key)
+            .get_associated_key_weight(account_hash)
             .expect("Public key wasn't added to associated keys");
 
         assert_eq!(value, &new_weight, "value was not updated");
 
         // Remove a key that was already added
         runtime_context
-            .remove_associated_key(public_key)
+            .remove_associated_key(account_hash)
             .expect("Unable to remove key");
 
         // Verify
@@ -746,11 +746,11 @@ fn manage_associated_keys() {
             _ => panic!("Invalid transform operation found"),
         };
 
-        assert!(account.get_associated_key_weight(public_key).is_none());
+        assert!(account.get_associated_key_weight(account_hash).is_none());
 
         // Remove a key that was already removed
         runtime_context
-            .remove_associated_key(public_key)
+            .remove_associated_key(account_hash)
             .expect_err("A non existing key was unexpectedly removed again");
 
         Ok(())
@@ -765,7 +765,7 @@ fn action_thresholds_management() {
     let access_rights = HashMap::new();
     let query = |mut runtime_context: RuntimeContext<InMemoryGlobalStateView>| {
         runtime_context
-            .add_associated_key(PublicKey::ed25519_from([42; 32]), Weight::new(254))
+            .add_associated_key(AccountHash::new([42; 32]), Weight::new(254))
             .expect("Unable to add associated key with maximum weight");
         runtime_context
             .set_action_threshold(ActionType::KeyManagement, Weight::new(253))
@@ -810,7 +810,7 @@ fn should_verify_ownership_before_adding_key() {
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
-            .add_associated_key(PublicKey::ed25519_from([84; 32]), Weight::new(123))
+            .add_associated_key(AccountHash::new([84; 32]), Weight::new(123))
             .expect_err("This operation should return error");
 
         match err {
@@ -834,7 +834,7 @@ fn should_verify_ownership_before_removing_a_key() {
         runtime_context.base_key = Key::Hash([1; 32]);
 
         let err = runtime_context
-            .remove_associated_key(PublicKey::ed25519_from([84; 32]))
+            .remove_associated_key(AccountHash::new([84; 32]))
             .expect_err("This operation should return error");
 
         match err {
@@ -898,7 +898,7 @@ fn remove_uref_works() {
 
     let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
-    let base_acc = PublicKey::ed25519_from(base_acc_addr);
+    let base_acc = AccountHash::new(base_acc_addr);
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account(base_acc);
     let mut address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
@@ -927,7 +927,7 @@ fn validate_valid_purse_of_an_account() {
     let mock_purse = [42u8; 32];
     let named_keys = HashMap::new();
     let base_acc_addr = [0u8; 32];
-    let base_acc = PublicKey::ed25519_from(base_acc_addr);
+    let base_acc = AccountHash::new(base_acc_addr);
     let deploy_hash = [1u8; 32];
     let (key, account) = mock_account_with_purse(base_acc, mock_purse);
     let address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
@@ -967,7 +967,7 @@ fn attenuate_uref_for_system_account() {
 
 #[test]
 fn attenuate_uref_for_user_account() {
-    let (_key, account) = mock_account(PublicKey::ed25519_from([42; 32]));
+    let (_key, account) = mock_account(AccountHash::new([42; 32]));
     let system_contract_uref = URef::new([42; 32], AccessRights::READ_ADD_WRITE);
     let attenuated_uref = attenuate_uref_for_account(&account, system_contract_uref);
 

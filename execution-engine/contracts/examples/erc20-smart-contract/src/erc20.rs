@@ -4,7 +4,7 @@ use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, CLValue, URef, U512};
+use types::{account::AccountHash, CLValue, URef, U512};
 
 use crate::{api::Api, error::Error};
 use erc20_logic::{ERC20BurnError, ERC20Trait, ERC20TransferError, ERC20TransferFromError};
@@ -16,13 +16,13 @@ pub const PURSE_NAME: &str = "erc20_main_purse";
 
 struct ERC20Token;
 
-impl ERC20Trait<U512, PublicKey> for ERC20Token {
-    fn read_balance(&mut self, address: &PublicKey) -> Option<U512> {
+impl ERC20Trait<U512, AccountHash> for ERC20Token {
+    fn read_balance(&mut self, address: &AccountHash) -> Option<U512> {
         let key = balance_key(address);
         storage::read_local(&key).unwrap_or_revert()
     }
 
-    fn save_balance(&mut self, address: &PublicKey, balance: U512) {
+    fn save_balance(&mut self, address: &AccountHash, balance: U512) {
         let key = balance_key(address);
         storage::write_local(key, balance);
     }
@@ -35,12 +35,12 @@ impl ERC20Trait<U512, PublicKey> for ERC20Token {
         storage::write_local(TOTAL_SUPPLY_KEY, total_supply);
     }
 
-    fn read_allowance(&mut self, owner: &PublicKey, spender: &PublicKey) -> Option<U512> {
+    fn read_allowance(&mut self, owner: &AccountHash, spender: &AccountHash) -> Option<U512> {
         let key = allowance_key(owner, spender);
         storage::read_local(&key).unwrap_or_revert()
     }
 
-    fn save_allowance(&mut self, owner: &PublicKey, spender: &PublicKey, amount: U512) {
+    fn save_allowance(&mut self, owner: &AccountHash, spender: &AccountHash, amount: U512) {
         let key = allowance_key(owner, spender);
         storage::write_local(key, amount);
     }
@@ -111,15 +111,15 @@ fn mark_as_initialized() {
     storage::write_local(INIT_FLAG_KEY, 1);
 }
 
-fn balance_key(public_key: &PublicKey) -> Vec<u8> {
-    let len = public_key.as_bytes().len() + 1;
+fn balance_key(account_hash: &AccountHash) -> Vec<u8> {
+    let len = account_hash.as_bytes().len() + 1;
     let mut result: Vec<u8> = Vec::with_capacity(len);
     result.extend(&[BALANCE_BYTE]);
-    result.extend(public_key.as_bytes());
+    result.extend(account_hash.as_bytes());
     result
 }
 
-fn allowance_key(owner: &PublicKey, spender: &PublicKey) -> Vec<u8> {
+fn allowance_key(owner: &AccountHash, spender: &AccountHash) -> Vec<u8> {
     let len = owner.as_bytes().len() + spender.as_bytes().len();
     let mut result: Vec<u8> = Vec::with_capacity(len);
     result.extend(owner.as_bytes());

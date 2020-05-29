@@ -12,9 +12,9 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::AccountHash, ApiError, Key, URef, U512};
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 const TRANSFER_PURSE_TO_ACCOUNT_WASM: &str = "transfer_purse_to_account.wasm";
 const REVERT_WASM: &str = "revert.wasm";
@@ -23,12 +23,12 @@ const ENDLESS_LOOP_WASM: &str = "endless_loop.wasm";
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
 
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         TRANSFER_PURSE_TO_ACCOUNT_WASM,
-        (account_1_public_key, U512::from(MAX_PAYMENT - 1)),
+        (account_1_account_hash, U512::from(MAX_PAYMENT - 1)),
     )
     .build();
 
@@ -75,7 +75,7 @@ fn should_raise_insufficient_payment_when_caller_lacks_minimum_balance() {
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -83,7 +83,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, U512::from(1)),
+                (account_1_account_hash, U512::from(1)),
             )
             .with_empty_payment_bytes((U512::from(1),))
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
@@ -147,7 +147,7 @@ fn should_raise_insufficient_payment_when_payment_code_does_not_pay_enough() {
 #[ignore]
 #[test]
 fn should_raise_insufficient_payment_error_when_out_of_gas() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount: U512 = U512::from(1);
     let transferred_amount = U512::from(1);
 
@@ -158,7 +158,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
             .with_empty_payment_bytes((payment_purse_amount,))
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, transferred_amount),
+                (account_1_account_hash, transferred_amount),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
@@ -221,7 +221,7 @@ fn should_raise_insufficient_payment_error_when_out_of_gas() {
 #[ignore]
 #[test]
 fn should_forward_payment_execution_runtime_error() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let transferred_amount = U512::from(1);
 
     let exec_request = {
@@ -231,7 +231,7 @@ fn should_forward_payment_execution_runtime_error() {
             .with_payment_code(REVERT_WASM, ())
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, transferred_amount),
+                (account_1_account_hash, transferred_amount),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
@@ -290,7 +290,7 @@ fn should_forward_payment_execution_runtime_error() {
 #[ignore]
 #[test]
 fn should_forward_payment_execution_gas_limit_error() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let transferred_amount = U512::from(1);
 
     let exec_request = {
@@ -300,7 +300,7 @@ fn should_forward_payment_execution_gas_limit_error() {
             .with_payment_code(ENDLESS_LOOP_WASM, ())
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM,
-                (account_1_public_key, transferred_amount),
+                (account_1_account_hash, transferred_amount),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
@@ -356,7 +356,7 @@ fn should_forward_payment_execution_gas_limit_error() {
 #[ignore]
 #[test]
 fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -367,7 +367,7 @@ fn should_run_out_of_gas_when_session_code_exceeds_gas_limit() {
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_session_code(
                 ENDLESS_LOOP_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();
@@ -452,7 +452,7 @@ fn should_correctly_charge_when_session_code_runs_out_of_gas() {
 #[ignore]
 #[test]
 fn should_correctly_charge_when_session_code_fails() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -463,7 +463,7 @@ fn should_correctly_charge_when_session_code_fails() {
             .with_empty_payment_bytes((U512::from(payment_purse_amount),))
             .with_session_code(
                 REVERT_WASM,
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_authorization_keys(&[DEFAULT_ACCOUNT_KEY])
             .build();

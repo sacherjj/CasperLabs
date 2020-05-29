@@ -9,7 +9,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, ContractRef, URef, U512};
+use types::{account::AccountHash, ApiError, ContractRef, URef, U512};
 
 #[repr(u16)]
 enum Error {
@@ -59,7 +59,7 @@ pub extern "C" fn call() {
 
         bond(&pos_pointer, &amount, account::get_main_purse());
     } else if command == TEST_SEED_NEW_ACCOUNT {
-        let account: PublicKey = runtime::get_arg(1)
+        let account: AccountHash = runtime::get_arg(1)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);
         let amount: U512 = runtime::get_arg(2)

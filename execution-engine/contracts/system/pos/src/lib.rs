@@ -15,7 +15,7 @@ use proof_of_stake::{
     MintProvider, ProofOfStake, Queue, QueueProvider, RuntimeProvider, Stakes, StakesProvider,
 };
 use types::{
-    account::PublicKey, system_contract_errors::pos::Error, ApiError, BlockTime, CLValue, Key,
+    account::AccountHash, system_contract_errors::pos::Error, ApiError, BlockTime, CLValue, Key,
     Phase, TransferResult, URef, U512,
 };
 
@@ -35,7 +35,7 @@ impl MintProvider for ProofOfStakeContract {
     fn transfer_purse_to_account(
         &mut self,
         source: URef,
-        target: PublicKey,
+        target: AccountHash,
         amount: U512,
     ) -> TransferResult {
         system::transfer_from_purse_to_account(source, target, amount)
@@ -102,7 +102,7 @@ impl RuntimeProvider for ProofOfStakeContract {
         runtime::get_blocktime()
     }
 
-    fn get_caller(&self) -> PublicKey {
+    fn get_caller(&self) -> AccountHash {
         runtime::get_caller()
     }
 }
@@ -126,7 +126,7 @@ impl StakesProvider for ProofOfStakeContract {
             let _bytes_written = base16::decode_slice(hex_key, &mut key_bytes)
                 .map_err(|_| Error::StakesKeyDeserializationFailed)?;
             debug_assert!(_bytes_written == key_bytes.len());
-            let pub_key = PublicKey::ed25519_from(key_bytes);
+            let pub_key = AccountHash::new(key_bytes);
             let balance = split_name
                 .next()
                 .and_then(|b| U512::from_dec_str(b).ok())
@@ -225,7 +225,7 @@ pub fn delegate() {
             let amount_spent: U512 = runtime::get_arg(1)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
-            let account: PublicKey = runtime::get_arg(2)
+            let account: AccountHash = runtime::get_arg(2)
                 .unwrap_or_revert_with(ApiError::MissingArgument)
                 .unwrap_or_revert_with(ApiError::InvalidArgument);
             pos_contract

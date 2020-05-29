@@ -9,7 +9,7 @@ use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, Key};
+use types::{account::AccountHash, Key};
 
 use tic_tac_toe_logic::{
     game_move::{Move, MoveOutcome},
@@ -30,7 +30,7 @@ use player_data::PlayerData;
 const GAME_CONTRACT_NAME: &str = "tic_tac_toe";
 const GAME_PROXY_CONTRACT_NAME: &str = "tic_tac_toe_proxy";
 
-fn start_game(x_player: PublicKey, o_player: PublicKey) -> Result<(), Error> {
+fn start_game(x_player: AccountHash, o_player: AccountHash) -> Result<(), Error> {
     if PlayerData::read_local(x_player).is_some() {
         return Err(Error::AlreadyPlaying);
     }
@@ -55,7 +55,11 @@ fn start_game(x_player: PublicKey, o_player: PublicKey) -> Result<(), Error> {
     Ok(())
 }
 
-fn take_turn(player: PublicKey, row_position: usize, column_position: usize) -> Result<(), Error> {
+fn take_turn(
+    player: AccountHash,
+    row_position: usize,
+    column_position: usize,
+) -> Result<(), Error> {
     let player_data = PlayerData::read_local(player).ok_or(Error::NoGameFoundForPlayer)?;
 
     let (x_player, o_player) = if player_data.piece() == Player::X {
@@ -91,7 +95,7 @@ fn take_turn(player: PublicKey, row_position: usize, column_position: usize) -> 
     }
 }
 
-fn complete_game(x_player: PublicKey, o_player: PublicKey, winner: Option<Player>) {
+fn complete_game(x_player: AccountHash, o_player: AccountHash, winner: Option<Player>) {
     let x_player_data = PlayerData::read_local(x_player).unwrap_or_revert();
     let o_player_data = PlayerData::read_local(o_player).unwrap_or_revert();
 
@@ -117,7 +121,7 @@ fn complete_game(x_player: PublicKey, o_player: PublicKey, winner: Option<Player
     storage::write_local(o_player, ());
 }
 
-fn concede(player: PublicKey) -> Result<(), Error> {
+fn concede(player: AccountHash) -> Result<(), Error> {
     let player_data = PlayerData::read_local(player).ok_or(Error::NoGameFoundForPlayer)?;
     let (x_player, o_player) = if player_data.piece() == Player::X {
         (player, player_data.opponent())

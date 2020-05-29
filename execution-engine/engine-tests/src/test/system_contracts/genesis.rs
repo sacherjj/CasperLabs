@@ -8,14 +8,14 @@ use engine_test_support::internal::{
     utils, InMemoryWasmTestBuilder, DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT,
     POS_INSTALL_CONTRACT, STANDARD_PAYMENT_INSTALL_CONTRACT,
 };
-use types::{account::PublicKey, Key, ProtocolVersion, U512};
+use types::{account::AccountHash, Key, ProtocolVersion, U512};
 
 #[cfg(feature = "use-system-contracts")]
 const BAD_INSTALL: &str = "standard_payment.wasm";
 
 const GENESIS_CONFIG_HASH: [u8; 32] = [127; 32];
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
-const ACCOUNT_2_ADDR: PublicKey = PublicKey::ed25519_from([2u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
+const ACCOUNT_2_ADDR: AccountHash = AccountHash::new([2u8; 32]);
 const ACCOUNT_1_BONDED_AMOUNT: u64 = 1_000_000;
 const ACCOUNT_2_BONDED_AMOUNT: u64 = 2_000_000;
 const ACCOUNT_1_BALANCE: u64 = 1_000_000_000;

@@ -5,12 +5,12 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, ApiError, U512};
+use types::{account::AccountHash, ApiError, U512};
 
 const FAUCET: &str = "faucet";
 const STANDARD_PAYMENT_CONTRACT_NAME: &str = "standard_payment";
 const STORE_AT_HASH: &str = "hash";
-const NEW_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([99u8; 32]);
+const NEW_ACCOUNT_ADDR: AccountHash = AccountHash::new([99u8; 32]);
 
 fn get_builder() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();

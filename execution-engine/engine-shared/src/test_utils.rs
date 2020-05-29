@@ -2,12 +2,12 @@
 use std::collections::BTreeMap;
 
 use engine_wasm_prep::wasm_costs::WasmCosts;
-use types::{account::PublicKey, AccessRights, Key, URef};
+use types::{account::AccountHash, AccessRights, Key, URef};
 
 use crate::{account::Account, stored_value::StoredValue};
 
 /// Returns an account value paired with its key
-pub fn mocked_account(public_key: PublicKey) -> Vec<(Key, StoredValue)> {
+pub fn mocked_account(public_key: AccountHash) -> Vec<(Key, StoredValue)> {
     let purse = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
     let account = Account::create(public_key, BTreeMap::new(), purse);
     vec![(Key::Account(public_key), StoredValue::Account(account))]

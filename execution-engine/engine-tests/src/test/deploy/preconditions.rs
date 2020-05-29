@@ -8,15 +8,15 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, U512};
+use types::{account::AccountHash, U512};
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_account() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
-    let nonexistent_account_addr = PublicKey::ed25519_from([99u8; 32]);
+    let account_1_account_hash = ACCOUNT_1_ADDR;
+    let nonexistent_account_addr = AccountHash::new([99u8; 32]);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -26,7 +26,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 "transfer_purse_to_account.wasm",
-                (account_1_public_key, U512::from(transferred_amount)),
+                (account_1_account_hash, U512::from(transferred_amount)),
             )
             .with_address(nonexistent_account_addr)
             .with_payment_code("standard_payment.wasm", (U512::from(payment_purse_amount),))
@@ -53,7 +53,7 @@ fn should_raise_precondition_authorization_failure_invalid_account() {
 #[ignore]
 #[test]
 fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
-    let empty_keys: [PublicKey; 0] = [];
+    let empty_keys: [AccountHash; 0] = [];
     let exec_request = {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
@@ -85,7 +85,7 @@ fn should_raise_precondition_authorization_failure_empty_authorized_keys() {
 #[test]
 fn should_raise_precondition_authorization_failure_invalid_authorized_keys() {
     let account_1_public_key = ACCOUNT_1_ADDR;
-    let nonexistent_account_addr = PublicKey::ed25519_from([99u8; 32]);
+    let nonexistent_account_addr = AccountHash::new([99u8; 32]);
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 

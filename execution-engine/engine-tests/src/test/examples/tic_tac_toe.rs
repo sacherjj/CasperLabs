@@ -1,6 +1,8 @@
 extern crate alloc;
 
-use engine_test_support::{Code, Hash, PublicKey, SessionBuilder, TestContext, TestContextBuilder};
+use engine_test_support::{
+    AccountHash, Code, Hash, SessionBuilder, TestContext, TestContextBuilder,
+};
 
 use types::{Key, U512};
 
@@ -14,8 +16,8 @@ mod method {
     pub const CONCEDE: &str = "concede";
 }
 
-const PLAYER_X: PublicKey = PublicKey::ed25519_from([1u8; 32]);
-const PLAYER_O: PublicKey = PublicKey::ed25519_from([2u8; 32]);
+const PLAYER_X: AccountHash = AccountHash::new([1u8; 32]);
+const PLAYER_O: AccountHash = AccountHash::new([2u8; 32]);
 
 pub struct GameTest {
     pub context: TestContext,
@@ -52,7 +54,7 @@ impl GameTest {
         self
     }
 
-    pub fn concede(mut self, player: PublicKey) -> Self {
+    pub fn concede(mut self, player: AccountHash) -> Self {
         let proxy = Code::Hash(self.proxy_contract_hash());
         let args = (self.game_contract_hash(), method::CONCEDE);
         let session = SessionBuilder::new(proxy, args)
@@ -63,7 +65,7 @@ impl GameTest {
         self
     }
 
-    pub fn make_move(mut self, player: PublicKey, move_x: u32, move_y: u32) -> Self {
+    pub fn make_move(mut self, player: AccountHash, move_x: u32, move_y: u32) -> Self {
         let proxy = Code::Hash(self.proxy_contract_hash());
         let args = (self.game_contract_hash(), method::MOVE, move_x, move_y);
         let session = SessionBuilder::new(proxy, args)
@@ -93,7 +95,7 @@ impl GameTest {
         self.contract_hash(GAME_PROXY_CONTRACT_NAME)
     }
 
-    pub fn player_status(&self, player: PublicKey) -> String {
+    pub fn player_status(&self, player: AccountHash) -> String {
         let key: String = format!("{}", player);
         self.context
             .query(PLAYER_X, &[GAME_CONTRACT_NAME, key.as_str()])
@@ -105,8 +107,8 @@ impl GameTest {
     pub fn assert_player_in_game(
         self,
         playing_as: &str,
-        player: PublicKey,
-        opponent: PublicKey,
+        player: AccountHash,
+        opponent: AccountHash,
     ) -> Self {
         let val = self.player_status(player);
         let expected = format!("playing as {} against {}", playing_as, opponent);
@@ -114,28 +116,28 @@ impl GameTest {
         self
     }
 
-    pub fn assert_player_won(self, player: PublicKey, opponent: PublicKey) -> Self {
+    pub fn assert_player_won(self, player: AccountHash, opponent: AccountHash) -> Self {
         let val = self.player_status(player);
         let expected = format!("victorious against {}", opponent);
         assert_eq!(val, expected);
         self
     }
 
-    pub fn assert_player_lost(self, player: PublicKey, opponent: PublicKey) -> Self {
+    pub fn assert_player_lost(self, player: AccountHash, opponent: AccountHash) -> Self {
         let val = self.player_status(player);
         let expected = format!("defeated by {}", opponent);
         assert_eq!(val, expected);
         self
     }
 
-    pub fn assert_player_draw(self, player: PublicKey, opponent: PublicKey) -> Self {
+    pub fn assert_player_draw(self, player: AccountHash, opponent: AccountHash) -> Self {
         let val = self.player_status(player);
         let expected = format!("draw against {}", opponent);
         assert_eq!(val, expected);
         self
     }
 
-    pub fn assert_board_status(self, pk1: PublicKey, pk2: PublicKey, expected: &str) -> Self {
+    pub fn assert_board_status(self, pk1: AccountHash, pk2: AccountHash, expected: &str) -> Self {
         let key: String = if pk1 > pk2 {
             format!("Game {} vs {}", pk1, pk2)
         } else {

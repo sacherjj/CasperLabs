@@ -10,9 +10,9 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, Key, ProtocolVersion, U512};
+use types::{account::AccountHash, Key, ProtocolVersion, U512};
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const DO_NOTHING_NAME: &str = "do_nothing";
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
@@ -799,7 +799,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 Transform::Write(StoredValue::Account(la)),
                 Transform::Write(StoredValue::Account(ra)),
             ) => {
-                assert_eq!(la.public_key(), ra.public_key());
+                assert_eq!(la.account_hash(), ra.account_hash());
                 assert_eq!(la.main_purse(), ra.main_purse());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
 

@@ -1,13 +1,13 @@
 use contract::{contract_api::account, unwrap_or_revert::UnwrapOrRevert};
 
 use types::account::{
-    ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure,
-    Weight,
+    AccountHash, ActionType, AddKeyFailure, RemoveKeyFailure, SetThresholdFailure,
+    UpdateKeyFailure, Weight,
 };
 
 use crate::{api::Api, error::Error};
 
-fn add_or_update_key(key: PublicKey, weight: Weight) -> Result<(), Error> {
+fn add_or_update_key(key: AccountHash, weight: Weight) -> Result<(), Error> {
     match account::update_associated_key(key, weight) {
         Ok(()) => Ok(()),
         Err(UpdateKeyFailure::MissingKey) => add_key(key, weight),
@@ -16,7 +16,7 @@ fn add_or_update_key(key: PublicKey, weight: Weight) -> Result<(), Error> {
     }
 }
 
-fn add_key(key: PublicKey, weight: Weight) -> Result<(), Error> {
+fn add_key(key: AccountHash, weight: Weight) -> Result<(), Error> {
     match account::add_associated_key(key, weight) {
         Ok(()) => Ok(()),
         Err(AddKeyFailure::MaxKeysLimit) => Err(Error::MaxKeysLimit),
@@ -25,7 +25,7 @@ fn add_key(key: PublicKey, weight: Weight) -> Result<(), Error> {
     }
 }
 
-fn remove_key_if_exists(key: PublicKey) -> Result<(), Error> {
+fn remove_key_if_exists(key: AccountHash) -> Result<(), Error> {
     match account::remove_associated_key(key) {
         Ok(()) | Err(RemoveKeyFailure::MissingKey) => Ok(()),
         Err(RemoveKeyFailure::PermissionDenied) => Err(Error::PermissionDenied),

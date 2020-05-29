@@ -9,7 +9,7 @@ use contract::{
     contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::AccountHash, ApiError, Key, URef, U512};
 
 const DONATION_AMOUNT: u64 = 1;
 // Different name just to make sure any routine that deals with named keys coming from different
@@ -48,7 +48,7 @@ impl Into<ApiError> for ContractError {
     }
 }
 
-fn get_maintainer_public_key() -> Result<PublicKey, ApiError> {
+fn get_maintainer_public_key() -> Result<AccountHash, ApiError> {
     // Obtain maintainer address from the contract's named keys
     let maintainer_key = runtime::get_key(MAINTAINER).ok_or(ApiError::GetKey)?;
     maintainer_key

@@ -7,12 +7,12 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, U512};
+use types::{account::AccountHash, U512};
 
 const CONTRACT_CHECK_SYSTEM_CONTRACT_UREFS_ACCESS_RIGHTS: &str =
     "check_system_contract_urefs_access_rights.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_BALANCE: U512 = *DEFAULT_PAYMENT;

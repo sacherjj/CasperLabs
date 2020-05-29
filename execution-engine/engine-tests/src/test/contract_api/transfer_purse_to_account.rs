@@ -10,10 +10,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, ApiError, CLValue, Key, TransferResult, TransferredTo, U512};
+use types::{account::AccountHash, ApiError, CLValue, Key, TransferResult, TransferredTo, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT + 42;
 }

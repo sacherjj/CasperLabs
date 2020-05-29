@@ -22,7 +22,7 @@ mod tests {
     use casperlabs_engine_test_support::{Code, Error, SessionBuilder, TestContextBuilder, Value};
     use casperlabs_types::{account::PublicKey, U512};
 
-    const MY_ACCOUNT: PublicKey = PublicKey::ed25519_from([7u8; 32]);
+    const MY_ACCOUNT: PublicKey = PublicKey::new([7u8; 32]);
     // define KEY constant to match that in the contract
     const KEY: &str = "special_value";
     const VALUE: &str = "hello world";

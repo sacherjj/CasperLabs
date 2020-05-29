@@ -4,7 +4,7 @@ use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, U512};
+use types::{account::AccountHash, ApiError, U512};
 
 #[repr(u32)]
 enum CustomError {
@@ -16,7 +16,7 @@ enum CustomError {
 /// 1 - requested transfer to already funded public key.
 #[no_mangle]
 pub fn delegate() {
-    let public_key: PublicKey = runtime::get_arg(0)
+    let public_key: AccountHash = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
@@ -25,7 +25,7 @@ pub fn delegate() {
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
     // Maybe we will decide to allow multiple funds up until some maximum value.
-    let already_funded = storage::read_local::<PublicKey, U512>(&public_key)
+    let already_funded = storage::read_local::<AccountHash, U512>(&public_key)
         .unwrap_or_default()
         .is_some();
 

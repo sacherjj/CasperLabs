@@ -10,7 +10,7 @@ use contract::{
 };
 use mint::{Mint, RuntimeProvider, StorageProvider};
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
     system_contract_errors::mint::Error,
     ApiError, CLTyped, CLValue, Key, URef, U512,
@@ -24,7 +24,7 @@ const METHOD_TRANSFER: &str = "transfer";
 pub struct MintContract;
 
 impl RuntimeProvider for MintContract {
-    fn get_caller(&self) -> PublicKey {
+    fn get_caller(&self) -> AccountHash {
         runtime::get_caller()
     }
 

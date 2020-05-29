@@ -2,7 +2,7 @@
 #![no_main]
 
 use contract::contract_api::{runtime, system};
-use types::{account::PublicKey, AccessRights, ApiError};
+use types::{account::AccountHash, AccessRights, ApiError};
 
 #[repr(u16)]
 enum Error {
@@ -34,7 +34,7 @@ fn delegate() {
     // Step 2 - Mint and PoS should be URefs and they should have valid access rights
     let mint_contract = system::get_mint();
 
-    let expected_access_rights = if runtime::get_caller() == PublicKey::ed25519_from(SYSTEM_ADDR) {
+    let expected_access_rights = if runtime::get_caller() == AccountHash::new(SYSTEM_ADDR) {
         // System account receives read/add/write access
         AccessRights::READ_ADD_WRITE
     } else {

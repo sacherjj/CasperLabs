@@ -9,7 +9,7 @@ use types::{AccessRights, Key, URef, U512};
 
 use crate::{
     internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_GENESIS_CONFIG_HASH},
-    Error, PublicKey, Result, Session, URefAddr, Value,
+    AccountHash, Error, Result, Session, URefAddr, Value,
 };
 
 /// Context in which to run a test of a Wasm smart contract.
@@ -32,7 +32,7 @@ impl TestContext {
     /// Queries for a [`Value`] stored under the given `key` and `path`.
     ///
     /// Returns an [`Error`] if not found.
-    pub fn query<T: AsRef<str>>(&self, key: PublicKey, path: &[T]) -> Result<Value> {
+    pub fn query<T: AsRef<str>>(&self, key: AccountHash, path: &[T]) -> Result<Value> {
         let path = path.iter().map(AsRef::as_ref).collect::<Vec<_>>();
         self.inner
             .query(None, Key::Account(key), &path)
@@ -69,7 +69,7 @@ impl TestContextBuilder {
     /// the Genesis block.
     ///
     /// Note: `initial_balance` represents the number of motes.
-    pub fn with_account(mut self, address: PublicKey, initial_balance: U512) -> Self {
+    pub fn with_account(mut self, address: AccountHash, initial_balance: U512) -> Self {
         let new_account = GenesisAccount::new(address, Motes::new(initial_balance), Motes::zero());
         self.genesis_config
             .ee_config_mut()

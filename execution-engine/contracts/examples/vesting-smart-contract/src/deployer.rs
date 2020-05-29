@@ -8,7 +8,7 @@ use contract::{
     contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ContractRef, Key, URef};
+use types::{account::AccountHash, ContractRef, Key, URef};
 
 use crate::vesting::PURSE_NAME;
 
@@ -27,8 +27,8 @@ pub fn deploy() {
 
 fn deploy_vesting_contract(
     name: &str,
-    admin: PublicKey,
-    recipient: PublicKey,
+    admin: AccountHash,
+    recipient: AccountHash,
     vesting_config: VestingConfig,
 ) {
     // Create a smart contract purse.

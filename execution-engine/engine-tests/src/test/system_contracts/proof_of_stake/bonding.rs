@@ -9,10 +9,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::AccountHash, ApiError, Key, URef, U512};
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 const ACCOUNT_1_SEED_AMOUNT: u64 = 100_000_000 * 2;
 const ACCOUNT_1_STAKE: u64 = 42_000;
 const ACCOUNT_1_UNBOND_1: u64 = 22_000;
@@ -50,7 +50,7 @@ fn should_run_successful_bond_and_unbond() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::ed25519_from([42; 32]),
+            AccountHash::new([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
@@ -424,7 +424,7 @@ fn should_fail_bonding_with_insufficient_funds() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::ed25519_from([42; 32]),
+            AccountHash::new([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
@@ -484,7 +484,7 @@ fn should_fail_unbonding_validator_without_bonding_first() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::ed25519_from([42; 32]),
+            AccountHash::new([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );

@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     api_error,
     bytesrepr::{self, ToBytes},
     Key, TransferredTo, U512,
@@ -315,11 +315,11 @@ where
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = size of a public key
                 // args(2) = weight of the key
-                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
+                let (account_hash_ptr, account_hash_size, weight_value): (u32, u32, u8) =
                     Args::parse(args)?;
                 let value = self.add_associated_key(
-                    public_key_ptr,
-                    public_key_size as usize,
+                    account_hash_ptr,
+                    account_hash_size as usize,
                     weight_value,
                 )?;
                 Ok(Some(RuntimeValue::I32(value)))
@@ -328,8 +328,9 @@ where
             FunctionIndex::RemoveAssociatedKeyFuncIndex => {
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = size of a public key
-                let (public_key_ptr, public_key_size): (_, u32) = Args::parse(args)?;
-                let value = self.remove_associated_key(public_key_ptr, public_key_size as usize)?;
+                let (account_hash_ptr, account_hash_size): (_, u32) = Args::parse(args)?;
+                let value =
+                    self.remove_associated_key(account_hash_ptr, account_hash_size as usize)?;
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
@@ -337,11 +338,11 @@ where
                 // args(0) = pointer to array of bytes of a public key
                 // args(1) = size of a public key
                 // args(2) = weight of the key
-                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
+                let (account_hash_ptr, account_hash_size, weight_value): (u32, u32, u8) =
                     Args::parse(args)?;
                 let value = self.update_associated_key(
-                    public_key_ptr,
-                    public_key_size as usize,
+                    account_hash_ptr,
+                    account_hash_size as usize,
                     weight_value,
                 )?;
                 Ok(Some(RuntimeValue::I32(value)))
@@ -375,7 +376,7 @@ where
                 // args(3) = length of array of bytes of an amount
                 let (key_ptr, key_size, amount_ptr, amount_size): (u32, u32, u32, u32) =
                     Args::parse(args)?;
-                let public_key: PublicKey = {
+                let public_key: AccountHash = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
@@ -407,7 +408,7 @@ where
                     let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let public_key: PublicKey = {
+                let public_key: AccountHash = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };

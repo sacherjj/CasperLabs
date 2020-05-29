@@ -7,7 +7,6 @@ use core::{
 };
 
 use failure::Fail;
-use hex_fmt::HexFmt;
 
 use crate::{
     bytesrepr::{Error, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
@@ -143,140 +142,77 @@ impl CLTyped for Weight {
         CLType::U8
     }
 }
-/// The length in bytes of a [`PublicKey`].
-pub const ED25519_LENGTH: usize = 32;
 
-/// The number of bytes in a serialized [`Ed25519`].
-pub const ED25519_SERIALIZED_LENGTH: usize = ED25519_LENGTH;
+/// The length in bytes of a [`AccountHash`].
+pub const ACCOUNT_HASH_LENGTH: usize = 32;
 
-/// The upper bound of bytes in a serialized [`PublicKey`].
-pub const PUBLIC_KEY_SERIALIZED_MAX_LENGTH: usize = ED25519_SERIALIZED_LENGTH;
+/// The number of bytes in a serialized [`AccountHash`].
+pub const ACCOUNT_HASH_SERIALIZED_LENGTH: usize = 32;
 
-/// A type alias for the raw bytes of an Ed25519 public key.
-pub type Ed25519Bytes = [u8; ED25519_LENGTH];
+/// A type alias for the raw bytes of an Account Hash.
+pub type AccountHashBytes = [u8; ACCOUNT_HASH_LENGTH];
 
-/// A newtype wrapping a [`Ed25519Bytes`] which is the raw bytes of
-/// the public key of an Ed25519 key pair.
+/// A newtype wrapping a [`AccountHashBytes`] which is the raw bytes of
+/// the AccountHash, a hash of Public Key and Algorithm
 #[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
-pub struct Ed25519(Ed25519Bytes);
+pub struct AccountHash(AccountHashBytes);
 
-impl Ed25519 {
-    /// Constructs a new `Ed25519` instance from the raw bytes of an Ed25519 public key.
-    pub const fn new(value: Ed25519Bytes) -> Ed25519 {
-        Ed25519(value)
+impl AccountHash {
+    /// Constructs a new `AccountHash` instance from the raw bytes of an Public Key Account Hash.
+    pub const fn new(value: AccountHashBytes) -> AccountHash {
+        AccountHash(value)
     }
 
-    /// Returns the raw bytes of the public key as an array.
-    pub fn value(&self) -> Ed25519Bytes {
+    /// Returns the raw bytes of the account hash as an array.
+    pub fn value(&self) -> AccountHashBytes {
         self.0
     }
 
-    /// Returns the raw bytes of the public key as a `slice`.
+    /// Returns the raw bytes of the account hash as a `slice`.
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
-}
 
-impl Display for Ed25519 {
-    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "Ed25519({})", HexFmt(&self.0))
-    }
-}
-
-impl ToBytes for Ed25519 {
-    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        self.0.to_bytes()
-    }
-
-    fn serialized_length(&self) -> usize {
-        ED25519_SERIALIZED_LENGTH
-    }
-}
-
-impl FromBytes for Ed25519 {
-    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (bytes, rem) = <[u8; 32]>::from_bytes(bytes)?;
-        Ok((Ed25519::new(bytes), rem))
-    }
-}
-
-/// An enum of supported public key types.
-#[derive(PartialOrd, Ord, PartialEq, Eq, Hash, Clone, Copy)]
-pub enum PublicKey {
-    /// An Ed25519 public key type.
-    Ed25519(Ed25519),
-}
-
-impl Display for PublicKey {
-    fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        let PublicKey::Ed25519(ed25519) = self;
-        write!(f, "PublicKey({})", ed25519)
-    }
-}
-
-impl PublicKey {
-    /// Constructs a new `PublicKey` using Ed25519 bytes.
-    pub const fn ed25519_from(key: Ed25519Bytes) -> PublicKey {
-        let ed25519 = Ed25519::new(key);
-        PublicKey::Ed25519(ed25519)
-    }
-
-    /// Attemps a new `PublicKey` creation using a slice of bytes.
-    pub fn ed25519_try_from(bytes: &[u8]) -> Result<PublicKey, TryFromSliceForPublicKeyError> {
-        Ed25519Bytes::try_from(bytes)
-            .map(PublicKey::ed25519_from)
+    /// Attemps a new `AccountHash` creation using a slice of bytes.
+    pub fn try_from(bytes: &[u8]) -> Result<AccountHash, TryFromSliceForPublicKeyError> {
+        AccountHashBytes::try_from(bytes)
+            .map(AccountHash::new)
             .map_err(|_| TryFromSliceForPublicKeyError(()))
     }
+}
 
-    /// Returns the raw bytes of the public key as an array.
-    #[doc(hidden)]
-    pub fn value(self) -> Ed25519Bytes {
-        let PublicKey::Ed25519(ed25519) = self;
-        ed25519.value()
-    }
-
-    /// Returns the raw bytes of the public key as a `slice`.
-    pub fn as_bytes(&self) -> &[u8] {
-        let PublicKey::Ed25519(ed25519) = self;
-        ed25519.as_bytes()
+impl Display for AccountHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
+        write!(f, "AccountHash({})", self)
     }
 }
 
-impl Debug for PublicKey {
+impl Debug for AccountHash {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
         write!(f, "{}", self)
     }
 }
 
-impl CLTyped for PublicKey {
+impl CLTyped for AccountHash {
     fn cl_type() -> CLType {
         CLType::FixedList(Box::new(CLType::U8), 32)
     }
 }
 
-impl From<Ed25519> for PublicKey {
-    fn from(ed25519: Ed25519) -> PublicKey {
-        PublicKey::Ed25519(ed25519)
-    }
-}
-
-impl ToBytes for PublicKey {
+impl ToBytes for AccountHash {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let PublicKey::Ed25519(ed25519) = self;
-        let mut bytes = Vec::with_capacity(PUBLIC_KEY_SERIALIZED_MAX_LENGTH);
-        bytes.append(&mut ed25519.to_bytes()?);
-        Ok(bytes)
+        self.0.to_bytes()
     }
 
     fn serialized_length(&self) -> usize {
-        PUBLIC_KEY_SERIALIZED_MAX_LENGTH
+        ACCOUNT_HASH_SERIALIZED_LENGTH
     }
 }
 
-impl FromBytes for PublicKey {
+impl FromBytes for AccountHash {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (ed25519, rem) = Ed25519::from_bytes(bytes)?;
-        Ok((PublicKey::from(ed25519), rem))
+        let (bytes, rem) = <[u8; 32]>::from_bytes(bytes)?;
+        Ok((AccountHash::new(bytes), rem))
     }
 }
 
@@ -391,21 +327,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ed25519_public_key_from_slice() {
+    fn account_hash_from_slice() {
         let bytes: Vec<u8> = (0..32).collect();
-        let public_key = PublicKey::ed25519_try_from(&bytes[..]).expect("should create public key");
-        assert_eq!(&bytes, &public_key.as_bytes());
+        let account_hash = AccountHash::try_from(&bytes[..]).expect("should create account hash");
+        assert_eq!(&bytes, &account_hash.as_bytes());
     }
     #[test]
-    fn ed25519_public_key_from_slice_too_small() {
-        let _public_key =
-            PublicKey::ed25519_try_from(&[0u8; 31][..]).expect_err("should not create public key");
+    fn account_hash_from_slice_too_small() {
+        let _account_hash =
+            AccountHash::try_from(&[0u8; 31][..]).expect_err("should not create account hash");
     }
 
     #[test]
-    fn ed25519_public_key_from_slice_too_big() {
-        let _public_key =
-            PublicKey::ed25519_try_from(&[0u8; 33][..]).expect_err("should not create public key");
+    fn account_hash_from_slice_too_big() {
+        let _account_hash =
+            AccountHash::try_from(&[0u8; 33][..]).expect_err("should not create account hash");
     }
 
     #[test]
