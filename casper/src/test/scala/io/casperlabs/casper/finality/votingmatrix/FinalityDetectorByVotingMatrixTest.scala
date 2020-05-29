@@ -134,7 +134,7 @@ class FinalityDetectorByVotingMatrixTest
             messageRole: MessageRole,
             parent: Block,
             justifications: Map[Validator, Block],
-            shouldFinalize: Option[Block]
+            shouldFinalize: Option[(Block, Set[Validator])]
         ) =>
           createBlockAndUpdateFinalityDetector[Task](
             parentsHashList = Seq(parent.blockHash),
@@ -148,9 +148,10 @@ class FinalityDetectorByVotingMatrixTest
           ) map {
             case (block, detected) =>
               shouldFinalize match {
-                case Some(newLFB) =>
+                case Some((newLFB, committee)) =>
                   detected should not be empty
                   detected.last.consensusValue shouldBe newLFB.blockHash
+                  detected.last.validator shouldBe committee
                 case None =>
                   detected shouldBe empty
               }
@@ -212,14 +213,28 @@ class FinalityDetectorByVotingMatrixTest
         c2 <- create(vC, BLOC, WITN, a1, Map(vA -> a1, vB -> b1, vC -> c1), None)
         d2 <- create(vD, BALL, WITN, a1, Map(vA -> a1, vD -> d1), None)
         b2 <- create(vB, BALL, WITN, c2, Map(vA -> a2, vB -> b1, vC -> c2), None)
-        a3 <- create(vA, BLOC, PROP, c2, Map(vA -> a2, vB -> b2, vC -> c2, vD -> d2), Some(a1))
+        a3 <- create(
+               vA,
+               BLOC,
+               PROP,
+               c2,
+               Map(vA  -> a2, vB -> b2, vC -> c2, vD -> d2),
+               Some(a1 -> Set(vA, vB, vC))
+             )
 
         b3 <- create(vB, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2), None)
         c3 <- create(vC, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2), None)
         d3 <- create(vD, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2), None)
         a4 <- create(vA, BALL, WITN, a3, Map(vA -> a3, vB -> b3, vC -> c3, vD -> d3), None)
         b4 <- create(vB, BALL, WITN, a3, Map(vA -> a4, vB -> b3, vC -> c3, vD -> d3), None)
-        c4 <- create(vC, BALL, WITN, a3, Map(vA -> a4, vB -> b4, vC -> c3, vD -> d3), Some(a3))
+        c4 <- create(
+               vC,
+               BALL,
+               WITN,
+               a3,
+               Map(vA  -> a4, vB -> b4, vC -> c3, vD -> d3),
+               Some(a3 -> Set(vA, vB, vC, vD))
+             )
         d4 <- create(vD, BALL, WITN, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d3), None)
         a5 <- create(vA, BLOC, PROP, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d4), None)
 
