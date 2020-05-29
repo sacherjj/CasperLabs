@@ -235,7 +235,7 @@ package object votingmatrix {
               .filter { case (_, witnessedIndex) => mask(witnessedIndex) }
               .map {
                 case (witnessedHighestLevel, witnessedIndex) =>
-                  // See if the witnessed validator is voting for the same candidate.
+                  // See if the witnessed level includes the vote for the candidate.
                   firstLevelZeroVotes(witnessedIndex) match {
                     case Some((_, witnessedVoteLevel))
                         if witnessedVoteLevel <= witnessedHighestLevel =>
