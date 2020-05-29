@@ -221,46 +221,35 @@ package object votingmatrix {
       q: Weight,
       weight: MutableSeq[Weight]
   ): Option[(MutableSeq[Boolean], Weight)] = {
-    // Go through each validator in the matrix rows and see if
-    // enough other validators saw them voting for the candidate.
+    // A level-1 summit with 2/3 quorum is just 2/3 of validators having seen each other vote for the candidate.
+    // Go through each validator in the matrix rows and see if they see a quorum of other validators vote for the candidate.
     val (newMask, prunedValidator, maxTotalWeight) = validatorsViews.zipWithIndex
       .filter { case (_, voterIndex) => mask(voterIndex) }
       .foldLeft((mask, false, Zero)) {
-        case ((newMask, prunedValidator, maxTotalWeight), (_, voterIndex)) =>
-          // Does this validator have enough witnesses behind it so that it can add its support to the candidate?
+        case ((newMask, prunedValidator, maxTotalWeight), (row, voterIndex)) =>
+          // Does this validator see enough of the others so that it can add its support to the candidate?
+          // i.e. is this validator part of the committee?
           val voteSum =
-            // See if this validator is indeed voting for the candidate.
-            firstLevelZeroVotes(voterIndex) match {
-              case Some((voterBlockHash, voterSinceLevel))
-                  if voterBlockHash == candidateBlockHash =>
-                // Add up the weight of other validators who have seen this validator vote for the candidate.
-                // For validator i this should be based on the i-th column in each row of the matrix,
-                // because that's where we see which is the latest level other validators have seen from it.
-                validatorsViews.zipWithIndex
-                  .filter { case (_, witnessIndex) => mask(witnessIndex) }
-                  .map {
-                    case (row, witnessIndex) =>
-                      // What's the latest level the witness has seen from the voter?
-                      val witnessedVoterLevel = row(voterIndex)
-                      // See if the witness is voting for the same candidate.
-                      firstLevelZeroVotes(witnessIndex) match {
-                        case Some((witnessBlockHash, _))
-                            if witnessBlockHash == candidateBlockHash && witnessedVoterLevel >= voterSinceLevel =>
-                          // The validator at `witnessIndex` puts their weight behind the one at `voterIndex`
-                          weight(witnessIndex)
+            // Add up the weight of other validators who this validator sees voting for the candidate in its panorama.
+            row.zipWithIndex
+              .filter { case (_, witnessedIndex) => mask(witnessedIndex) }
+              .map {
+                case (witnessedHighestLevel, witnessedIndex) =>
+                  // See if the witnessed validator is voting for the same candidate.
+                  firstLevelZeroVotes(witnessedIndex) match {
+                    case Some((witnessedBlockHash, witnessedVoteLevel))
+                        if witnessedBlockHash == candidateBlockHash && witnessedVoteLevel <= witnessedHighestLevel =>
+                      // The validator at `witnessedIndex` puts their weight behind the one at `voterIndex`
+                      weight(witnessedIndex)
 
-                        // Voting for a different candidate or hasn't seen the voter's vote yet.
-                        case _ => Zero
-                      }
+                    // Voting for a different candidate or the voter hasn't witnessed the vote.
+                    case _ => Zero
                   }
-                  .sum
+              }
+              .sum
 
-              // Not voting for the candidate.
-              case _ => Zero
-            }
-
-          // If not enough other validators see this one, eliminate this validator from the committee.
-          // Otherwise add their weight to the vote behind the candidate itself.
+          // If this validator hasn't seen a qourum of others' votes, eliminate it from the committee,
+          // otherwise add its weight to the candidate support.
           if (voteSum < q) {
             (newMask.updated(voterIndex, false), true, maxTotalWeight)
           } else {

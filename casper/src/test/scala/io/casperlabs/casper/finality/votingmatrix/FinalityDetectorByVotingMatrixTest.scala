@@ -164,8 +164,6 @@ class FinalityDetectorByVotingMatrixTest
       val PROP = MessageRole.PROPOSAL
       val WITN = MessageRole.WITNESS
 
-      // A level-1 summit with 2/3 quorum is just 2/3 of validators having seen each other vote for the candidate.
-
       /* The DAG looks like:
        *
        * A5 ---------
@@ -233,7 +231,7 @@ class FinalityDetectorByVotingMatrixTest
                WITN,
                a3,
                Map(vA  -> a4, vB -> b4, vC -> c3, vD -> d3),
-               Some(a3 -> Set(vA, vB, vC, vD))
+               Some(a3 -> Set(vA, vB, vC))
              )
         d4 <- create(vD, BALL, WITN, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d3), None)
         a5 <- create(vA, BLOC, PROP, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d4), None)
