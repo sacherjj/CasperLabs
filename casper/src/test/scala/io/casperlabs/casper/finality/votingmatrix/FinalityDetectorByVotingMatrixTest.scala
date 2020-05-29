@@ -119,7 +119,7 @@ class FinalityDetectorByVotingMatrixTest
     } yield ()
   }
 
-  it should "finalize as many blocks as possible in a round (TNET-36) even with omega blocks" in withCombinedStorage() {
+  it should "finalize as many blocks as possible in a round even with omega blocks (TNET-36)" in withCombinedStorage() {
     implicit storage =>
       /* The DAG looks like:
        * A3
@@ -162,14 +162,14 @@ class FinalityDetectorByVotingMatrixTest
             justifications = justifications.mapValues(_.blockHash)
           ) map {
             case (block, detected) =>
+              println(s"created block ${block.blockHash.show}")
               shouldFinalize match {
-                case Some(fin) =>
+                case Some(newLFB) =>
                   detected should not be empty
-                  detected.last.consensusValue shouldBe block.blockHash
+                  detected.last.consensusValue shouldBe newLFB.blockHash
                 case None =>
                   detected shouldBe empty
               }
-              println(s"created block ${block.blockHash.show}")
               block
           }
 

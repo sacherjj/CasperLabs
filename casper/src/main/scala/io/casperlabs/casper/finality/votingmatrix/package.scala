@@ -155,6 +155,11 @@ package object votingmatrix {
       weightMap           <- matrix.get.map(_.weightMap)
       validators          <- matrix.get.map(_.validators)
       firstLevelZeroVotes <- matrix.get.map(_.firstLevelZeroVotes)
+      _ = println(
+        "level-0 votes: " + firstLevelZeroVotes
+          .map(_.map(v => s"${v._1.show} -> ${v._2}"))
+          .mkString("; ")
+      )
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
       committee <- if (firstLevelZeroVotes.isEmpty) {
                     // No one voted on anything in the current b-game
@@ -211,17 +216,24 @@ package object votingmatrix {
 
   @tailrec
   private[votingmatrix] def pruneLoop(
+      // Matrix of the latest j-DAG level of messages that validators saw from each other.
       validatorsViews: MutableSeq[MutableSeq[Level]],
+      // Which candidate (if any) does each validator vote for and since which level.
       firstLevelZeroVotes: MutableSeq[Option[Vote]],
       candidateBlockHash: BlockHash,
+      // Which validators were (and are still) part of the committee.
       mask: MutableSeq[Boolean],
       q: Weight,
       weight: MutableSeq[Weight]
   ): Option[(MutableSeq[Boolean], Weight)] = {
+    println(s"validator views: $validatorsViews")
+    // Go through each validator in the matrix rows and see if
+    // enough other validators saw them voting for the candidate.
     val (newMask, prunedValidator, maxTotalWeight) = validatorsViews.zipWithIndex
       .filter { case (_, rowIndex) => mask(rowIndex) }
       .foldLeft((mask, false, Zero)) {
         case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
+          // Add up the weight of other validators who have seen this validator vote for the candidate.
           val voteSum = row.zipWithIndex
             .filter { case (_, columnIndex) => mask(columnIndex) }
             .map {
@@ -229,11 +241,16 @@ package object votingmatrix {
                 firstLevelZeroVotes(columnIndex).fold(Zero) {
                   case (consensusValue, dagLevelOf1stLevel0) =>
                     if (consensusValue == candidateBlockHash && dagLevelOf1stLevel0 <= latestDagLevelSeen)
+                      // The validator at `columnIndex` has been voting for the candidate since `dagLevelOf1stLevel0`,
+                      // and the validator at `rowIndex` has seen it voting since `latestDagLevelSeen`,
+                      // so she validator at `columnIndex` puts their weight behind the validator at `rowIndex`?
                       weight(columnIndex)
                     else Zero
                 }
             }
             .sum
+          // If not enough other validators see this one, eliminate this validator from the committee.
+          // Otherwise add their weight to the vote behind the candidate itself.
           if (voteSum < q) {
             (newMask.updated(rowIndex, false), true, maxTotalWeight)
           } else {
