@@ -53,6 +53,8 @@ def guarded_command(function):
     :return:
     """
 
+    import traceback
+
     @functools.wraps(function)
     def wrapper(*args, **kwargs):
         try:
@@ -63,6 +65,7 @@ def guarded_command(function):
                 return rc
             return 0
         except Exception as e:
+            traceback.print_exc(file=sys.stderr)
             print(str(e), file=sys.stderr)
             return 1
 

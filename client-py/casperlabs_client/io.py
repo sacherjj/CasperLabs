@@ -3,7 +3,7 @@ from os.path import dirname, realpath
 from typing import Union
 from pathlib import Path
 
-from casperlabs_client import consensus_pb2 as consensus, utils
+from casperlabs_client import consensus_pb2 as consensus
 
 
 def read_file(file_path: Union[Path, str]) -> str:
@@ -49,20 +49,6 @@ def read_pem_key(file_path: str) -> bytes:
             return key_bytes[:32]
         else:
             return key_bytes[-32:]
-
-
-def print_blocks(response, element_name="block"):
-    count = 0
-    for block in response:
-        print(f"------------- {element_name} {count} ---------------")
-        print_block(block)
-        print("-----------------------------------------------------\n")
-        count += 1
-    print("count:", count)
-
-
-def print_block(block):
-    print(utils.hexify(block))
 
 
 def read_version() -> str:

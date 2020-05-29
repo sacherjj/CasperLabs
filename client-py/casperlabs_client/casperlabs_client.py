@@ -6,19 +6,6 @@ import time
 import warnings
 from typing import List, Union
 
-from casperlabs_client.deploy import DeployData
-from casperlabs_client import io, utils, common
-from .insecure_grpc_service import InsecureGRPCService
-from .secure_grpc_service import SecureGRPCService
-
-# Hack to fix the relative imports problems with grpc #
-import sys
-
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-# end of hack #
-
-from grpc._channel import _Rendezvous
-
 # Monkey patching of google.protobuf.text_encoding.CEscape
 # to get keys and signatures in hex when printed
 import google.protobuf.text_format
@@ -38,6 +25,21 @@ def _hex(text, as_utf8):
 
 google.protobuf.text_format.text_encoding.CEscape = _hex
 
+# Hack to fix the relative imports problems with grpc #
+import sys
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+# end of hack #
+
+from . import io, utils, common, vdag, abi
+from .insecure_grpc_service import InsecureGRPCService
+from .secure_grpc_service import SecureGRPCService
+from .contract import bundled_contract_path
+from .query_state import key_variant
+from .deploy import DeployData, sign_deploy
+
+from grpc._channel import _Rendezvous
+
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/control.proto
 from . import control_pb2_grpc, consts, crypto
 from . import control_pb2 as control
@@ -52,13 +54,6 @@ from . import info_pb2 as info
 # ~/CasperLabs/protobuf/io/casperlabs/node/api/diagnostics.proto
 from . import diagnostics_pb2_grpc
 from . import empty_pb2
-
-from . import vdag
-from . import abi
-
-from casperlabs_client.contract import bundled_contract_path
-from casperlabs_client.query_state import key_variant
-from casperlabs_client.deploy import sign_deploy
 
 
 class InternalError(Exception):
