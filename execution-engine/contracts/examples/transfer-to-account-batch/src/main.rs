@@ -12,7 +12,7 @@ use types::{account::AccountHash, ApiError, Key, U512};
 
 const FN_NAME: &str = "transfer_batch";
 
-/// Assumes 0-th argument is a Vec<(PublicKey, U512)>.
+/// Assumes 0-th argument is a Vec<(AccountHash, U512)>.
 /// Performs a transfer for each element of the vector,
 /// sending the specified amount to the specified key.
 #[no_mangle]

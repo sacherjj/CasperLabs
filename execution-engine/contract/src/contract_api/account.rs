@@ -43,7 +43,7 @@ pub fn set_action_threshold(
     }
 }
 
-/// Adds the given [`PublicKey`] with associated [`Weight`] to the account's associated keys.
+/// Adds the given [`AccountHash`] with associated [`Weight`] to the account's associated keys.
 pub fn add_associated_key(account_hash: AccountHash, weight: Weight) -> Result<(), AddKeyFailure> {
     let (account_hash_ptr, account_hash_size, _bytes) = to_ptr(account_hash);
     // Cast of u8 (weight) into i32 is assumed to be always safe
@@ -57,7 +57,7 @@ pub fn add_associated_key(account_hash: AccountHash, weight: Weight) -> Result<(
     }
 }
 
-/// Removes the given [`PublicKey`] from the account's associated keys.
+/// Removes the given [`AccountHash`] from the account's associated keys.
 pub fn remove_associated_key(account_hash: AccountHash) -> Result<(), RemoveKeyFailure> {
     let (account_hash_ptr, account_hash_size, _bytes) = to_ptr(account_hash);
     let result = unsafe { ext_ffi::remove_associated_key(account_hash_ptr, account_hash_size) };
@@ -68,7 +68,7 @@ pub fn remove_associated_key(account_hash: AccountHash) -> Result<(), RemoveKeyF
     }
 }
 
-/// Updates the [`Weight`] of the given [`PublicKey`] in the account's associated keys.
+/// Updates the [`Weight`] of the given [`AccountHash`] in the account's associated keys.
 pub fn update_associated_key(
     account_hash: AccountHash,
     weight: Weight,

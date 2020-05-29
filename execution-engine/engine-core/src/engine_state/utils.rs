@@ -1,8 +1,8 @@
 use types::{account::AccountHash, U512};
 
 /// In PoS, the validators are stored under named keys with names formatted as
-/// "v_<hex-formatted-PublicKey>_<bond-amount>".  This function attempts to parse such a string back
-/// into the `PublicKey` and bond amount.
+/// "v_<hex-formatted-AccountHash>_<bond-amount>".  This function attempts to parse such a string
+/// back into the `AccountHash` and bond amount.
 pub fn pos_validator_key_name_to_tuple(pos_key_name: &str) -> Option<(AccountHash, U512)> {
     let mut split_bond = pos_key_name.split('_'); // expected format is "v_{account_hash}_{bond}".
     if Some("v") != split_bond.next() {

@@ -17,7 +17,7 @@ impl TryFrom<Bond> for (AccountHash, U512) {
     type Error = MappingError;
 
     fn try_from(mut pb_bond: Bond) -> Result<Self, Self::Error> {
-        // TODO: our TryFromSliceForPublicKeyError should convey length info
+        // TODO: our TryFromSliceForAccountHashError should convey length info
         let account_hash =
             AccountHash::try_from(pb_bond.get_validator_account_hash()).map_err(|_| {
                 MappingError::invalid_account_hash_length(pb_bond.validator_account_hash.len())

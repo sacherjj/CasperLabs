@@ -8,7 +8,7 @@ use contract::{
 use types::{account::AccountHash, ApiError, TransferredTo, U512};
 
 enum Arg {
-    PublicKey = 0,
+    AccountHash = 0,
     Amount = 1,
 }
 
@@ -19,7 +19,7 @@ enum Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: AccountHash = runtime::get_arg(Arg::PublicKey as u32)
+    let public_key: AccountHash = runtime::get_arg(Arg::AccountHash as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let amount: U512 = runtime::get_arg(Arg::Amount as u32)

@@ -134,7 +134,7 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     Some(bytesrepr::deserialize(arg_bytes))
 }
 
-/// Returns the caller of the current context, i.e. the [`PublicKey`] of the account which made the
+/// Returns the caller of the current context, i.e. the [`AccountHash`] of the account which made the
 /// deploy request.
 pub fn get_caller() -> AccountHash {
     let output_size = {

@@ -46,7 +46,7 @@ impl TryFrom<state::Account> for Account {
 
     fn try_from(pb_account: state::Account) -> Result<Self, Self::Error> {
         let account_hash =
-            mappings::vec_to_array(pb_account.public_key, "Protobuf Account::PublicKey")?;
+            mappings::vec_to_array(pb_account.public_key, "Protobuf Account::AccountHash")?;
 
         let named_keys: NamedKeyMap = pb_account.named_keys.into_vec().try_into()?;
 

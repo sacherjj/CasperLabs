@@ -8,14 +8,14 @@ use types::{account::AccountHash, ApiError, U512};
 
 #[repr(u16)]
 enum Args {
-    AccountPublicKey = 0,
+    AccountHash = 0,
     Amount = 1,
 }
 
 #[repr(u32)]
 enum CustomError {
-    MissingAccountPublicKey = 1,
-    InvalidAccountPublicKey = 2,
+    MissingAccountAccountHash = 1,
+    InvalidAccountAccountHash = 2,
     MissingAmount = 3,
     InvalidAmount = 4,
 }
@@ -24,9 +24,9 @@ enum CustomError {
 /// Transfers the requested amount.
 #[no_mangle]
 pub fn delegate() {
-    let account_hash: AccountHash = runtime::get_arg(Args::AccountPublicKey as u32)
-        .unwrap_or_revert_with(ApiError::User(CustomError::MissingAccountPublicKey as u16))
-        .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAccountPublicKey as u16));
+    let account_hash: AccountHash = runtime::get_arg(Args::AccountHash as u32)
+        .unwrap_or_revert_with(ApiError::User(CustomError::MissingAccountAccountHash as u16))
+        .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAccountAccountHash as u16));
     let transfer_amount: U512 = runtime::get_arg(Args::Amount as u32)
         .unwrap_or_revert_with(ApiError::User(CustomError::MissingAmount as u16))
         .unwrap_or_revert_with(ApiError::User(CustomError::InvalidAmount as u16));

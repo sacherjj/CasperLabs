@@ -26,7 +26,7 @@ impl TryFrom<ChainSpec_GenesisConfig_ExecConfig_GenesisAccount> for GenesisAccou
     fn try_from(
         mut pb_genesis_account: ChainSpec_GenesisConfig_ExecConfig_GenesisAccount,
     ) -> Result<Self, Self::Error> {
-        // TODO: our TryFromSliceForPublicKeyError should convey length info
+        // TODO: our TryFromSliceForAccountHashError should convey length info
         let account_hash = AccountHash::try_from(pb_genesis_account.get_public_key_hash())
             .map_err(|_| {
                 MappingError::invalid_account_hash_length(pb_genesis_account.public_key_hash.len())

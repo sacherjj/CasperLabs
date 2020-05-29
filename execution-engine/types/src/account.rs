@@ -18,18 +18,18 @@ use crate::{
 #[derive(Debug, Eq, PartialEq)]
 pub struct TryFromIntError(());
 
-/// Associated error type of `TryFrom<&[u8]>` for [`PublicKey`].
+/// Associated error type of `TryFrom<&[u8]>` for [`AccountHash`].
 #[derive(Debug)]
-pub struct TryFromSliceForPublicKeyError(());
+pub struct TryFromSliceForAccountHashError(());
 
 /// The various types of action which can be performed in the context of a given account.
 #[repr(u32)]
 pub enum ActionType {
     /// Represents performing a deploy.
     Deployment = 0,
-    /// Represents changing the associated keys (i.e. map of [`PublicKey`]s to [`Weight`]s) or
-    /// action thresholds (i.e. the total [`Weight`]s of signing [`PublicKey`]s required to perform
-    /// various actions).
+    /// Represents changing the associated keys (i.e. map of [`AccountHash`]s to [`Weight`]s) or
+    /// action thresholds (i.e. the total [`Weight`]s of signing [`AccountHash`]s required to
+    /// perform various actions).
     KeyManagement = 1,
 }
 
@@ -51,7 +51,7 @@ impl TryFrom<u32> for ActionType {
 }
 
 /// Errors that can occur while changing action thresholds (i.e. the total [`Weight`]s of signing
-/// [`PublicKey`]s required to perform various actions) on an account.
+/// [`AccountHash`]s required to perform various actions) on an account.
 #[repr(i32)]
 #[derive(Debug, Fail, PartialEq, Eq, Copy, Clone)]
 pub enum SetThresholdFailure {
@@ -97,14 +97,14 @@ impl TryFrom<i32> for SetThresholdFailure {
     }
 }
 
-/// Maximum number of associated keys (i.e. map of [`PublicKey`]s to [`Weight`]s) for a single
+/// Maximum number of associated keys (i.e. map of [`AccountHash`]s to [`Weight`]s) for a single
 /// account.
 pub const MAX_ASSOCIATED_KEYS: usize = 10;
 
 /// The number of bytes in a serialized [`Weight`].
 pub const WEIGHT_SERIALIZED_LENGTH: usize = U8_SERIALIZED_LENGTH;
 
-/// The weight attributed to a given [`PublicKey`] in an account's associated keys.
+/// The weight attributed to a given [`AccountHash`] in an account's associated keys.
 #[derive(PartialOrd, Ord, PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Weight(u8);
 
@@ -174,10 +174,10 @@ impl AccountHash {
     }
 
     /// Attemps a new `AccountHash` creation using a slice of bytes.
-    pub fn try_from(bytes: &[u8]) -> Result<AccountHash, TryFromSliceForPublicKeyError> {
+    pub fn try_from(bytes: &[u8]) -> Result<AccountHash, TryFromSliceForAccountHashError> {
         AccountHashBytes::try_from(bytes)
             .map(AccountHash::new)
-            .map_err(|_| TryFromSliceForPublicKeyError(()))
+            .map_err(|_| TryFromSliceForAccountHashError(()))
     }
 }
 
@@ -216,18 +216,19 @@ impl FromBytes for AccountHash {
     }
 }
 
-/// Errors that can occur while adding a new [`PublicKey`] to an account's associated keys map.
+/// Errors that can occur while adding a new [`AccountHash`] to an account's associated keys map.
 #[derive(PartialEq, Eq, Fail, Debug, Copy, Clone)]
 #[repr(i32)]
 pub enum AddKeyFailure {
-    /// There are already [`MAX_ASSOCIATED_KEYS`] [`PublicKey`]s associated with the given account.
+    /// There are already [`MAX_ASSOCIATED_KEYS`] [`AccountHash`]s associated with the given
+    /// account.
     #[fail(display = "Unable to add new associated key because maximum amount of keys is reached")]
     MaxKeysLimit = 1,
-    /// The given [`PublicKey`] is already associated with the given account.
+    /// The given [`AccountHash`] is already associated with the given account.
     #[fail(display = "Unable to add new associated key because given key already exists")]
     DuplicateKey = 2,
-    /// Caller doesn't have sufficient permissions to associate a new [`PublicKey`] with the given
-    /// account.
+    /// Caller doesn't have sufficient permissions to associate a new [`AccountHash`] with the
+    /// given account.
     #[fail(display = "Unable to add new associated key due to insufficient permissions")]
     PermissionDenied = 3,
 }
@@ -247,19 +248,19 @@ impl TryFrom<i32> for AddKeyFailure {
     }
 }
 
-/// Errors that can occur while removing a [`PublicKey`] from an account's associated keys map.
+/// Errors that can occur while removing a [`AccountHash`] from an account's associated keys map.
 #[derive(Fail, Debug, Eq, PartialEq, Copy, Clone)]
 #[repr(i32)]
 pub enum RemoveKeyFailure {
-    /// The given [`PublicKey`] is not associated with the given account.
+    /// The given [`AccountHash`] is not associated with the given account.
     #[fail(display = "Unable to remove a key that does not exist")]
     MissingKey = 1,
-    /// Caller doesn't have sufficient permissions to remove an associated [`PublicKey`] from the
+    /// Caller doesn't have sufficient permissions to remove an associated [`AccountHash`] from the
     /// given account.
     #[fail(display = "Unable to remove associated key due to insufficient permissions")]
     PermissionDenied = 2,
-    /// Removing the given associated [`PublicKey`] would cause the total weight of all remaining
-    /// `PublicKey`s to fall below one of the action thresholds for the given account.
+    /// Removing the given associated [`AccountHash`] would cause the total weight of all remaining
+    /// `AccountHash`s to fall below one of the action thresholds for the given account.
     #[fail(display = "Unable to remove a key which would violate action threshold constraints")]
     ThresholdViolation = 3,
 }
@@ -283,20 +284,21 @@ impl TryFrom<i32> for RemoveKeyFailure {
     }
 }
 
-/// Errors that can occur while updating the [`Weight`] of a [`PublicKey`] in an account's
+/// Errors that can occur while updating the [`Weight`] of a [`AccountHash`] in an account's
 /// associated keys map.
 #[derive(PartialEq, Eq, Fail, Debug, Copy, Clone)]
 #[repr(i32)]
 pub enum UpdateKeyFailure {
-    /// The given [`PublicKey`] is not associated with the given account.
+    /// The given [`AccountHash`] is not associated with the given account.
     #[fail(display = "Unable to update the value under an associated key that does not exist")]
     MissingKey = 1,
-    /// Caller doesn't have sufficient permissions to update an associated [`PublicKey`] from the
+    /// Caller doesn't have sufficient permissions to update an associated [`AccountHash`] from the
     /// given account.
     #[fail(display = "Unable to update associated key due to insufficient permissions")]
     PermissionDenied = 2,
-    /// Updating the [`Weight`] of the given associated [`PublicKey`] would cause the total weight
-    /// of all `PublicKey`s to fall below one of the action thresholds for the given account.
+    /// Updating the [`Weight`] of the given associated [`AccountHash`] would cause the total
+    /// weight of all `AccountHash`s to fall below one of the action thresholds for the given
+    /// account.
     #[fail(display = "Unable to update weight that would fall below any of action thresholds")]
     ThresholdViolation = 3,
 }

@@ -7,14 +7,14 @@ use contract::{
 use types::{account::AccountHash, ApiError, U512};
 
 enum Args {
-    PublicKey = 0,
+    AccountHash = 0,
     Amount = 1,
 }
 
 /// Executes mote transfer to supplied public key.
 /// Transfers the requested amount.
 pub fn delegate() {
-    let account_hash: AccountHash = runtime::get_arg(Args::PublicKey as u32)
+    let account_hash: AccountHash = runtime::get_arg(Args::AccountHash as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let transfer_amount: u64 = runtime::get_arg(Args::Amount as u32)

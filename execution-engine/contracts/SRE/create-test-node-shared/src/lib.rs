@@ -10,7 +10,7 @@ use types::{account::AccountHash, ApiError, TransferredTo, U512};
 enum Error {
     AccountAlreadyExists = 10,
     TransferFailed = 11,
-    FailedToParsePublicKey = 12,
+    FailedToParseAccountHash = 12,
 }
 
 impl Into<ApiError> for Error {
@@ -23,9 +23,9 @@ fn parse_account_hash(hex: &[u8]) -> AccountHash {
     let mut buffer = [0u8; 32];
     let bytes_written = base16::decode_slice(hex, &mut buffer)
         .ok()
-        .unwrap_or_revert_with(Error::FailedToParsePublicKey);
+        .unwrap_or_revert_with(Error::FailedToParseAccountHash);
     if bytes_written != buffer.len() {
-        runtime::revert(Error::FailedToParsePublicKey)
+        runtime::revert(Error::FailedToParseAccountHash)
     }
     AccountHash::new(buffer)
 }
