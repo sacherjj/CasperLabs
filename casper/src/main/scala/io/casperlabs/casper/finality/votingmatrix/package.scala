@@ -216,7 +216,7 @@ package object votingmatrix {
 
   @tailrec
   private[votingmatrix] def pruneLoop(
-      // Matrix of the latest j-DAG level of messages that validators saw from each other.
+      // Matrix of the latest j-DAG level of messages that a validator in row i saw from a validator in column j.
       validatorsViews: MutableSeq[MutableSeq[Level]],
       // Which candidate (if any) does each validator vote for and since which level.
       firstLevelZeroVotes: MutableSeq[Option[Vote]],
@@ -230,31 +230,47 @@ package object votingmatrix {
     // Go through each validator in the matrix rows and see if
     // enough other validators saw them voting for the candidate.
     val (newMask, prunedValidator, maxTotalWeight) = validatorsViews.zipWithIndex
-      .filter { case (_, rowIndex) => mask(rowIndex) }
+      .filter { case (_, voterIndex) => mask(voterIndex) }
       .foldLeft((mask, false, Zero)) {
-        case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
-          // Add up the weight of other validators who have seen this validator vote for the candidate.
-          val voteSum = row.zipWithIndex
-            .filter { case (_, columnIndex) => mask(columnIndex) }
-            .map {
-              case (latestDagLevelSeen, columnIndex) =>
-                firstLevelZeroVotes(columnIndex).fold(Zero) {
-                  case (consensusValue, dagLevelOf1stLevel0) =>
-                    if (consensusValue == candidateBlockHash && dagLevelOf1stLevel0 <= latestDagLevelSeen)
-                      // The validator at `columnIndex` has been voting for the candidate since `dagLevelOf1stLevel0`,
-                      // and the validator at `rowIndex` has seen it voting since `latestDagLevelSeen`,
-                      // so she validator at `columnIndex` puts their weight behind the validator at `rowIndex`?
-                      weight(columnIndex)
-                    else Zero
-                }
+        case ((newMask, prunedValidator, maxTotalWeight), (_, voterIndex)) =>
+          // Does this validator have enough witnesses behind it so that it can add its support to the candidate?
+          val voteSum =
+            // See if this validator is indeed voting for the candidate.
+            firstLevelZeroVotes(voterIndex) match {
+              case Some((voterBlockHash, voterSinceLevel))
+                  if voterBlockHash == candidateBlockHash =>
+                // Add up the weight of other validators who have seen this validator vote for the candidate.
+                // For validator i this should be based on the i-th column in each row of the matrix,
+                // because that's where we see which is the latest level other validators have seen from it.
+                validatorsViews.zipWithIndex
+                  .filter { case (_, witnessIndex) => mask(witnessIndex) }
+                  .map {
+                    case (row, witnessIndex) =>
+                      // What's the latest level the witness has seen from the voter?
+                      val witnessedVoterLevel = row(voterIndex)
+                      // See if the witness is voting for the same candidate.
+                      firstLevelZeroVotes(witnessIndex) match {
+                        case Some((witnessBlockHash, _))
+                            if witnessBlockHash == candidateBlockHash && witnessedVoterLevel >= voterSinceLevel =>
+                          // The validator at `witnessIndex` puts their weight behind the one at `voterIndex`
+                          weight(witnessIndex)
+
+                        // Voting for a different candidate or hasn't seen the voter's vote yet.
+                        case _ => Zero
+                      }
+                  }
+                  .sum
+
+              // Not voting for the candidate.
+              case _ => Zero
             }
-            .sum
+
           // If not enough other validators see this one, eliminate this validator from the committee.
           // Otherwise add their weight to the vote behind the candidate itself.
           if (voteSum < q) {
-            (newMask.updated(rowIndex, false), true, maxTotalWeight)
+            (newMask.updated(voterIndex, false), true, maxTotalWeight)
           } else {
-            (newMask, prunedValidator, maxTotalWeight + weight(rowIndex))
+            (newMask, prunedValidator, maxTotalWeight + weight(voterIndex))
           }
       }
     if (prunedValidator) {
