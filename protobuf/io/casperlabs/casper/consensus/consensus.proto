@@ -36,7 +36,7 @@ message Deploy {
         // Removed the nonce.
         reserved 2;
         // Identifying the Account is the key used to sign the Deploy.
-        bytes account_hash = 1;
+        bytes account_public_key_hash = 1;
         // Current time milliseconds.
         uint64 timestamp = 3;
         // Conversion rate between the cost of Wasm opcodes and the motes sent by the `payment_code`.

@@ -78,7 +78,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
           pd =>
             (
               pd.getDeploy.deployHash,
-              pd.getDeploy.getHeader.accountHash,
+              pd.getDeploy.getHeader.accountPublicKeyHash,
               pd.getDeploy.getHeader.timestamp,
               pd.getDeploy.clearBody.toByteString,
               pd.getDeploy.getBody.toByteString
@@ -109,7 +109,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
                 block.blockHash,
                 pd.getDeploy.deployHash,
                 deployPosition,
-                pd.getDeploy.getHeader.accountHash,
+                pd.getDeploy.getHeader.accountPublicKeyHash,
                 pd.getDeploy.getHeader.timestamp,
                 block.getHeader.timestamp,
                 pd.cost,
@@ -137,7 +137,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
       ).updateMany(deploys.map { d =>
         (
           d.deployHash,
-          d.getHeader.accountHash,
+          d.getHeader.accountPublicKeyHash,
           d.getHeader.timestamp,
           d.clearBody.toByteString,
           d.getBody.toByteString
@@ -151,7 +151,7 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
             (
               d.deployHash,
               status,
-              d.getHeader.accountHash,
+              d.getHeader.accountPublicKeyHash,
               currentTimeEpochMillis,
               currentTimeEpochMillis,
               d.clearBody.toByteString,

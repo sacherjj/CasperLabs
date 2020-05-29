@@ -206,7 +206,7 @@ trait ArbitraryConsensus {
       bodyHash = protoHash(body)
       header = Deploy
         .Header()
-        .withAccountHash(accountKeys.publicKeyHash)
+        .withAccountPublicKeyHash(accountKeys.publicKeyHash)
         .withTimestamp(timestamp)
         .withGasPrice(gasPrice)
         .withBodyHash(bodyHash)

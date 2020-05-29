@@ -575,7 +575,7 @@ object ProtoUtil {
       .withPayment(Deploy.Code().withWasm(sessionCode))
     val h = Deploy
       .Header()
-      .withAccountHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk)))
+      .withAccountPublicKeyHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk)))
       .withTimestamp(timestamp)
       .withBodyHash(protoHash(b))
       .withTtlMillis(ttl.toMillis.toInt)
@@ -624,7 +624,7 @@ object ProtoUtil {
                   }.sequence
     } yield {
       ipc.DeployItem(
-        address = d.getHeader.accountHash,
+        address = d.getHeader.accountPublicKeyHash,
         session = session,
         payment = payment,
         gasPrice = GAS_PRICE,
