@@ -17,7 +17,7 @@
 //! use casperlabs_contract::{
 //!     contract_api::{runtime, storage},
 //! };
-//! use casperlabs_types::{ApiError, Key, URef};
+//! use casperlabs_types::{Key, URef};
 //!
 //! const KEY: &str = "special_value";
 //!

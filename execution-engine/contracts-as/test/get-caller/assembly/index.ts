@@ -3,12 +3,10 @@ import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {typedToArray, checkArraysEqual} from "../../../../contract-as/assembly/utils";
 import {PublicKey} from "../../../../contract-as/assembly/key";
 
+const ARG_ACCOUNT = "account";
+
 export function call(): void {
-  const knownPublicKeyBytes = CL.getArg(0);
-  if (knownPublicKeyBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+  const knownPublicKeyBytes = CL.getNamedArg(ARG_ACCOUNT);
   let knownPublicKeyResult = PublicKey.fromBytes(knownPublicKeyBytes);
   if (knownPublicKeyResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();

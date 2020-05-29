@@ -27,3 +27,42 @@ export function testRuntimeArgs(): bool {
     let bytes = runtimeArgs.toBytes();
     return checkArraysEqual(typedToArray(truth), bytes);
 }
+
+export function testRuntimeArgsFromMap(): bool {
+    // Source:
+    //
+    // ```
+    // let args = runtime_args! {
+    //     "arg1" => 42u64,
+    //     "arg2" => "Hello, world!",
+    //     "arg3" => U512::from(123456789),
+    // };
+    // ```
+    const truth = hex2bin("030000000400000061726731080000002a00000000000000050400000061726732110000000d00000048656c6c6f2c20776f726c64210a0400000061726733050000000415cd5b0708");
+
+    let map = new Map<String, CLValue>();
+    map.set("arg1", CLValue.fromU64(42));
+    map.set("arg2", CLValue.fromString("Hello, world!"));
+    map.set("arg3", CLValue.fromU512(U512.fromU64(123456789)));
+    let runtimeArgs = RuntimeArgs.fromMap(map);
+    let bytes = runtimeArgs.toBytes();
+    return checkArraysEqual(typedToArray(truth), bytes);
+}
+
+
+export function testRuntimeArgs_Empty(): bool {
+    // Source:
+    //
+    // ```
+    // let args = runtime_args! {
+    //     "arg1" => 42u64,
+    //     "arg2" => "Hello, world!",
+    //     "arg3" => U512::from(123456789),
+    // };
+    // ```
+    const truth = hex2bin("00000000");
+
+    let runtimeArgs = new RuntimeArgs();
+    let bytes = runtimeArgs.toBytes();
+    return checkArraysEqual(typedToArray(truth), bytes);
+}

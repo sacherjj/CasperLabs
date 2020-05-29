@@ -4,12 +4,10 @@ import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {U512} from "../../../../contract-as/assembly/bignum";
 import * as StandardPayment from "../../../client/standard-payment/assembly/index";
 
+const ARG_PHASE = "phase";
+
 export function call(): void {
-  const phaseBytes = CL.getArg(0);
-  if (phaseBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+  const phaseBytes = CL.getNamedArg(ARG_PHASE);
   if (phaseBytes.length != 1) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;

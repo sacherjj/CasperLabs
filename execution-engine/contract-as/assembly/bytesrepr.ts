@@ -57,7 +57,7 @@ export class Result<T> {
      * @param error Error value
      * @param position Position of input stream
      */
-    constructor(public ref: Ref<T> | null, public error: Error, public position: usize) {}
+    constructor(public ref: Ref<T> | null, public error: Error, public position: u32) {}
 
     /**
      * Assumes that reference wrapper contains a value and then returns it
@@ -205,16 +205,17 @@ export function toBytesPair(key: u8[], value: u8[]): u8[] {
 /**
  * Serializes a map into an array of bytes.
  *
- * @param pairs Array of serialized key-value pairs.
+ * @param map A map container.
+ * @param serializeKey A function that will serialize given key.
+ * @param serializeValue A function that will serialize given value.
  */
-export function toBytesMap(pairs: u8[][]): u8[] {
-    // https://github.com/AssemblyScript/docs/blob/master/standard-library/map.md#methods
-    // Gets the keys contained in this map as an array, in insertion order. This is preliminary while iterators are not supported.
-    // See https://github.com/AssemblyScript/assemblyscript/issues/166
-    var bytes = toBytesU32(<u32>pairs.length);
-    for (var i = 0; i < pairs.length; i++) {
-        var pairBytes = pairs[i];
-        bytes = bytes.concat(pairBytes);
+export function toBytesMap<K, V>(map: Map<K, V>, serializeKey: (key: K) => Array<u8>, serializeValue: (value: V) => Array<u8>): Array<u8> {
+    var bytes = toBytesU32(<u32>map.size);
+    var keys = map.keys();
+    var values = map.values();
+    for (var i = 0; i < map.size; i++) {
+        bytes = bytes.concat(serializeKey(keys[i]));
+        bytes = bytes.concat(serializeValue(values[i]));
     }
     return bytes;
 }

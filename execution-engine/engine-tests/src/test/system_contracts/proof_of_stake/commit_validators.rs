@@ -9,7 +9,7 @@ use engine_test_support::{
 };
 use types::{account::PublicKey, RuntimeArgs, U512};
 
-const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
+const CONTRACT_LOCAL_STATE: &str = "do_nothing.wasm";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;

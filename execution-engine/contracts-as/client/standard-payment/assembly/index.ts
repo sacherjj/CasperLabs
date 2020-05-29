@@ -6,18 +6,19 @@ import {U512} from "../../../../contract-as/assembly/bignum";
 import {Key} from "../../../../contract-as/assembly/key";
 import {getMainPurse} from "../../../../contract-as/assembly/account";
 import {transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
+import {RuntimeArgs} from "../../../../contract-as/assembly/runtime_args";
 
 const POS_ACTION = "get_payment_purse";
+const ARG_AMOUNT = "amount";
 
 export function entryPoint(amount: U512): void {
   let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
 
+  
   let mainPurse = getMainPurse();
 
-  let key = Key.fromURef(proofOfStake);
-  let output = CL.callContract(key, [
-    CLValue.fromString(POS_ACTION),
-  ]);
+  let output = CL.callContract(proofOfStake, POS_ACTION, new RuntimeArgs());
+
   let paymentPurseResult = URef.fromBytes(output);
   if (paymentPurseResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
@@ -37,12 +38,7 @@ export function entryPoint(amount: U512): void {
 }
 
 export function call(): void {
-  let amountBytes = CL.getArg(0);
-  if (amountBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-
+  let amountBytes = CL.getNamedArg(ARG_AMOUNT);
   let amountResult = U512.fromBytes(amountBytes);
   if (amountResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();

@@ -19,13 +19,6 @@ export declare function add_local(key_ptr: usize, key_size: usize, value_ptr: us
 /** @hidden */
 @external("env", "new_uref")
 export declare function new_uref(uref_ptr: usize, value_ptr: usize, value_size: usize): void;
-/** @hidden */
-@external("env", "store_function")
-export declare function store_function(function_name_ptr: usize, function_name_size: usize, named_keys_ptr: usize, named_keys_size: usize, uref_addr_ptr: usize): void;
-/** @hidden */
-@external("env", "store_function_at_hash")
-export declare function store_function_at_hash(function_name_ptr: usize, function_name_size: usize, named_keys_ptr: usize, named_keys_size: usize, hash_ptr: usize): void;
-/** @hidden */
 @external("env", "load_named_keys")
 export declare function load_named_keys(total_keys: usize, result_size: usize): i32;
 /** @hidden */
@@ -116,7 +109,7 @@ export declare function transfer_from_purse_to_purse(
 ): i32;
 /** @hidden */
 @external("env", "get_balance")
-export declare function get_balance(purse_ptr: usize, purse_size: usize, result_size: u32): i32;
+export declare function get_balance(purse_ptr: usize, purse_size: usize, result_size: usize): i32;
 /** @hidden */
 @external("env", "get_phase")
 export declare function get_phase(dest_ptr: usize): void;
@@ -137,3 +130,50 @@ export declare function get_main_purse(dest_ptr: usize): void;
 /** @hidden */
 @external("env", "read_host_buffer")
 export declare function read_host_buffer(dest_ptr: usize, dest_size: u32, bytes_written: usize): i32;
+/** @hidden */
+@external("env", "remove_contract_user_group")
+export declare function remove_contract_user_group(
+    contract_package_hash_ptr: usize,
+    contract_package_hash_size: usize,
+    access_uref_ptr: usize,
+    label_ptr: usize,
+    label_size: usize): i32;
+/** @hidden */
+@external("env", "extend_contract_user_group_urefs")
+export declare function extend_contract_user_group_urefs(contract_package_hash_ptr: usize,
+    contract_package_hash_size: usize,
+    access_uref_ptr: usize,
+    label_ptr: usize,
+    label_size: usize,
+    new_urefs_count: usize,
+    value_size_ptr: usize,
+): i32;
+/** @hidden */
+@external("env", "extend_contremove_contract_user_group_urefsract_user_group_urefs")
+export declare function remove_contract_user_group_urefs(
+    contract_package_hash_ptr: usize,
+    contract_package_hash_size: usize,
+    access_uref_ptr: usize,
+    label_ptr: usize,
+    label_size: usize,
+    urefs_ptr: usize,
+    urefs_size: usize,
+): i32;
+/** @hidden */
+@external("env", "create_contract_package_at_hash")
+export declare function create_contract_package_at_hash(hash_addr_ptr: usize, access_addr_ptr: usize): void;
+/** @hidden */
+@external("env", "add_contract_version")
+export declare function add_contract_version(
+    contract_package_hash_ptr: usize,
+    contract_package_hash_size: usize,
+    access_ptr: usize,
+    version_ptr: usize,
+    entry_points_ptr: usize,
+    entry_points_size: usize,
+    named_keys_ptr: usize,
+    named_keys_size: usize,
+    output_ptr: usize,
+    output_size: usize,
+    bytes_written_ptr: usize,
+): i32;

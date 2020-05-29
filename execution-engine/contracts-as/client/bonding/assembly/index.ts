@@ -5,11 +5,11 @@ import {CLValue} from "../../../../contract-as/assembly/clvalue";
 import {Key} from "../../../../contract-as/assembly/key";
 import {getMainPurse} from "../../../../contract-as/assembly/account";
 import {createPurse, transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
+import {RuntimeArgs} from "../../../../contract-as/assembly/runtime_args";
 
 const POS_ACTION = "bond";
 const ARG_AMOUNT = "amount";
 const ARG_PURSE = "purse";
-
 
 export function call(): void {
     let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
@@ -41,11 +41,8 @@ export function call(): void {
     }
 
     let bondingPurseValue = CLValue.fromURef(bondingPurse);
-    let key = Key.fromURef(proofOfStake);
-    let args: CLValue[] = [
-        CLValue.fromString(POS_ACTION),
-        CLValue.fromU512(amount),
-        bondingPurseValue
-    ];
-    CL.callContract(key, args);
+    let args = new Map<String, CLValue>();
+    args.set(ARG_AMOUNT, CLValue.fromU512(amount));
+    args.set(ARG_PURSE, bondingPurseValue);
+    CL.callContract(proofOfStake, POS_ACTION, RuntimeArgs.fromMap(args));
 }

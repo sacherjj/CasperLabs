@@ -9,17 +9,13 @@ import {PublicKey} from "../../../../contract-as/assembly/key";
 const INIT_WEIGHT: u8 = 1;
 const MOD_WEIGHT: u8 = 2;
 
-export function call(): void {
-  let publicKeyBytes = CL.getArg(0);
-  if (publicKeyBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+const ARG_ACCOUNT = "account";
 
+export function call(): void {
+  let publicKeyBytes = CL.getNamedArg(ARG_ACCOUNT);
   const publicKeyResult = PublicKey.fromBytes(publicKeyBytes);
   if (publicKeyResult.hasError()) {
     Error.fromUserError(<u16>4464 + <u16>publicKeyResult.error).revert();
-    // Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
   const publicKey = publicKeyResult.value;
