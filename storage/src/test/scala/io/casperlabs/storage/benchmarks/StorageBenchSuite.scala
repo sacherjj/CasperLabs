@@ -66,7 +66,7 @@ object StorageBenchSuite {
   //Take this into account before change it
   def randomDeployData: Deploy =
     Deploy()
-      .withHeader(Deploy.Header().withAccountHash(randomHexString(32)))
+      .withHeader(Deploy.Header().withAccountPublicKeyHash(randomHexString(32)))
       .withBody(
         Deploy
           .Body()

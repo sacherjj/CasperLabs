@@ -599,7 +599,7 @@ abstract class HashSetCasperTest
         .withHeader(
           deployDatas(1).getHeader
             .withTimestamp(deployDatas(0).getHeader.timestamp)
-            .withAccountHash(deployDatas(0).getHeader.accountHash)
+            .withAccountPublicKeyHash(deployDatas(0).getHeader.accountPublicKeyHash)
         ) // deployPrim0 has the same (user, millisecond timestamp) with deployDatas(0)
       _            <- nodes(0).deployBuffer.addDeploy(deployDatas(0))
       signedBlock1 <- nodes(0).propose()

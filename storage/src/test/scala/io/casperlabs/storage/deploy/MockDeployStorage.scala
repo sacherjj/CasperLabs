@@ -191,7 +191,7 @@ class MockDeployStorage[F[_]: Sync: Log](
     override def readProcessed: F[List[Deploy]] = readByStatus(ProcessedStatusCode)
 
     override def readProcessedByAccount(account: PublicKeyHashBS): F[List[Deploy]] =
-      readProcessed.map(_.filter(_.getHeader.accountHash == account))
+      readProcessed.map(_.filter(_.getHeader.accountPublicKeyHash == account))
 
     override def readProcessedHashes: F[List[ByteString]] = readProcessed.map(_.map(_.deployHash))
 
