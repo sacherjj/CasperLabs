@@ -58,7 +58,7 @@ class FinalityDetectorByVotingMatrixTest
         isHighway
       )
 
-  ignore should "detect ballots finalizing a block" in withCombinedStorage() { implicit storage =>
+  it should "detect ballots finalizing a block" in withCombinedStorage() { implicit storage =>
     /* The DAG looks like:
      *
      *
@@ -127,9 +127,6 @@ class FinalityDetectorByVotingMatrixTest
       val vD    = generateValidator("D")
       val bonds = List(vA, vB, vC, vD).map(Bond(_, 10))
 
-      import MessageType._
-      import MessageRole._
-
       def makeCreator(genesis: Block)(implicit m: FinalityDetectorVotingMatrix[Task]) =
         (
             validator: ByteString,
@@ -150,7 +147,6 @@ class FinalityDetectorByVotingMatrixTest
             justifications = justifications.mapValues(_.blockHash)
           ) map {
             case (block, detected) =>
-              println(s"created block ${block.blockHash.show}")
               shouldFinalize match {
                 case Some(newLFB) =>
                   detected should not be empty
@@ -161,10 +157,29 @@ class FinalityDetectorByVotingMatrixTest
               block
           }
 
+      val BLOC = MessageType.BLOCK
+      val BALL = MessageType.BALLOT
+      val CONF = MessageRole.CONFIRMATION
+      val PROP = MessageRole.PROPOSAL
+      val WITN = MessageRole.WITNESS
+
       // A level-1 summit with 2/3 quorum is just 2/3 of validators having seen each other vote for the candidate.
 
       /* The DAG looks like:
-       * A3
+       *
+       * A5 ---------
+       *             \
+       *               d4
+       *             /
+       *          c4
+       *        /
+       *     b4
+       *   /
+       * a4 ----------
+       * |  \    \    \
+       * |   b3   c3   d3
+       * |  /    /    /
+       * A3 ---------
        *   \------
        *    \     \
        *     |     \
@@ -189,29 +204,29 @@ class FinalityDetectorByVotingMatrixTest
                                                                   )
         create = makeCreator(genesis)
 
-        _  = println(s"creating a1")
-        a1 <- create(vA, BLOCK, PROPOSAL, genesis, Map.empty, None)
-        _  = println(s"creating b1")
-        b1 <- create(vB, BALLOT, CONFIRMATION, a1, Map(vA -> a1), None)
-        _  = println(s"creating c1")
-        c1 <- create(vC, BALLOT, CONFIRMATION, a1, Map(vA -> a1), None)
-        _  = println(s"creating d1")
-        d1 <- create(vD, BALLOT, CONFIRMATION, a1, Map(vA -> a1), None)
-        _  = println(s"creating a2")
-        a2 <- create(vA, BALLOT, WITNESS, a1, Map(vA -> a1, vB -> b1), None)
-        _  = println(s"creating c2")
-        c2 <- create(vC, BLOCK, WITNESS, a1, Map(vA -> a1, vB -> b1, vC -> c1), None)
-        _  = println(s"creating d2")
-        d2 <- create(vD, BALLOT, WITNESS, a1, Map(vA -> a1, vD -> d1), None)
-        _  = println(s"creating b2")
-        b2 <- create(vB, BALLOT, WITNESS, c2, Map(vA -> a2, vB -> b1, vC -> c2), None)
-        _  = println(s"creating a3")
-        a3 <- create(vA, BLOCK, PROPOSAL, c2, Map(vA -> a2, vB -> b2, vC -> c2, vD -> d2), Some(a1))
+        a1 <- create(vA, BLOC, PROP, genesis, Map.empty, None)
+        b1 <- create(vB, BALL, CONF, a1, Map(vA -> a1), None)
+        c1 <- create(vC, BALL, CONF, a1, Map(vA -> a1), None)
+        d1 <- create(vD, BALL, CONF, a1, Map(vA -> a1), None)
+        a2 <- create(vA, BALL, WITN, a1, Map(vA -> a1, vB -> b1), None)
+        c2 <- create(vC, BLOC, WITN, a1, Map(vA -> a1, vB -> b1, vC -> c1), None)
+        d2 <- create(vD, BALL, WITN, a1, Map(vA -> a1, vD -> d1), None)
+        b2 <- create(vB, BALL, WITN, c2, Map(vA -> a2, vB -> b1, vC -> c2), None)
+        a3 <- create(vA, BLOC, PROP, c2, Map(vA -> a2, vB -> b2, vC -> c2, vD -> d2), Some(a1))
+
+        b3 <- create(vB, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2), None)
+        c3 <- create(vC, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2), None)
+        d3 <- create(vD, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2), None)
+        a4 <- create(vA, BALL, WITN, a3, Map(vA -> a3, vB -> b3, vC -> c3, vD -> d3), None)
+        b4 <- create(vB, BALL, WITN, a3, Map(vA -> a4, vB -> b3, vC -> c3, vD -> d3), None)
+        c4 <- create(vC, BALL, WITN, a3, Map(vA -> a4, vB -> b4, vC -> c3, vD -> d3), Some(a3))
+        d4 <- create(vD, BALL, WITN, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d3), None)
+        a5 <- create(vA, BLOC, PROP, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d4), None)
 
       } yield ()
   }
 
-  ignore should "detect finality as appropriate" in withCombinedStorage() { implicit storage =>
+  it should "detect finality as appropriate" in withCombinedStorage() { implicit storage =>
     /* The DAG looks like:
      *
      *
@@ -277,7 +292,7 @@ class FinalityDetectorByVotingMatrixTest
     } yield result
   }
 
-  ignore should "finalize blocks properly with only one validator" in withCombinedStorage() {
+  it should "finalize blocks properly with only one validator" in withCombinedStorage() {
     implicit storage =>
       /* The DAG looks like:
        *
@@ -340,7 +355,7 @@ class FinalityDetectorByVotingMatrixTest
       } yield result
   }
 
-  ignore should "increment last finalized block as appropriate in round robin" in withCombinedStorage() {
+  it should "increment last finalized block as appropriate in round robin" in withCombinedStorage() {
     implicit storage =>
       /* The DAG looks like:
        *
@@ -441,7 +456,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/finalityDetectorWithEquivocations.png]]
-  ignore should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withCombinedStorage() {
+  it should "exclude the weight of validator who have been detected equivocating when searching for the committee" in withCombinedStorage() {
     implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
@@ -511,7 +526,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockGetFinalized.png]]
-  ignore should "finalize equivocator's block when enough honest validators votes for it" in withCombinedStorage() {
+  it should "finalize equivocator's block when enough honest validators votes for it" in withCombinedStorage() {
     implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
@@ -584,7 +599,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // See [[casper/src/test/resources/casper/equivocatingBlockCantGetFinalized.png]]
-  ignore should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withCombinedStorage() {
+  it should "not finalize equivocator's blocks, no matter how many votes equivocating validators cast" in withCombinedStorage() {
     implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
@@ -671,7 +686,7 @@ class FinalityDetectorByVotingMatrixTest
       } yield result
   }
 
-  ignore should "not count child era messages towards finality of the parent bocks" in withCombinedStorage() {
+  it should "not count child era messages towards finality of the parent bocks" in withCombinedStorage() {
     implicit storage =>
       /* The DAG looks like:
        * era-1:
@@ -740,7 +755,7 @@ class FinalityDetectorByVotingMatrixTest
   }
 
   // see [casper/src/test/resources/casper/CON-654_testnet_finalizer_bug.jpg]
-  ignore should "not detect finality when there's none (a test case from the CON-654 bug)" in withCombinedStorage() {
+  it should "not detect finality when there's none (a test case from the CON-654 bug)" in withCombinedStorage() {
     implicit storage =>
       val v1     = generateValidator("V1")
       val v2     = generateValidator("V2")
@@ -872,7 +887,7 @@ class FinalityDetectorByVotingMatrixTest
     }
 
   // see [casper/src/test/resources/casper/CON-654_finalizer_bug_2.jpg]
-  ignore should "replay history from the file with events" in replayedDag(
+  it should "replay history from the file with events" in replayedDag(
     "/con-654_event_stream.txt"
   ) { implicit storage => fixture =>
     val genesis = fixture.genesis

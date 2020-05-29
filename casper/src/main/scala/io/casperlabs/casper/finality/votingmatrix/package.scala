@@ -155,11 +155,6 @@ package object votingmatrix {
       weightMap           <- matrix.get.map(_.weightMap)
       validators          <- matrix.get.map(_.validators)
       firstLevelZeroVotes <- matrix.get.map(_.firstLevelZeroVotes)
-      _ = println(
-        "level-0 votes: " + firstLevelZeroVotes
-          .map(_.map(v => s"${v._1.show} -> ${v._2}"))
-          .mkString("; ")
-      )
       // Get Map[VoteBranch, List[Validator]] directly from firstLevelZeroVotes
       committee <- if (firstLevelZeroVotes.isEmpty) {
                     // No one voted on anything in the current b-game
@@ -226,7 +221,6 @@ package object votingmatrix {
       q: Weight,
       weight: MutableSeq[Weight]
   ): Option[(MutableSeq[Boolean], Weight)] = {
-    println(s"validator views: $validatorsViews")
     // Go through each validator in the matrix rows and see if
     // enough other validators saw them voting for the candidate.
     val (newMask, prunedValidator, maxTotalWeight) = validatorsViews.zipWithIndex
