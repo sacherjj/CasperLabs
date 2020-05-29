@@ -52,7 +52,7 @@ class SQLiteDeployStorageSpec
           deployView = DeployInfo.View.BASIC,
           test = { (reader: DeployStorageReader[Task], writer: DeployStorageWriter[Task]) =>
             val accountDeploysWithoutBody = deploys
-              .filter(_.getHeader.accountHash == accountKey.publicKeyHash)
+              .filter(_.getHeader.accountPublicKeyHash == accountKey.publicKeyHash)
               .sortBy(d => (d.getHeader.timestamp, d.deployHash))
               .reverse
               .map(_.clearBody)
@@ -75,11 +75,11 @@ class SQLiteDeployStorageSpec
     "getDeploysByAccount" should {
       "return the correct paginated list of deploys for the specified account" in forAll(
         for {
-          deploys     <- deploysGen()
-          accountKey  <- Gen.oneOf(randomAccounts)
-          accountHash = accountKey.publicKeyHash
+          deploys              <- deploysGen()
+          accountKey           <- Gen.oneOf(randomAccounts)
+          accountPublicKeyHash = accountKey.publicKeyHash
           deploysByAccount = deploys
-            .filter(_.getHeader.accountHash == accountHash)
+            .filter(_.getHeader.accountPublicKeyHash == accountPublicKeyHash)
             .sortBy(d => (d.getHeader.timestamp, d.deployHash))
             .reverse
           offset = if (deploysByAccount.isEmpty) {
@@ -89,9 +89,9 @@ class SQLiteDeployStorageSpec
           }
           limit  <- Gen.choose(0, 100)
           isNext <- arbitrary[Boolean]
-        } yield (deploys, accountHash, deploysByAccount, offset, limit, isNext)
+        } yield (deploys, accountPublicKeyHash, deploysByAccount, offset, limit, isNext)
       ) {
-        case (deploys, accountHash, deploysByAccount, offset, limit, isNext) =>
+        case (deploys, accountPublicKeyHash, deploysByAccount, offset, limit, isNext) =>
           testFixture { (reader, writer) =>
             val (lastTimeStamp, lastDeployHash) =
               deploysByAccount
@@ -109,7 +109,7 @@ class SQLiteDeployStorageSpec
             for {
               _ <- writer.addAsPending(deploys)
               all <- reader.getDeploysByAccount(
-                      PublicKeyHash(accountHash),
+                      PublicKeyHash(accountPublicKeyHash),
                       limit,
                       lastTimeStamp,
                       lastDeployHash,

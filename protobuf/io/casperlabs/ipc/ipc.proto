@@ -45,12 +45,12 @@ message Bond {
 message DeployItem {
     reserved 5; // motes in payment
     reserved 7; // nonce
-    // Public key of the account which is the context of the execution.
+    // Public key hash of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
     DeployPayload session = 3;
     DeployPayload payment = 4;
     uint64 gas_price = 6; // in units of Mote / Gas
-    // Public keys used to sign this deploy, to be checked against the keys
+    // Hashes of the public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
     repeated bytes authorization_keys = 8;
     bytes deploy_hash = 9;
