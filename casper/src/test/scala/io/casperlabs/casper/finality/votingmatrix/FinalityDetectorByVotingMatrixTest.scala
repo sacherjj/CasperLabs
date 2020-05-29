@@ -121,23 +121,11 @@ class FinalityDetectorByVotingMatrixTest
 
   it should "finalize as many blocks as possible in a round even with omega blocks (TNET-36)" in withCombinedStorage() {
     implicit storage =>
-      /* The DAG looks like:
-       * A3
-       *   \
-       *     b2
-       *   /    \
-       * a2       C2
-       * |  \   /  |
-       * |   b1   c1
-       * |  /    /
-       * A1 ----
-       *  \
-       *   g
-       */
       val vA    = generateValidator("A")
       val vB    = generateValidator("B")
       val vC    = generateValidator("C")
-      val bonds = List(vA, vB, vC).map(Bond(_, 10))
+      val vD    = generateValidator("D")
+      val bonds = List(vA, vB, vC, vD).map(Bond(_, 10))
 
       import MessageType._
       import MessageRole._
@@ -173,6 +161,25 @@ class FinalityDetectorByVotingMatrixTest
               block
           }
 
+      // A level-1 summit with 2/3 quorum is just 2/3 of validators having seen each other vote for the candidate.
+
+      /* The DAG looks like:
+       * A3
+       *   \------
+       *    \     \
+       *     |     \
+       *     |      \
+       *     b2      \
+       *   /    \     \
+       * a2       C2   d2
+       * |  \   /  |   |
+       * |   b1   c1   d1
+       * |  /    /    /
+       * A1 ---------
+       *  \
+       *   G
+       */
+
       for {
         genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
         dag     <- storage.getRepresentation
@@ -188,14 +195,18 @@ class FinalityDetectorByVotingMatrixTest
         b1 <- create(vB, BALLOT, CONFIRMATION, a1, Map(vA -> a1), None)
         _  = println(s"creating c1")
         c1 <- create(vC, BALLOT, CONFIRMATION, a1, Map(vA -> a1), None)
+        _  = println(s"creating d1")
+        d1 <- create(vD, BALLOT, CONFIRMATION, a1, Map(vA -> a1), None)
         _  = println(s"creating a2")
         a2 <- create(vA, BALLOT, WITNESS, a1, Map(vA -> a1, vB -> b1), None)
         _  = println(s"creating c2")
         c2 <- create(vC, BLOCK, WITNESS, a1, Map(vA -> a1, vB -> b1, vC -> c1), None)
+        _  = println(s"creating d2")
+        d2 <- create(vD, BALLOT, WITNESS, a1, Map(vA -> a1, vD -> d1), None)
         _  = println(s"creating b2")
-        b2 <- create(vB, BALLOT, WITNESS, c2, Map(vA -> a2, vB -> b1, vC -> c2), Some(a1))
+        b2 <- create(vB, BALLOT, WITNESS, c2, Map(vA -> a2, vB -> b1, vC -> c2), None)
         _  = println(s"creating a3")
-        a3 <- create(vA, BLOCK, PROPOSAL, c2, Map(vA -> a2, vB -> b2, vC -> c2), None)
+        a3 <- create(vA, BLOCK, PROPOSAL, c2, Map(vA -> a2, vB -> b2, vC -> c2, vD -> d2), Some(a1))
 
       } yield ()
   }
