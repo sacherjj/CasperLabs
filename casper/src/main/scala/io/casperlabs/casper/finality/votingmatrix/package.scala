@@ -216,7 +216,7 @@ package object votingmatrix {
       // Which candidate (if any) does each validator vote for and since which level.
       firstLevelZeroVotes: MutableSeq[Option[Vote]],
       candidateBlockHash: BlockHash,
-      // Which validators were (and are still) part of the committee.
+      // Which validators were (and are still) part of the committee that vote for this candidate.
       mask: MutableSeq[Boolean],
       q: Weight,
       weight: MutableSeq[Weight]
@@ -237,12 +237,12 @@ package object votingmatrix {
                 case (witnessedHighestLevel, witnessedIndex) =>
                   // See if the witnessed validator is voting for the same candidate.
                   firstLevelZeroVotes(witnessedIndex) match {
-                    case Some((witnessedBlockHash, witnessedVoteLevel))
-                        if witnessedBlockHash == candidateBlockHash && witnessedVoteLevel <= witnessedHighestLevel =>
+                    case Some((_, witnessedVoteLevel))
+                        if witnessedVoteLevel <= witnessedHighestLevel =>
                       // The validator at `witnessedIndex` puts their weight behind the one at `voterIndex`
                       weight(witnessedIndex)
 
-                    // Voting for a different candidate or the voter hasn't witnessed the vote.
+                    // The voter hasn't witnessed the vote.
                     case _ => Zero
                   }
               }
