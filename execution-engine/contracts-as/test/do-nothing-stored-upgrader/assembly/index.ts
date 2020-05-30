@@ -3,6 +3,7 @@ import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
+import {Pair} from "../../../../contract-as/assembly/pair";
 import {URef} from "../../../../contract-as/assembly/uref";
 import {createPurse} from "../../../../contract-as/assembly/purse";
 import {CLType, CLTypeTag} from "../../../../contract-as/assembly/clvalue";
@@ -25,7 +26,7 @@ export function call(): void {
   let entryPoints = new CL.EntryPoints();
   let entryPoint = new CL.EntryPoint(
     ENTRY_FUNCTION_NAME,
-    new Map<String, CLType>(),
+    new Array<Pair<String, CLType>>(),
     new CLType(CLTypeTag.Unit),
     new CL.PublicAccess(),
     CL.EntryPointType.Session);
@@ -47,7 +48,7 @@ export function call(): void {
     <Uint8Array>doNothingPackageHash.hash,
     <URef>doNothingURef.uref,
     entryPoints,
-    new Map<String, Key>(),
+    new Array<Pair<String, Key>>(),
   );
 
   CL.putKey("end of upgrade", Key.fromHash(key));

@@ -165,10 +165,10 @@ export function testSerializeMap(): bool {
     const truth = hex2bin(
         "02000000040000004b6579310600000056616c756531040000004b6579320600000056616c756532"
     );
-    const map = new Map<String, String>();
-    map.set("Key1", "Value1");
-    map.set("Key2", "Value2");
-    const serialized = toBytesMap(map, toBytesString, toBytesString);
+    const pairs = new Array<Pair<String, String>>();
+    pairs.push(new Pair("Key1", "Value1"));
+    pairs.push(new Pair("Key2", "Value2"));
+    const serialized = toBytesMap(pairs, toBytesString, toBytesString);
     assert(checkArraysEqual(serialized, typedToArray(truth)));
 
     const deser = fromBytesMap<String, String>(
@@ -198,9 +198,10 @@ export function testSerializeMap(): bool {
 export function testToBytesVecT(): bool {
     // let args = ("get_payment_purse",).parse().unwrap().to_bytes().unwrap();
     const truth = hex2bin("0100000015000000110000006765745f7061796d656e745f70757273650a");
+    let serialize = function(item: CLValue): Array<u8> { return item.toBytes(); };
     let serialized = toBytesVecT<CLValue>([
         CLValue.fromString("get_payment_purse"),
-    ]);
+    ], serialize);
     return checkArraysEqual(serialized, typedToArray(truth));
 }
 
@@ -396,8 +397,8 @@ export function testComplexCLType(): bool {
 
 export function testToBytesEntryPoint(): bool {
     let entryPoints = new EntryPoints();
-    let args = new Map<String, CLType>();
-    args.set("param1", new CLType(CLTypeTag.U512));
+    let args = new Array<Pair<String, CLType>>();
+    args.push(new Pair("param1", new CLType(CLTypeTag.U512)));
     let entryPoint = new EntryPoint("delegate", args, new CLType(CLTypeTag.Unit), new PublicAccess(), EntryPointType.Contract);
     entryPoints.addEntryPoint(entryPoint);
     let bytes = entryPoints.toBytes();

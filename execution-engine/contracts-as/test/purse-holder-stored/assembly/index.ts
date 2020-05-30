@@ -3,6 +3,7 @@ import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {fromBytesString, toBytesMap} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
+import {Pair} from "../../../../contract-as/assembly/pair";
 import {putKey, ret} from "../../../../contract-as/assembly";
 import {CLValue, CLType, CLTypeTag} from "../../../../contract-as/assembly/clvalue";
 import {createPurse} from "../../../../contract-as/assembly/purse";
@@ -45,13 +46,13 @@ export function call(): void {
   let entryPoints = new CL.EntryPoints();
 
   {
-    let args = new Map<String, CLType>();
-    args.set(ARG_PURSE, new CLType(CLTypeTag.String));
+    let args = new Array<Pair<String, CLType>>();
+    args.push(new Pair(ARG_PURSE, new CLType(CLTypeTag.String)));
     let entryPointAdd = new CL.EntryPoint(ENTRY_POINT_ADD, args, new CLType(CLTypeTag.Unit), new CL.PublicAccess(), CL.EntryPointType.Contract);
     entryPoints.addEntryPoint(entryPointAdd);  
   }
   {
-    let entryPointAdd = new CL.EntryPoint(ENTRY_POINT_VERSION, new Map<String, CLType>(), new CLType(CLTypeTag.Unit), new CL.PublicAccess(), CL.EntryPointType.Contract);
+    let entryPointAdd = new CL.EntryPoint(ENTRY_POINT_VERSION, new Array<Pair<String, CLType>>(), new CLType(CLTypeTag.Unit), new CL.PublicAccess(), CL.EntryPointType.Contract);
     entryPoints.addEntryPoint(entryPointAdd);
   }
 

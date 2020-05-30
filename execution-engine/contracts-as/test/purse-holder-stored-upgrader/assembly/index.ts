@@ -7,6 +7,7 @@ import {CLValue, CLType, CLTypeTag} from "../../../../contract-as/assembly/clval
 import {URef} from "../../../../contract-as/assembly/uref";
 import {createPurse} from "../../../../contract-as/assembly/purse";
 import { checkItemsEqual } from "../../../../contract-as/assembly/utils";
+import {Pair} from "../../../../contract-as/assembly/pair";
 
 const METHOD_ADD = "add";
 const METHOD_REMOVE = "remove";
@@ -64,8 +65,8 @@ export function call(): void {
 
   let entryPoints = new CL.EntryPoints();
 
-  let addArgs = new Map<String, CLType>();
-  addArgs.set(ARG_PURSE_NAME, new CLType(CLTypeTag.String));
+  let addArgs = new Array<Pair<String, CLType>>();
+  addArgs.push(new Pair(ARG_PURSE_NAME, new CLType(CLTypeTag.String)));
 
   let add = new CL.EntryPoint(
         METHOD_ADD,
@@ -79,15 +80,15 @@ export function call(): void {
 
   let version = new CL.EntryPoint(
       METHOD_VERSION,
-      new Map<String, CLType>(),
+      new Array<Pair<String, CLType>>(),
       new CLType(CLTypeTag.String),
       new CL.PublicAccess(),
       CL.EntryPointType.Contract,
   );
   entryPoints.addEntryPoint(version);
 
-  let removeArgs = new Map<String, CLType>();
-  removeArgs.set(ARG_PURSE_NAME, new CLType(CLTypeTag.String));
+  let removeArgs = new Array<Pair<String, CLType>>();
+  removeArgs.push(new Pair(ARG_PURSE_NAME, new CLType(CLTypeTag.String)));
 
   let remove = new CL.EntryPoint(
     METHOD_REMOVE,
@@ -102,7 +103,7 @@ export function call(): void {
     contractPackageHash,
     <URef>accessKey.uref,
     entryPoints,
-    new Map<String, Key>(),
+    new Array<Pair<String, Key>>(),
   );
   CL.putKey(PURSE_HOLDER_STORED_CONTRACT_NAME, Key.fromHash(newContractHash));
 

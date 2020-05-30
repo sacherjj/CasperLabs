@@ -3,6 +3,7 @@ import {URef, AccessRights} from "./uref";
 import {Error, ErrorCode} from "./error";
 import {CLValue, CLType, CLTypeTag} from "./clvalue";
 import {Key, PublicKey} from "./key";
+import {Pair} from "./pair";
 import {toBytesString,
         toBytesVecT,
         fromBytesMap,
@@ -402,14 +403,15 @@ export enum EntryPointType {
 
 export class EntryPoint {
   constructor(public name: String,
-              public args: Map<String, CLType>,
+              public args: Array<Pair<String, CLType>>,
               public ret: CLType,
               public access: EntryPointAccess,
               public entry_point_type: EntryPointType) {}
 
   toBytes(): Array<u8> {
     let nameBytes = toBytesString(this.name);
-    let argsBytes = toBytesMap(this.args, toBytesString, (clType: CLType): Array<u8> => clType.toBytes());
+    let toBytesCLType = function(clType: CLType): Array<u8> { return clType.toBytes(); };
+    let argsBytes = toBytesMap(this.args, toBytesString, toBytesCLType);
     let retBytes = this.ret.toBytes();
     let accessBytes = this.access.toBytes();
     let entryPointTypeBytes: Array<u8> = [<u8>this.entry_point_type];
@@ -417,18 +419,14 @@ export class EntryPoint {
   }
 };
 
-
-function foo(entryPoint: EntryPoint): Array<u8> {
-  return entryPoint.toBytes();
-}
-
 export class EntryPoints {
-  entryPoints: Map<String, EntryPoint>;
+  entryPoints: Array<Pair<String, EntryPoint>>;
   addEntryPoint(entryPoint: EntryPoint): void {
-    this.entryPoints.set(entryPoint.name, entryPoint);
+    this.entryPoints.push(new Pair(entryPoint.name, entryPoint));
   }
   toBytes(): Array<u8> {
-    return toBytesMap(this.entryPoints, toBytesString, (entryPoint: EntryPoint): Array<u8> => entryPoint.toBytes());
+    let toBytesEntryPoint = function(entryPoint: EntryPoint): Array<u8> { return entryPoint.toBytes(); };
+    return toBytesMap(this.entryPoints, toBytesString, toBytesEntryPoint);
   }
 }
 
@@ -449,7 +447,7 @@ export function createContractPackageAtHash(): CreateContractPackageResult {
   );
 }
 
-export function newContract(entryPoints: EntryPoints, namedKeys: Map<String, Key> | null = null, hashName: String | null = null, urefName: String | null = null): Uint8Array {
+export function newContract(entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>> | null = null, hashName: String | null = null, urefName: String | null = null): Uint8Array {
   let result = createContractPackageAtHash();
   if (hashName !== null) {
     putKey(<String>hashName, Key.fromHash(result.packageHash));
@@ -459,7 +457,7 @@ export function newContract(entryPoints: EntryPoints, namedKeys: Map<String, Key
   }
 
   if (namedKeys === null) {
-    namedKeys = new Map<String, Key>();
+    namedKeys = new Array<Pair<String, Key>>();
   }
 
   return addContractVersion(
@@ -474,7 +472,7 @@ export function callVersionedContract(packageHash: Uint8Array, version: u8, entr
   return <Uint8Array>unreachable();
 }
 
-export function addContractVersion(packageHash: Uint8Array, accessURef: URef, entryPoints: EntryPoints, namedKeys: Map<String, Key>): Uint8Array {
+export function addContractVersion(packageHash: Uint8Array, accessURef: URef, entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>>): Uint8Array {
 
   let accessURefBytes = accessURef.toBytes();
   var versionPtr = new Uint8Array(1);

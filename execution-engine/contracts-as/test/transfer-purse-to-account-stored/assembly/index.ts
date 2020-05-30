@@ -10,7 +10,7 @@ import {URef} from "../../../../contract-as/assembly/uref";
 import {toBytesMap} from "../../../../contract-as/assembly/bytesrepr";
 import * as TransferPurseToAccount  from "../../transfer-purse-to-account/assembly";
 import {getPurseBalance, transferFromPurseToAccount, TransferredTo} from "../../../../contract-as/assembly/purse";
-
+import {Pair} from "../../../../contract-as/assembly/pair";
 
 const ENTRY_FUNCTION_NAME = "transfer";
 const PACKAGE_HASH_KEY_NAME = "transfer_purse_to_account";
@@ -33,9 +33,9 @@ export function transfer(): void {
 
 export function call(): void {
     let entryPoints = new CL.EntryPoints();
-    let args = new Map<String, CLType>();
-    args.set(ARG_0_NAME, CLType.fixedList(new CLType(CLTypeTag.U8), 32));
-    args.set(ARG_1_NAME, new CLType(CLTypeTag.U512));
+    let args = new Array<Pair<String, CLType>>();
+    args.push(new Pair(ARG_0_NAME, CLType.fixedList(new CLType(CLTypeTag.U8), 32)));
+    args.push(new Pair(ARG_1_NAME, new CLType(CLTypeTag.U512)));
 
     let entryPoint = new CL.EntryPoint(ENTRY_FUNCTION_NAME, args, new CLType(CLTypeTag.Unit), new CL.PublicAccess(), CL.EntryPointType.Session);
     entryPoints.addEntryPoint(entryPoint);

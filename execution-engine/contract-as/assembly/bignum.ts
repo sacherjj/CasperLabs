@@ -103,7 +103,7 @@ export class U512 {
 
         // Find the length
         let digits = 0;
-        while (digits < value.length && HEX_DIGITS[<usize>value.charCodeAt(digits)] != -1 ) {
+        while (digits < value.length && HEX_DIGITS[value.charCodeAt(digits)] != -1 ) {
             digits++;
         }
 

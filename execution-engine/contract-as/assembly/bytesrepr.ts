@@ -1,5 +1,5 @@
 import { Pair } from "./pair";
-import { typedToArray } from "./utils";
+import { typedToArray, encodeUTF8 } from "./utils";
 import { ErrorCode, Error as StdError } from "./error";
 
 /**
@@ -209,13 +209,12 @@ export function toBytesPair(key: u8[], value: u8[]): u8[] {
  * @param serializeKey A function that will serialize given key.
  * @param serializeValue A function that will serialize given value.
  */
-export function toBytesMap<K, V>(map: Map<K, V>, serializeKey: (key: K) => Array<u8>, serializeValue: (value: V) => Array<u8>): Array<u8> {
-    var bytes = toBytesU32(<u32>map.size);
-    var keys = map.keys();
-    var values = map.values();
-    for (var i = 0; i < map.size; i++) {
-        bytes = bytes.concat(serializeKey(keys[i]));
-        bytes = bytes.concat(serializeValue(values[i]));
+export function toBytesMap<K, V>(vecOfPairs: Array<Pair<K, V>>, serializeKey: (key: K) => Array<u8>, serializeValue: (value: V) => Array<u8>): Array<u8> {
+    const len = vecOfPairs.length;
+    var bytes = toBytesU32(<u32>len);
+    for (var i = 0; i < len; i++) {
+        bytes = bytes.concat(serializeKey(vecOfPairs[i].first));
+        bytes = bytes.concat(serializeValue(vecOfPairs[i].second));
     }
     return bytes;
 }
@@ -281,12 +280,7 @@ export function fromBytesMap<K, V>(
  */
 export function toBytesString(s: String): u8[] {
     let bytes = toBytesU32(<u32>s.length);
-    for (let i = 0; i < s.length; i++) {
-        let charCode = s.charCodeAt(i);
-        // Assumes ascii encoding (i.e. charCode < 0x80)
-        bytes.push(<u8>charCode);
-    }
-    return bytes;
+    return bytes.concat(typedToArray(encodeUTF8(s)));
 }
 
 /**
@@ -344,10 +338,11 @@ export function fromBytesArrayU8(bytes: Uint8Array): Result<Array<u8>> {
 /**
  * Serializes a vector of values of type `T` into an array of bytes.
  */
-export function toBytesVecT<T>(ts: T[]): Array<u8> {
-    let bytes = toBytesU32(<u32>ts.length);
+export function toBytesVecT<T>(ts: Array<T>, encodeItem: (item: T) => Array<u8>): Array<u8> {
+    var bytes = toBytesU32(<u32>ts.length);
     for (let i = 0; i < ts.length; i++) {
-        bytes = bytes.concat(ts[i].toBytes());
+        var itemBytes = encodeItem(ts[i]);
+        bytes = bytes.concat(itemBytes);
     }
     return bytes;
 }
