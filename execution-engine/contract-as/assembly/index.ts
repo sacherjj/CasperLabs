@@ -10,9 +10,13 @@ import {toBytesString,
         fromBytesString,
         toBytesStringList,
         toBytesU32,
+        Result,
         Ref,
         toBytesArrayU8,
-        toBytesMap} from "./bytesrepr";
+        toBytesMap,
+        toBytesVecT,
+        fromBytesStringList,
+        fromBytesArray} from "./bytesrepr";
 import {U512} from "./bignum";
 import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH, UREF_ADDR_LENGTH, KEY_HASH_LENGTH} from "./constants";
 import {Pair} from "./pair";
@@ -389,7 +393,7 @@ export class PublicAccess extends EntryPointAccess {
 
 export class GroupAccess extends EntryPointAccess {
   constructor(groups: String[]) {
-    let bytes = [ENTRYPOINTACCESS_GROUPS_TAG];
+    let bytes: Array<u8> = [ENTRYPOINTACCESS_GROUPS_TAG];
     bytes = bytes.concat(toBytesStringList(groups));
     super(bytes);
   }
@@ -420,7 +424,7 @@ export class EntryPoint {
 };
 
 export class EntryPoints {
-  entryPoints: Array<Pair<String, EntryPoint>>;
+  entryPoints: Array<Pair<String, EntryPoint>> = new Array<Pair<String, EntryPoint>>();
   addEntryPoint(entryPoint: EntryPoint): void {
     this.entryPoints.push(new Pair(entryPoint.name, entryPoint));
   }
@@ -469,19 +473,38 @@ export function newContract(entryPoints: EntryPoints, namedKeys: Array<Pair<Stri
 }
 
 export function callVersionedContract(packageHash: Uint8Array, version: u8, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
-  return <Uint8Array>unreachable();
+  let entryPointBytes = toBytesString(entryPointName);
+  let argBytes = runtimeArgs.toBytes();
+  let bytesWritten = new Uint32Array(1);
+  let ret = externals.call_versioned_contract(
+    packageHash.dataStart,
+    packageHash.length,
+    version,
+    entryPointBytes.dataStart,
+    entryPointBytes.length,
+    argBytes.dataStart,
+    argBytes.length,
+    bytesWritten.dataStart,
+  );
+  let err = Error.fromResult(ret);
+  if (err !== null) {
+    err.revert();
+  }
+  if (bytesWritten[0] == 0) {
+    return new Uint8Array(0);
+  }
+  else {
+    return readHostBuffer(bytesWritten[0]);
+  }
 }
 
 export function addContractVersion(packageHash: Uint8Array, accessURef: URef, entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>>): Uint8Array {
-
   let accessURefBytes = accessURef.toBytes();
   var versionPtr = new Uint8Array(1);
-
   let entryPointsBytes = entryPoints.toBytes();
-
-  let namedKeysBytes = toBytesMap(namedKeys, toBytesString, (key: Key): Array<u8> => key.toBytes());
-
-  let keyBytes = new Uint8Array(KEY_HASH_LENGTH);
+  let keyToBytes = function(key: Key): Array<u8> { return key.toBytes(); };
+  let namedKeysBytes = toBytesMap(namedKeys, toBytesString, keyToBytes);
+  let keyBytes = new Uint8Array(32);
   let totalBytes = new Uint32Array(1);
 
   let ret = externals.add_contract_version(
@@ -495,11 +518,124 @@ export function addContractVersion(packageHash: Uint8Array, accessURef: URef, en
     namedKeysBytes.length,
     keyBytes.dataStart,
     keyBytes.length,
-    totalBytes.length,
+    totalBytes.dataStart,
   );
   const error = Error.fromResult(ret);
   if (error !== null) {
+    error.revert();
     return <Uint8Array>unreachable();
   }
-  return keyBytes;
+  return keyBytes.slice(0, totalBytes[0])
+}
+
+export function createContractUserGroup(packageHash: Uint8Array, accessURef: URef, label: String, newURefs: u8, existingURefs: Array<URef>): Array<URef> {
+  let accessBytes = accessURef.toBytes();
+  let labelBytes = toBytesString(label);
+
+  // NOTE: AssemblyScript sometimes is fine with closures, and sometimes
+  // it generates unreachable code. Anonymous functions seems to be working
+  // consistently.
+  let toBytesURef = function(item: URef): Array<u8> { return item.toBytes(); }
+  let fromBytesURef = function(bytes: Uint8Array): Result<URef> { return URef.fromBytes(bytes); }
+
+  let existingUrefBytes: Array<u8> = toBytesVecT(existingURefs, toBytesURef);
+
+  let outputSize = new Uint32Array(1);
+
+  let ret = externals.create_contract_user_group(
+    packageHash.dataStart,
+    packageHash.length,
+    accessBytes.dataStart,
+    labelBytes.dataStart,
+    labelBytes.length,
+    newURefs,
+    existingUrefBytes.dataStart,
+    existingUrefBytes.length,
+    outputSize.dataStart,
+  );
+
+  let err = Error.fromResult(ret);
+  if (err !== null) {
+    err.revert();
+    return <Array<URef>>unreachable();
+  }
+  let bytes = readHostBuffer(outputSize[0]);
+  return fromBytesArray<URef>(bytes, fromBytesURef).unwrap();
+}
+
+export function removeContractUserGroup(
+  contract: Key,
+  access_key: URef,
+  label: String,
+): void {
+  let contract_bytes = contract.toBytes();
+  let access_key_bytes = access_key.toBytes();
+  let label_bytes = toBytesString(label);
+  let ret = externals.remove_contract_user_group(
+    contract_bytes.dataStart,
+    contract_bytes.length,
+    access_key_bytes.dataStart,
+    label_bytes.dataStart,
+    label_bytes.length,
+  );
+  let err = Error.fromResult(ret);
+  if (err !== null) {
+    err.revert();
+  }
+}
+
+export function extendContractUserGroupURefs(
+  contract: Key,
+  accessKey: URef,
+  label: String,
+  new_urefs_count: usize,
+): Array<URef> {
+  let contractBytes = contract.toBytes();
+  let accessKeyBytes = accessKey.toBytes();
+  let label_bytes = toBytesString(label);
+  let size = new Uint32Array(1);
+  let ret = externals.extend_contract_user_group_urefs(
+    contractBytes.dataStart,
+    contractBytes.length,
+    accessKeyBytes.dataStart,
+    label_bytes.dataStart,
+    label_bytes.length,
+    new_urefs_count,
+    size.dataStart,
+  );
+  let err = Error.fromResult(ret);
+  if (err !== null) {
+    err.revert();
+  }
+  let bytes = readHostBuffer(size[0]);
+  let decode = function(bytes: Uint8Array): Result<URef> { return URef.fromBytes(bytes); };
+  return fromBytesArray<URef>(bytes, decode).unwrap();
+}
+
+export function removeContractUserGroupURefs(
+  contract: Key,
+  access_key: URef,
+  label: String,
+  urefs: Array<URef>): void {
+
+  let contract_bytes = contract.toBytes();
+  let access_key_bytes = access_key.toBytes();
+  let label_bytes = toBytesString(label);
+
+  let encode = function(item: URef): Array<u8> { return item.toBytes(); };
+  let urefsData = toBytesVecT(urefs, encode);
+
+  let ret = externals.remove_contract_user_group_urefs(
+    contract_bytes.dataStart,
+    contract_bytes.length,
+    access_key_bytes.dataStart,
+    label_bytes.dataStart,
+    label_bytes.length,
+    urefsData.dataStart,
+    urefsData.length,
+  );
+  let err = Error.fromResult(ret);
+  if (err !== null) {
+    err.revert();
+  }
 }

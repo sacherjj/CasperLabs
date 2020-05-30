@@ -5,6 +5,7 @@ import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
 import {Pair} from "../../../../contract-as/assembly/pair";
 import {URef} from "../../../../contract-as/assembly/uref";
+import {Pair} from "../../../../contract-as/assembly/pair";
 import {createPurse} from "../../../../contract-as/assembly/purse";
 import {CLType, CLTypeTag} from "../../../../contract-as/assembly/clvalue";
 import * as CreatePurse01 from "../../create-purse-01/assembly";

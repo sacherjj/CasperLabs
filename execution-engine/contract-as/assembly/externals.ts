@@ -33,7 +33,18 @@ export declare function ret(value_ptr: usize, value_size: usize): void;
 /** @hidden */
 @external("env", "call_contract")
 export declare function call_contract(contract_hash_ptr: usize, contract_hash_size: usize, entry_point_name_ptr: usize, entry_point_name_size: usize, runtime_args_ptr: usize, runtime_args_size: usize, result_size: usize): i32;
-
+/** @hidden */
+@external("env", "call_versioned_contract")
+export declare function call_versioned_contract(
+    contract_package_hash_ptr: usize,
+    contract_package_hash_size: usize,
+    version: u8,
+    entry_point_name_ptr: usize,
+    entry_point_name_size: usize,
+    runtime_args_ptr: usize,
+    runtime_args_size: usize,
+    result_size: usize,
+): i32;
 /** @hidden */
 @external("env", "get_key")
 export declare function get_key(
@@ -149,7 +160,7 @@ export declare function extend_contract_user_group_urefs(contract_package_hash_p
     value_size_ptr: usize,
 ): i32;
 /** @hidden */
-@external("env", "extend_contremove_contract_user_group_urefsract_user_group_urefs")
+@external("env", "remove_contract_user_group_urefs")
 export declare function remove_contract_user_group_urefs(
     contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
@@ -176,4 +187,17 @@ export declare function add_contract_version(
     output_ptr: usize,
     output_size: usize,
     bytes_written_ptr: usize,
+): i32;
+/** @hidden */
+@external("env", "create_contract_user_group")
+export declare function create_contract_user_group(
+    contract_package_hash_ptr: usize,
+    contract_package_hash_size: usize,
+    access_ptr: usize,
+    label_ptr: usize,
+    label_size: usize,
+    num_new_urefs: u8,
+    existing_urefs_ptr: usize,
+    existing_urefs_size: usize,
+    output_size_ptr: usize,
 ): i32;
