@@ -321,7 +321,7 @@ mod tests {
         let account_key = Key::Account(account_hash);
         assert_eq!(
             format!("{}", account_key),
-            format!("Key::Account(Ed25519({}))", expected_hash)
+            format!("Key::Account({})", expected_hash)
         );
         let uref_key = Key::URef(URef::new(addr_array, AccessRights::READ));
         assert_eq!(

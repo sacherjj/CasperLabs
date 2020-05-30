@@ -4,6 +4,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
+use core::convert::TryFrom;
 
 use contract::{
     contract_api::{runtime, system},

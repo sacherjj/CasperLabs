@@ -172,10 +172,23 @@ impl AccountHash {
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
+}
 
-    /// Attemps a new `AccountHash` creation using a slice of bytes.
-    pub fn try_from(bytes: &[u8]) -> Result<AccountHash, TryFromSliceForAccountHashError> {
+impl TryFrom<&[u8]> for AccountHash {
+    type Error = TryFromSliceForAccountHashError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, TryFromSliceForAccountHashError> {
         AccountHashBytes::try_from(bytes)
+            .map(AccountHash::new)
+            .map_err(|_| TryFromSliceForAccountHashError(()))
+    }
+}
+
+impl TryFrom<&alloc::vec::Vec<u8>> for AccountHash {
+    type Error = TryFromSliceForAccountHashError;
+
+    fn try_from(bytes: &Vec<u8>) -> Result<Self, Self::Error> {
+        AccountHashBytes::try_from(bytes as &[u8])
             .map(AccountHash::new)
             .map_err(|_| TryFromSliceForAccountHashError(()))
     }
@@ -183,13 +196,13 @@ impl AccountHash {
 
 impl Display for AccountHash {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
-        write!(f, "AccountHash({})", self)
+        write!(f, "{}", base16::encode_lower(&self.0))
     }
 }
 
 impl Debug for AccountHash {
     fn fmt(&self, f: &mut Formatter) -> core::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "AccountHash({})", base16::encode_lower(&self.0))
     }
 }
 
