@@ -8,7 +8,7 @@ import { fromBytesU64, toBytesU64,
          toBytesVecT,
          Error } from "../../assembly/bytesrepr";
 import { CLValue } from "../../assembly/clvalue";
-import { Key, KeyVariant, PublicKey, PUBLIC_KEY_ED25519_ID } from "../../assembly/key";
+import { Key, KeyVariant, AccountHash } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
 import { Option } from "../../assembly/option";
 import { hex2bin } from "../utils/helpers";
@@ -314,8 +314,8 @@ export function testDeserMapOfNamedKeys(): bool {
     let accountBytes = new Array<u8>(32);
     accountBytes.fill(1);
 
-    assert(checkTypedArrayEqual((<PublicKey>deser[0].second.account).bytes, arrayToTyped(accountBytes)));
-    assert(checkTypedArrayEqual((<PublicKey>deser[0].second.account).bytes, arrayToTyped(accountBytes)));
+    assert(checkTypedArrayEqual((<AccountHash>deser[0].second.account).bytes, arrayToTyped(accountBytes)));
+    assert(checkTypedArrayEqual((<AccountHash>deser[0].second.account).bytes, arrayToTyped(accountBytes)));
 
     //
 
@@ -343,7 +343,7 @@ export function testDeserMapOfNamedKeys(): bool {
     // Compares to truth
 
     let truthObj = new Array<Pair<String, Key>>();
-    let keyA = Key.fromAccount(new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(accountBytes)));
+    let keyA = Key.fromAccount(new AccountHash(arrayToTyped(accountBytes)));
     truthObj.push(new Pair<String, Key>("A", keyA));
 
     let urefB = new URef(arrayToTyped(urefBytes), AccessRights.READ_ADD_WRITE);

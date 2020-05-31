@@ -2,15 +2,15 @@ import * as CL from "../../../../contract-as/assembly";
 import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {fromBytesString, fromBytesI32} from "../../../../contract-as/assembly/bytesrepr";
 import {arrayToTyped} from "../../../../contract-as/assembly/utils";
-import {Key, PublicKey, PUBLIC_KEY_ED25519_ID} from "../../../../contract-as/assembly/key"
+import {Key, AccountHash} from "../../../../contract-as/assembly/key"
 import {addAssociatedKey, AddKeyFailure, ActionType, setActionThreshold, SetThresholdFailure} from "../../../../contract-as/assembly/account";
 
 export function call(): void {
   let publicKeyBytes = new Array<u8>(32);
   publicKeyBytes.fill(123);
-  let publicKey = new PublicKey(PUBLIC_KEY_ED25519_ID, arrayToTyped(publicKeyBytes));
+  let accountHash = new AccountHash(arrayToTyped(publicKeyBytes));
 
-  const addResult = addAssociatedKey(publicKey, 100);
+  const addResult = addAssociatedKey(accountHash, 100);
   switch (addResult) {
     case AddKeyFailure.DuplicateKey:
       break;
