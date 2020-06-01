@@ -6,8 +6,6 @@ import time
 
 from casperlabs_client import crypto
 from .contract import PaymentCode, SessionCode
-from .crypto import private_to_public_key
-from .io import read_pem_key
 
 
 def sign_deploy(deploy, public_key, private_key_file):
@@ -30,10 +28,10 @@ def sign_deploy(deploy, public_key, private_key_file):
 
 @dataclass
 class DeployData:
-    from_: bytes
+    from_addr: bytes
     payment_code: PaymentCode
     session_code: SessionCode
-    public_key: str = None
+    account_hash: str = None
     ttl_millis: int = 0
     dependencies: list = None
     chain_name: str = None
@@ -47,14 +45,14 @@ class DeployData:
         """
 
         # `from` isn't good for dict creation, but used from CLI, so handle both `from` and `from_addr`
-        from_ = args.get("from", args.get("from_addr"))
-        if from_ and not isinstance(from_, bytes):
-            from_ = bytes.fromhex(from_)
+        from_addr = args.get("from", args.get("from_addr"))
+        if from_addr and not isinstance(from_addr, bytes):
+            from_addr = bytes.fromhex(from_addr)
 
         payment_code = PaymentCode.from_args(args)
         session_code = SessionCode.from_args(args)
 
-        public_key = args.get("public_key")
+        account_hash = args.get("account_hash")
         ttl_millis = args.get("ttl_millis")
         dependencies = args.get("dependencies")
         if dependencies:
@@ -62,15 +60,17 @@ class DeployData:
         else:
             dependencies = []
         chain_name = args.get("chain_name", "")
+        private_key = args.get("private_key")
 
         deploy = DeployData(
-            from_,
+            from_addr,
             payment_code,
             session_code,
-            public_key,
+            account_hash,
             ttl_millis,
             dependencies,
             chain_name,
+            private_key,
         )
         if len(deploy.from_addr) != 32:
             raise Exception(
@@ -78,30 +78,6 @@ class DeployData:
             )
 
         return deploy
-
-    @property
-    def public_key_to_use(self):
-        if self.public_key:
-            return crypto.read_pem_key(self.public_key)
-        elif self.from_:
-            return self.from_
-        else:
-            return crypto.private_to_public_key(self.private_key)
-
-    @property
-    def from_addr(self):
-        """ Attempts to guess which from account we should use for the user. """
-        # TODO: Should we require explicitly `from`?
-        if self.from_:
-            return self.from_
-        elif self.public_key:
-            return read_pem_key(self.public_key)
-        elif self.private_key:
-            return private_to_public_key(self.private_key)
-        else:
-            raise TypeError(
-                "Unable to generate from address using `from`, `public_key`, or `private_key`."
-            )
 
     def make_protobuf(self) -> consensus.Deploy:
         """
@@ -119,7 +95,7 @@ class DeployData:
         body_hash = crypto.blake2b_hash((body.SerializeToString()))
 
         header = consensus.Deploy.Header(
-            account_public_key=self.from_addr,
+            account_public_key_hash=self.account_hash,
             timestamp=int(1000 * time.time()),
             body_hash=body_hash,
             ttl_millis=self.ttl_millis,

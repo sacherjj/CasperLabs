@@ -156,28 +156,9 @@ OPTIONS = [
         dict(type=int, default=consts.STATUS_TIMEOUT, help="Timeout in seconds"),
     ],
     [
-        ("--public-key",),
-        dict(
-            required=False,
-            default=None,
-            type=str,
-            help="Path to the file with account public key (Ed25519)",
-        ),
-    ],
-    [
-        ("-a", "--algorithm"),
-        dict(
-            required=False,
-            default=consts.ED25519_KEY_ALGORITHM,
-            type=str,
-            choices=consts.SUPPORTED_KEY_ALGORITHMS,
-            help="Algorithm used for public key generation.",
-        ),
-    ],
-    [
         ("--account-hash",),
         dict(
-            required=False,
+            required=True,
             type=str,
             help="Account hash based on account public key. Generated with `account-hash` command.",
         ),
