@@ -413,6 +413,27 @@ steps:
   - rust-compile-test-bors
   - sbt-test-docker-bors
 
+- name: run-casperlabs-updater-dry-bors
+  commands:
+  - "cd ci/casperlabs-updater"
+  - "cargo run --release -- --dry-run"
+  image: "casperlabs/buildenv:latest"
+  when:
+    branch:
+    - staging
+    - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/ci/casperlabs-updater/**"
+  depends_on:
+  - rust-compile-test-bors
+  - sbt-test-docker-bors
+
 - name: docker-build-ee-int-bors
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
