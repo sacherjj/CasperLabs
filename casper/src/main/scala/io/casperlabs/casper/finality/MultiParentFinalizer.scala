@@ -8,6 +8,7 @@ import io.casperlabs.casper.CasperMetricsSource
 import io.casperlabs.casper.finality.MultiParentFinalizer.FinalizedBlocks
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.shared.Log
 import io.casperlabs.models.Message
 import io.casperlabs.storage.dag.DagRepresentation
 import simulacrum.typeclass
