@@ -9,7 +9,6 @@ import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
@@ -81,6 +80,7 @@ package object votingmatrix {
                           // A sequence of validators' weights.
                           weight = FinalityDetectorUtil
                             .fromMapToArray(validatorToIndex, weightMap.getOrElse(_, Zero))
+
                           committee = pruneLoop(
                             votingMatrix,
                             firstLevelZeroVotes,
