@@ -7,18 +7,18 @@ import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {URef} from "../../../../contract-as/assembly/uref";
 import {Key, KeyVariant} from "../../../../contract-as/assembly/key";
 import {transferFromPurseToPurse} from "../../../../contract-as/assembly/purse";
+import {RuntimeArgs} from "../../../../contract-as/assembly/runtime_args";
 
 const GET_PAYMENT_PURSE = "get_payment_purse";
 const SET_REFUND_PURSE= "set_refund_purse";
+const ARG_AMOUNT = "amount";
+const ARG_PURSE = "purse";
+const ARG_PURSE_NAME = "purse_name";
 
 export function call(): void {
   let proofOfStake = CL.getSystemContract(CL.SystemContract.ProofOfStake);
 
-  let purseNameBytes = CL.getArg(0);
-  if (purseNameBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+  let purseNameBytes = CL.getNamedArg(ARG_PURSE_NAME);
 
   let purseName = fromBytesString(purseNameBytes);
   if (purseName.hasError()) {
@@ -39,12 +39,7 @@ export function call(): void {
 
   let purse = <URef>purseKey.uref;
 
-  let amountBytes = CL.getArg(1);
-  if (amountBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-
+  let amountBytes = CL.getNamedArg(ARG_AMOUNT);
   let amountResult = U512.fromBytes(amountBytes);
   if (amountResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
@@ -52,12 +47,8 @@ export function call(): void {
   }
   let amount = amountResult.value;
 
-  let proofOfStakeKey = Key.fromURef(proofOfStake);
-
   // Get Payment Purse
-  let paymentPurseOutput = CL.callContract(proofOfStakeKey, [
-    CLValue.fromString(GET_PAYMENT_PURSE),
-  ]);
+  let paymentPurseOutput = CL.callContract(proofOfStake, GET_PAYMENT_PURSE, new RuntimeArgs());
   let paymentPurseResult = URef.fromBytes(paymentPurseOutput);
   if (paymentPurseResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidPurse).revert();
@@ -66,8 +57,9 @@ export function call(): void {
   let paymentPurse = paymentPurseResult.value;
 
   // Set Refund Purse
-  let args: CLValue[] = [CLValue.fromString(SET_REFUND_PURSE), CLValue.fromURef(purse)];
-  CL.callContract(proofOfStakeKey, args);
+  let args = new Map<String, CLValue>();
+  args.set(ARG_PURSE,  CLValue.fromURef(purse));
+  CL.callContract(proofOfStake, SET_REFUND_PURSE, RuntimeArgs.fromMap(args));
 
   let ret = transferFromPurseToPurse(
     purse,

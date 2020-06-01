@@ -1362,6 +1362,8 @@ where
             }
         };
 
+        log::debug!("Payment result: {:?}", payment_result);
+
         let payment_result_cost = payment_result.cost();
         // payment_code_spec_3: fork based upon payment purse balance and cost of
         // payment code execution
@@ -1510,6 +1512,7 @@ where
                 &session_package,
             )
         };
+        log::debug!("Session result: {:?}", session_result);
 
         let post_session_rc = if session_result.is_failure() {
             // If session code fails we do not include its effects,

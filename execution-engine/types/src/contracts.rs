@@ -986,4 +986,5 @@ mod tests {
         assert!(contract_metadata.remove_group(&Group::new("Group 1")));
         assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group no longer exists
     }
+
 }

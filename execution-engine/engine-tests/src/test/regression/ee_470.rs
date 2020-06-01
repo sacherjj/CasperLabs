@@ -5,7 +5,7 @@ use engine_test_support::{
 };
 use types::RuntimeArgs;
 
-const CONTRACT_LOCAL_STATE: &str = "local_state.wasm";
+const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
 
 #[ignore]
 #[test]
@@ -14,7 +14,7 @@ fn regression_test_genesis_hash_mismatch() {
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
-        CONTRACT_LOCAL_STATE,
+        CONTRACT_DO_NOTHING,
         RuntimeArgs::default(),
     )
     .build();
