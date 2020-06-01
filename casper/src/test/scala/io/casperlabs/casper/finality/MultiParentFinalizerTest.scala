@@ -125,9 +125,9 @@ class MultiParentFinalizerTest
         b <- MultiParentFinalizerTest
               .finalizeBlock[Task](a.blockHash, nelBonds)
               .flatMap(ProtoUtil.unsafeGetBlock[Task](_))
-        bMsg            <- Task.fromTry(Message.fromBlock(b))
-        Seq(finalizedA) <- onNewMessageAdded[Task](bMsg)
-        _               = assert(finalizedA.newLFB == a.blockHash && finalizedA.indirectlyFinalized.isEmpty)
+        bMsg                        <- Task.fromTry(Message.fromBlock(b))
+        Seq(finalizedA, finalizedB) <- onNewMessageAdded[Task](bMsg)
+        _                           = assert(finalizedA.newLFB == a.blockHash && finalizedA.indirectlyFinalized.isEmpty)
 
         // `aPrime` is sibiling of `a`, another child of Genesis.
         // Since `a` has already been finalized `aPrime` should never become chosen as new LFB.
