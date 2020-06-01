@@ -18,7 +18,7 @@ def _hex(text, as_utf8):
         if len(text) in (32, 64, 20):
             return text.hex()
         else:
-            CEscape(text, as_utf8)
+            return CEscape(text, as_utf8)
     except TypeError:
         return CEscape(text, as_utf8)
 
@@ -31,7 +31,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
 
-from . import io, utils, common, vdag, abi
+from . import io, reformat, common, vdag, abi
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
 from .contract import bundled_contract_path
@@ -605,7 +605,7 @@ class CasperLabsClient:
         (private_pem, public_pem, public_bytes) = crypto.generate_keys()
         io.write_binary_file(private_path, private_pem)
         io.write_binary_file(public_path, public_pem)
-        io.write_file(id_path, utils.encode_base64(public_bytes))
+        io.write_file(id_path, reformat.encode_base64(public_bytes))
         io.write_file(id_hex_path, public_bytes.hex())
 
     @api
@@ -844,7 +844,7 @@ class CasperLabsClient:
 
         io.write_binary_file(validator_private_path, validator_private_pem)
         io.write_binary_file(validator_public_path, validator_public_pem)
-        io.write_file(validator_id_path, utils.encode_base64(validator_public_bytes))
+        io.write_file(validator_id_path, reformat.encode_base64(validator_public_bytes))
         io.write_file(validator_id_hex_path, validator_public_bytes.hex())
 
         private_key, public_key = crypto.generate_key_pair()

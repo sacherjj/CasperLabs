@@ -16,17 +16,3 @@ def hexify(o):
 
 def jsonify(o):
     return google.protobuf.json_format.MessageToJson(o)
-
-
-def print_blocks(response, element_name="block"):
-    count = 0
-    for block in response:
-        print(f"------------- {element_name} {count} ---------------")
-        print_block(block)
-        print("-----------------------------------------------------\n")
-        count += 1
-    print("count:", count)
-
-
-def print_block(block):
-    print(hexify(block))

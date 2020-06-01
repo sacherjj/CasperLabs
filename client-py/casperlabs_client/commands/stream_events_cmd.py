@@ -1,7 +1,7 @@
 import base64
 from typing import Dict, List
 
-from casperlabs_client import CasperLabsClient, utils
+from casperlabs_client import CasperLabsClient, reformat
 from casperlabs_client.decorators import guarded_command
 
 
@@ -95,6 +95,6 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
         if output_format == "binary":
             print(base64.b64encode(event.SerializeToString()).decode())
         elif output_format == "json":
-            print(utils.jsonify(event))
+            print(reformat.jsonify(event))
         else:
-            print(utils.hexify(event))
+            print(reformat.hexify(event))

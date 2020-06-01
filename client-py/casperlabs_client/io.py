@@ -4,6 +4,7 @@ from typing import Union
 from pathlib import Path
 
 from casperlabs_client import consensus_pb2 as consensus
+from casperlabs_client.reformat import hexify
 
 
 def read_file(file_path: Union[Path, str]) -> str:
@@ -54,3 +55,17 @@ def read_pem_key(file_path: str) -> bytes:
 def read_version() -> str:
     version_path = Path(dirname(realpath(__file__))) / "VERSION"
     return read_file(version_path).strip()
+
+
+def print_blocks(response, element_name="block"):
+    count = 0
+    for block in response:
+        print(f"------------- {element_name} {count} ---------------")
+        print_block(block)
+        print("-----------------------------------------------------\n")
+        count += 1
+    print("count:", count)
+
+
+def print_block(block):
+    print(hexify(block))

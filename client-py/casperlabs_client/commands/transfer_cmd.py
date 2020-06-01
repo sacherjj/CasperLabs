@@ -1,6 +1,6 @@
 from typing import Dict
 
-from casperlabs_client import CasperLabsClient, consts, utils
+from casperlabs_client import CasperLabsClient, consts, reformat
 from casperlabs_client.decorators import guarded_command
 
 
@@ -135,6 +135,16 @@ OPTIONS = [
         ),
     ],
     [
+        ("--algorithm",),
+        dict(
+            required=False,
+            default=consts.ED25519_KEY_ALGORITHM,
+            type=str,
+            choices=consts.SUPPORTED_KEY_ALGORITHMS,
+            help="Algorithm used for public key generation.",
+        ),
+    ],
+    [
         ("--account-hash",),
         dict(
             required=False,
@@ -156,7 +166,7 @@ OPTIONS = [
 
 @guarded_command
 def method(casperlabs_client: CasperLabsClient, args: Dict):
-    deploy_hash = casperlabs_client.deploy(
+    deploy_hash = casperlabs_client.transfer(
         target_account=args.get("target_account"),
         amount=args.get("amount"),
         from_addr=args.get("from_addr"),
@@ -180,4 +190,4 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
             wait_for_processed=True,
             timeout_seconds=args.get("timeout_seconds", consts.STATUS_TIMEOUT),
         )
-        print(utils.hexify(deploy_info))
+        print(reformat.hexify(deploy_info))

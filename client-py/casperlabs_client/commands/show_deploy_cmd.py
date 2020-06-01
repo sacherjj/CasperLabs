@@ -1,6 +1,6 @@
 from typing import Dict
 
-from casperlabs_client import consts, CasperLabsClient, utils
+from casperlabs_client import consts, CasperLabsClient, reformat
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "show-deploy"
@@ -26,4 +26,4 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
         wait_for_processed=args.get("wait_for_processed", False),
         timeout_seconds=args.get("timeout_seconds", consts.STATUS_TIMEOUT),
     )
-    print(utils.hexify(response))
+    print(reformat.hexify(response))

@@ -1,6 +1,6 @@
 from typing import Dict
 
-from casperlabs_client import CasperLabsClient, utils
+from casperlabs_client import CasperLabsClient, reformat
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "show-peers"
@@ -14,6 +14,6 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
     i = 0
     for i, node in enumerate(peers, 1):
         print(f"------------- node {i} ---------------")
-        print(utils.hexify(node))
+        print(reformat.hexify(node))
     print("-----------------------------------------------------")
     print(f"count: {i}")
