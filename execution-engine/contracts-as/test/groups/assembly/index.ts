@@ -199,8 +199,6 @@ function createEntryPoints(): CL.EntryPoints {
   );
   entryPoints.addEntryPoint(call_restricted_entry_points);
 
-
-
   return entryPoints;
 }
 

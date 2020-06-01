@@ -36,7 +36,6 @@ function getPurseName(): String {
   return fromBytesString(purseNameBytes).unwrap();
 }
 
-
 export function add(): void {
   let purseName = getPurseName();
   let purse = createPurse();
@@ -76,7 +75,6 @@ export function call(): void {
         CL.EntryPointType.Contract,
     );
   entryPoints.addEntryPoint(add);
-
 
   let version = new CL.EntryPoint(
       METHOD_VERSION,
