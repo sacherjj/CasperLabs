@@ -19,7 +19,7 @@ import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{raiseValidateErrorThroughApplicativeError, Validation}
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.models.{ArbitraryConsensus, Message}
@@ -67,8 +67,8 @@ trait HighwayFixture
     }
 
   // Allow using strings for validator names where a ByteString key is required.
-  implicit def `String => PublicKeyBS`(s: String): PublicKeyBS =
-    PublicKey(ByteString.copyFromUtf8(s))
+  implicit def `String => PublicKeyHashBS`(s: String): Keys.PublicKeyHashBS =
+    Keys.PublicKeyHash(ByteString.copyFromUtf8(s))
 
   import HighwayConf.{EraDuration, VotingDuration}
 
@@ -193,7 +193,7 @@ trait HighwayFixture
       chainName = chainName,
       genesis = genesisBlock,
       upgrades = Seq.empty,
-      maybeValidatorId = Some(validator: PublicKeyBS)
+      maybeValidatorId = Some(validator: Keys.PublicKeyHashBS)
     )
 
     implicit lazy val blockRelaying = new BlockRelaying[Task] {
@@ -226,7 +226,7 @@ trait HighwayFixture
           latest      <- tips.latestMessages
           parentBlock <- dag.lookupBlockUnsafe(parent)
           justifications = latest.map {
-            case (v, ms) => PublicKey(v) -> ms
+            case (v, ms) => Keys.PublicKeyHash(v) -> ms
           }
           b <- mp.ballot(
                 era.keyBlockHash,
@@ -244,7 +244,7 @@ trait HighwayFixture
           parentBlock <- dag.lookupBlockUnsafe(parent)
           latest      <- tips.latestMessages
           justifications = latest.map {
-            case (v, ms) => PublicKey(v) -> ms
+            case (v, ms) => Keys.PublicKeyHash(v) -> ms
           }
           b <- mp.block(
                 era.keyBlockHash,

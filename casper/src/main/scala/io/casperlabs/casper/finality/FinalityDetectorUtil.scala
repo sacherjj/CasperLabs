@@ -117,7 +117,7 @@ object FinalityDetectorUtil {
     // Assumes that validator always includes his last message as justification.
     val previousHashO = block.justifications
       .find(
-        _.validatorPublicKey == validator
+        _.validatorPublicKeyHash == validator
       )
       .map(_.latestBlockHash)
 

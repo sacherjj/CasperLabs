@@ -6,7 +6,7 @@ import cats.implicits._
 import io.casperlabs.casper.consensus.Block.MessageRole
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
-import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.crypto.Keys
 import io.casperlabs.models.Message
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import monix.eval.Task
@@ -78,7 +78,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
               keyBlockHash: BlockHash,
               roundId: Ticks,
               mainParent: Message.Block,
-              justifications: Map[PublicKeyBS, Set[Message]],
+              justifications: Map[Keys.PublicKeyHashBS, Set[Message]],
               isBookingBlock: Boolean,
               messageRole: MessageRole
           ) = Task.raiseError(new RuntimeException("Stop the agenda!"))
@@ -116,7 +116,7 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
             isSyncedRef = isSyncedRef
           ) (timer, db) {
 
-        val validatorId: PublicKeyBS              = validator
+        val validatorId: Keys.PublicKeyHashBS     = validator
         val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
 
         override lazy val blockRelaying = new BlockRelaying[Task] {

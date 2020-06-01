@@ -12,7 +12,7 @@ import io.casperlabs.casper.consensus.{Block, BlockSummary, Era}
 import io.casperlabs.casper.dag.DagOperations
 import io.casperlabs.casper.validation.Errors.ErrorMessageWrapper
 import io.casperlabs.catscontrib.{MakeSemaphore, MonadThrowable}
-import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
+import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS, PublicKeyHash, PublicKeyHashBS}
 import io.casperlabs.models.Message
 import io.casperlabs.metrics.implicits._
 import io.casperlabs.metrics.Metrics
@@ -56,7 +56,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     // we must protect the fork choice _and_ the message production with a common semaphore.
     // Also make sure that we only add one message from another validator at a time, so as
     // not to miss any equivocations that may happen if they arrive at the same time.
-    validatorSemaphoreMap: SemaphoreMap[F, PublicKeyBS],
+    validatorSemaphoreMap: SemaphoreMap[F, PublicKeyHashBS],
     // Indicate whether the initial syncing mechanism that runs when the node is started
     // is still ongoing, or it has concluded and the node is caught up with its peers.
     // Before that, responding to messages risks creating an equivocation, in case some
@@ -80,6 +80,9 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   val endTick   = Ticks(era.endTick)
   val start     = conf.toInstant(startTick)
   val end       = conf.toInstant(endTick)
+
+  private val bondedValidators: Set[PublicKeyHashBS] =
+    era.bonds.map(_.validatorPublicKeyHash).map(PublicKeyHash).toSet
 
   val bookingBoundaries =
     conf.criticalBoundaries(start, end, delayDuration = conf.bookingDuration)
@@ -525,7 +528,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
       ) >>
       check(
         "The validator is not bonded in the era.",
-        era.bonds.find(_.validatorPublicKey == message.validatorId).isEmpty
+        !bondedValidators(message.validatorId)
       ) >> {
       message match {
         case b: Message.Block =>
@@ -732,7 +735,9 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               ),
             _ => ().pure[F]
           )
-      semaphore      <- validatorSemaphoreMap.getOrAdd(PublicKey(block.getHeader.validatorPublicKey))
+      semaphore <- validatorSemaphoreMap.getOrAdd(
+                    PublicKeyHash(block.getHeader.validatorPublicKeyHash)
+                  )
       isBookingBlock <- message.isBookingBlock
       _              <- messageExecutor.validateAndAdd(semaphore, block, isBookingBlock)
     } yield Validated(message)
@@ -775,7 +780,7 @@ object EraRuntime {
       leaderFunction   <- leaderSequencer[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
       dag              <- DagStorage[F].getRepresentation
-      semaphoreMap     <- SemaphoreMap[F, PublicKeyBS](1)
+      semaphoreMap     <- SemaphoreMap[F, PublicKeyHashBS](1)
     } yield {
       new EraRuntime[F](
         conf,
@@ -785,7 +790,7 @@ object EraRuntime {
         // Whether the validator is bonded depends on the booking block. Only bonded validators
         // have to produce blocks and ballots in the era.
         maybeMessageProducer.filter { mp =>
-          era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
+          era.bonds.exists(b => b.validatorPublicKeyHash == mp.validatorId)
         },
         semaphoreMap,
         isSynced,
@@ -859,7 +864,7 @@ object EraRuntime {
       message: Message
   ): F[Boolean] =
     message.justifications
-      .filter(_.validatorPublicKey == message.validatorId)
+      .filter(_.validatorPublicKeyHash == message.validatorId)
       .toList
       .findM[F] { j =>
         dag.lookupUnsafe(j.latestBlockHash).map(isSameRoundAs(message))

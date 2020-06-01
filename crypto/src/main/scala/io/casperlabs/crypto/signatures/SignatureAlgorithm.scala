@@ -2,12 +2,12 @@ package io.casperlabs.crypto.signatures
 
 import java.io.StringReader
 
-import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, Signature}
+import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, PublicKeyHash, Signature}
 import io.casperlabs.crypto.codec.Base64
 import org.bouncycastle.openssl.PEMKeyPair
-
 import scala.util.control.NonFatal
 import scala.util.{Random, Try}
+import io.casperlabs.crypto.Keys
 
 /**
   * Useful links:
@@ -54,6 +54,9 @@ sealed trait SignatureAlgorithm {
     val signature = sign(a, privateKey)
     verify(a, signature, publicKey)
   }
+
+  /** Compute a unique hash from the algorithm name and a public key, used for accounts. */
+  val publicKeyHash: PublicKey => PublicKeyHash = Keys.publicKeyHash(name)
 }
 
 object SignatureAlgorithm {
@@ -75,7 +78,6 @@ object SignatureAlgorithm {
     */
   object Ed25519 extends SignatureAlgorithm {
 
-    import io.casperlabs.crypto.codec.Base64
     import org.abstractj.kalium.keys.{SigningKey, VerifyKey}
 
     override def name: String = "ed25519"

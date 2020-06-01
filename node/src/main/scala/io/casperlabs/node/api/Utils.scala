@@ -52,15 +52,15 @@ object Utils {
       )
       .adaptError(adaptError)
 
-  def validateAccountPublicKey[F[_]: MonadThrowable](
-      keyBase16: String,
-      key: ByteString,
+  def validateAccountPublicKeyHash[F[_]: MonadThrowable](
+      hashBase16: String,
+      hash: ByteString,
       adaptError: PartialFunction[Throwable, Throwable] = PartialFunction.empty
   ): F[String] =
     Utils
       .check[F, String](
-        fallback(keyBase16, key),
-        "AccountPublicKey must be 64 base16 characters (32 bytes) long",
+        fallback(hashBase16, hash),
+        "AccountHash must be 64 base16 characters (32 bytes) long",
         _.matches("[a-f0-9]{64}")
       )
       .adaptError(adaptError)
