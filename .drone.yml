@@ -954,6 +954,50 @@ steps:
   depends_on:
     - package-ee-tag
 
+- name: build-docker-tag
+  image: "casperlabs/buildenv:latest"
+  commands:
+  - "export DOCKER_LATEST_TAG=${DRONE_TAG}"
+  - "make docker-build/node"
+  - "make docker-build/client"
+  - "make docker-build/execution-engine"
+  - "make docker-build/key-generator"
+  - "make docker-build/explorer"
+  - "make docker-build/grpcwebproxy"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+    - package-ee-tag
+
+- name: publish-docker-tag
+  image: "casperlabs/buildenv:latest"
+  environment:
+    DOCKER_PASSWORD:
+      from_secret: docker_password
+    DOCKER_USERNAME:
+      from_secret: docker_username
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  commands:
+  - |
+      echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+      docker push casperlabs/node:"${DRONE_TAG}"
+      docker push casperlabs/client:"${DRONE_TAG}"
+      docker push casperlabs/execution-engine:"${DRONE_TAG}"
+      docker push casperlabs/key-generator:"${DRONE_TAG}"
+      docker push casperlabs/explorer:"${DRONE_TAG}"
+      docker push casperlabs/grpcwebproxy:"${DRONE_TAG}"
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+    - build-docker-tag
+
 - name: mac-ee-tarball-tag
   image: appleboy/drone-ssh:1.5.5
   environment:
