@@ -7,6 +7,7 @@ import cats.implicits._
 import com.google.common.cache.{Cache, CacheBuilder, RemovalListener, RemovalNotification}
 import io.casperlabs.casper.consensus.{Block, BlockSummary}
 import io.casperlabs.casper.consensus.info.BlockInfo
+import io.casperlabs.casper.consensus.info.BlockInfo.Status.Finality
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.models.Message
 import io.casperlabs.storage.DagStorageMetricsSource
@@ -17,6 +18,7 @@ import io.casperlabs.storage.dag.DagStorage.{MeteredDagRepresentation, MeteredDa
 import io.casperlabs.catscontrib.MonadThrowable
 
 import scala.collection.concurrent.TrieMap
+import java.util.concurrent.TimeUnit
 
 class CachingDagStorage[F[_]: Concurrent](
     // How far to go to the past (by ranks) for caching neighborhood of looked up block
@@ -30,6 +32,8 @@ class CachingDagStorage[F[_]: Concurrent](
     private[dag] val childrenCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
+    private[dag] val finalityCache: Cache[BlockHash, FinalityStorage.FinalityStatus],
+    private[dag] val lfbCache: Ref[F, Option[BlockHash]],
     private[dag] val ranksRanges: TrieMap[Rank, Unit],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
@@ -42,10 +46,32 @@ class CachingDagStorage[F[_]: Concurrent](
     ranksRanges ++= (start to end).map((_, ()))
   }
 
-  private def cacheOrUnderlying[A](fromCache: => Option[A], fromUnderlying: F[A]) =
+  private def cacheOrUnderlying[A](
+      fromCache: => Option[A],
+      fromUnderlying: F[A],
+      intoCache: A => Unit = (_: A) => ()
+  ) =
     Sync[F].delay(fromCache) flatMap {
-      case None    => fromUnderlying
+      case None =>
+        fromUnderlying map { a =>
+          intoCache(a); a
+        }
       case Some(a) => a.pure[F]
+    }
+
+  private def cacheOrUnderlyingF[A](
+      fromCache: F[Option[A]],
+      fromUnderlying: F[A],
+      intoCache: A => F[Unit]
+  ) =
+    fromCache flatMap {
+      case None =>
+        for {
+          a <- fromUnderlying
+          _ <- intoCache(a)
+        } yield a
+      case Some(a) =>
+        a.pure[F]
     }
 
   private def cacheOrUnderlyingOpt[A](fromCache: => Option[A], fromUnderlying: F[Option[A]]) =
@@ -124,7 +150,12 @@ class CachingDagStorage[F[_]: Concurrent](
     for {
       dag     <- underlying.insert(block)
       message <- Sync[F].fromTry(Message.fromBlock(block))
-      _       <- semaphore.withPermit(unsafeCacheMessage(message))
+      _ <- semaphore.withPermit {
+            unsafeCacheMessage(message) *>
+              // Every block is inserted only once. At that point it's fate should be undecided,
+              // marked as finalized or orphaned later. We can't assume the same in `unsafeCacheMessage` itself.
+              Sync[F].delay(finalityCache.put(block.blockHash, Finality.UNDECIDED))
+          }
     } yield dag
 
   override def checkpoint(): F[Unit] = underlying.checkpoint()
@@ -133,7 +164,10 @@ class CachingDagStorage[F[_]: Concurrent](
     Sync[F].delay {
       childrenCache.invalidateAll()
       justificationCache.invalidateAll()
-    } >> underlying.clear()
+      messagesCache.invalidateAll()
+      finalityCache.invalidateAll()
+      ranksRanges.clear()
+    } >> lfbCache.set(None) >> underlying.clear()
 
   override def close(): F[Unit] = underlying.close()
 
@@ -183,12 +217,29 @@ class CachingDagStorage[F[_]: Concurrent](
       secondary: Set[BlockHash],
       orphaned: Set[BlockHash]
   ): F[Unit] =
-    underlying.markAsFinalized(mainParent, secondary, orphaned)
+    for {
+      _ <- lfbCache.set(Some(mainParent))
+      _ <- underlying.markAsFinalized(mainParent, secondary, orphaned)
+      _ <- Sync[F].delay {
+            finalityCache.put(mainParent, Finality.FINALIZED)
+            secondary.foreach(finalityCache.put(_, Finality.FINALIZED))
+            orphaned.foreach(finalityCache.put(_, Finality.ORPHANED))
+          }
+    } yield ()
 
   override def getFinalityStatus(block: BlockHash): F[FinalityStorage.FinalityStatus] =
-    underlying.getFinalityStatus(block)
+    cacheOrUnderlying(
+      Option(finalityCache.getIfPresent(block)),
+      underlying.getFinalityStatus(block),
+      finalityCache.put(block, _)
+    )
 
-  override def getLastFinalizedBlock: F[BlockHash] = underlying.getLastFinalizedBlock
+  override def getLastFinalizedBlock: F[BlockHash] =
+    cacheOrUnderlyingF(
+      lfbCache.get,
+      underlying.getLastFinalizedBlock,
+      intoCache = a => lfbCache.set(Some(a))
+    )
 }
 
 object CachingDagStorage {
@@ -239,12 +290,21 @@ object CachingDagStorage {
           .build[BlockHash, Message]()
       }
 
+    val createFinalityCache = Sync[F].delay {
+      CacheBuilder
+        .newBuilder()
+        .expireAfterWrite(1, TimeUnit.HOURS)
+        .build[BlockHash, Finality]
+    }
+
     for {
       ranksRanges        <- Sync[F].delay(TrieMap.empty[Rank, Unit])
       semaphore          <- Semaphore[F](1)
       childrenCache      <- createBlockHashesSetCache
       justificationCache <- createBlockHashesSetCache
       messagesCache      <- createMessagesCache(createMessageRemovalListener(ranksRanges))
+      finalityCache      <- createFinalityCache
+      lfbCache           <- Ref.of[F, Option[BlockHash]](None)
 
       store = new CachingDagStorage[F](
         neighborhoodBefore,
@@ -253,6 +313,8 @@ object CachingDagStorage {
         childrenCache,
         justificationCache,
         messagesCache,
+        finalityCache,
+        lfbCache,
         ranksRanges,
         semaphore
       ) with MeteredDagStorage[F] with MeteredDagRepresentation[F] {
