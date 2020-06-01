@@ -975,6 +975,7 @@ steps:
 
 - name: publish-docker-tag
   image: "casperlabs/buildenv:latest"
+  failure: "ignore"
   environment:
     DOCKER_PASSWORD:
       from_secret: docker_password
