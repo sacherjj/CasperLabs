@@ -1,14 +1,14 @@
 use std::convert::TryInto;
 
 use engine_shared::{
-    account::Account, contract_wasm::ContractWasm, motes::Motes, newtypes::CorrelationId,
-    stored_value::StoredValue, wasm, TypeMismatch,
+    account::Account, motes::Motes, newtypes::CorrelationId, stored_value::StoredValue, wasm,
+    TypeMismatch,
 };
 use engine_storage::global_state::StateReader;
 use engine_wasm_prep::Preprocessor;
 use types::{
     account::PublicKey, CLValue, Contract, ContractHash, ContractPackage, ContractPackageHash,
-    ContractWasmHash, Key, U512,
+    ContractWasm, ContractWasmHash, Key, U512,
 };
 
 use crate::{execution, tracking_copy::TrackingCopy};
@@ -52,7 +52,7 @@ pub trait TrackingCopyExt<R> {
         contract_hash: ContractHash,
     ) -> Result<Contract, Self::Error>;
 
-    /// Gets a contract metadata by Key
+    /// Gets a contract package by Key
     fn get_contract_package(
         &mut self,
         correlation_id: CorrelationId,
@@ -179,9 +179,9 @@ where
     ) -> Result<ContractPackage, Self::Error> {
         let key = contract_package_hash.into();
         match self.get(correlation_id, &key).map_err(Into::into)? {
-            Some(StoredValue::ContractPackage(contract_metadata)) => Ok(contract_metadata),
+            Some(StoredValue::ContractPackage(contract_package)) => Ok(contract_package),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
-                "ContractMetadata".to_string(),
+                "Contractpackage".to_string(),
                 other.type_name(),
             ))),
             None => Err(execution::Error::KeyNotFound(key)),

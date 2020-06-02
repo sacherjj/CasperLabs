@@ -29,7 +29,7 @@ const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 
-const ARG_MINT_METADATA_HASH: &str = "mint_contract_metadata_hash";
+const ARG_MINT_PACKAGE_HASH: &str = "mint_contract_package_hash";
 const ARG_GENESIS_VALIDATORS: &str = "genesis_validators";
 
 #[ignore]
@@ -76,7 +76,7 @@ fn should_run_pos_install_contract() {
         DEPLOY_HASH_2,
         "install",
         runtime_args! {
-            ARG_MINT_METADATA_HASH => mint_package_hash,
+            ARG_MINT_PACKAGE_HASH => mint_package_hash,
             ARG_GENESIS_VALIDATORS => genesis_validators,
         },
         vec![],

@@ -269,7 +269,7 @@ where
             let proof_of_stake_installer_module =
                 preprocessor.preprocess(proof_of_stake_installer_bytes)?;
             let args = runtime_args! {
-                "mint_contract_metadata_hash" => mint_package_hash,
+                "mint_contract_package_hash" => mint_package_hash,
                 "genesis_validators" => bonded_validators,
             };
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();

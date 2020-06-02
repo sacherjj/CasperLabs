@@ -1,4 +1,4 @@
-//! Data types for contract metadata (including version and method type signatures)
+//! Data types for supporting contract headers feature.
 
 use crate::{
     alloc::string::ToString,
@@ -15,7 +15,7 @@ use alloc::{
 use core::fmt;
 
 /// Maximum number of distinct user groups.
-pub const MAX_GROUP_UREFS: u8 = 10;
+pub const MAX_GROUPS: u8 = 10;
 /// Maximum number of URefs which can be assigned across all user groups.
 pub const MAX_TOTAL_UREFS: usize = 100;
 
@@ -23,30 +23,30 @@ pub const MAX_TOTAL_UREFS: usize = 100;
 #[derive(Debug, PartialEq)]
 #[repr(u8)]
 pub enum Error {
-    /// Attempt to add/remove contract versions without the right access key.
-    InvalidAccessKey = 1,
     /// Attempt to override an existing or previously existing version with a
     /// new header (this is not allowed to ensure immutability of a given
     /// version).
-    PreviouslyUsedVersion = 2,
-    /// Attempted to remove a version that does not exist.
-    VersionNotFound = 3,
+    PreviouslyUsedVersion = 1,
+    /// Attempted to disable a contract that does not exist.
+    ContractNotFound = 2,
     /// Attempted to create a user group which already exists (use the update
     /// function to change an existing user group).
-    GroupAlreadyExists = 4,
+    GroupAlreadyExists = 3,
     /// Attempted to add a new user group which exceeds the allowed maximum
     /// number of groups.
-    MaxGroupsExceeded = 5,
+    MaxGroupsExceeded = 4,
     /// Attempted to add a new URef to a group, which resulted in the total
     /// number of URefs across all user groups to exceed the allowed maximum.
-    MaxTotalURefsExceeded = 6,
+    MaxTotalURefsExceeded = 5,
     /// Attempted to remove a URef from a group, which does not exist in the
     /// group.
-    GroupDoesNotExist = 7,
+    GroupDoesNotExist = 6,
     /// Attempted to remove unknown URef from the group.
-    UnableToRemoveURef = 8,
+    UnableToRemoveURef = 7,
     /// Group is use by at least one active contract.
-    GroupInUse = 9,
+    GroupInUse = 8,
+    /// URef already exists in given group.
+    URefAlreadyExists = 9,
 }
 
 /// A (labelled) "user group". Each method of a versioned contract may be
@@ -89,7 +89,7 @@ impl FromBytes for Group {
 }
 
 /// Automatically incremented value for a contract version within a major `ProtocolVersion`.
-pub type ContractVersion = u8;
+pub type ContractVersion = u32;
 
 /// Within each discrete major `ProtocolVersion`, contract version resets to this value.
 pub const CONTRACT_INITIAL_VERSION: ContractVersion = 1;
@@ -147,7 +147,7 @@ impl ToBytes for ContractVersionKey {
 impl FromBytes for ContractVersionKey {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (major, rem): (u32, &[u8]) = FromBytes::from_bytes(bytes)?;
-        let (contract, rem): (u8, &[u8]) = FromBytes::from_bytes(rem)?;
+        let (contract, rem): (ContractVersion, &[u8]) = FromBytes::from_bytes(rem)?;
         Ok((ContractVersionKey::new(major, contract), rem))
     }
 }
@@ -162,7 +162,7 @@ impl fmt::Display for ContractVersionKey {
 pub type ContractVersions = BTreeMap<ContractVersionKey, ContractHash>;
 
 /// Collection of contract versions that are no longer supported.
-pub type RemovedVersions = BTreeSet<ContractVersionKey>;
+pub type DisabledVersions = BTreeSet<ContractVersionKey>;
 
 /// Collection of different versions of the same contract.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -173,7 +173,7 @@ pub struct ContractPackage {
     /// Versions that can be called
     // versions: BTreeMap<SemVer, Contract>,
     /// Old versions that are no longer supported
-    disabled_versions: RemovedVersions,
+    disabled_versions: DisabledVersions,
     /// Mapping maintaining the set of URefs associated with each "user
     /// group". This can be used to control access to methods in a particular
     /// version of the contract. A method is callable by any context which
@@ -182,7 +182,7 @@ pub struct ContractPackage {
 }
 
 impl ContractPackage {
-    /// Create new `ContractMetadata` (with no versions) from given access key.
+    /// Create new `ContractPackage` (with no versions) from given access key.
     pub fn new(access_key: URef) -> Self {
         ContractPackage {
             access_key,
@@ -192,7 +192,7 @@ impl ContractPackage {
         }
     }
 
-    /// Get the access key for this ContractMetadata.
+    /// Get the access key for this ContractPackage.
     pub fn access_key(&self) -> URef {
         self.access_key
     }
@@ -242,15 +242,17 @@ impl ContractPackage {
     }
 
     /// Remove the given version from active versions, putting it into removed versions.
-    pub fn disable_contract_version(
-        &mut self,
-        contract_version_key: ContractVersionKey,
-    ) -> Result<(), Error> {
-        if !self.versions.contains_key(&contract_version_key) {
-            return Err(Error::VersionNotFound);
-        }
-        // idempotent; do not error if already removed
-        self.disabled_versions.insert(contract_version_key.clone());
+    pub fn disable_contract_version(&mut self, contract_hash: ContractHash) -> Result<(), Error> {
+        let key = self
+            .versions
+            .iter()
+            .filter_map(|(k, v)| if *v == contract_hash { Some(*k) } else { None })
+            .next()
+            .ok_or(Error::ContractNotFound)?;
+
+        self.versions.remove(&key).unwrap(); // Assumed to be safe as the existing key is found by the value
+        self.disabled_versions.insert(key);
+
         Ok(())
     }
 
@@ -269,13 +271,13 @@ impl ContractPackage {
         self.versions
     }
 
-    /// Get removed versions set.
-    pub fn removed_versions(&self) -> &RemovedVersions {
+    /// Get disabled versions set.
+    pub fn disabled_versions(&self) -> &DisabledVersions {
         &self.disabled_versions
     }
 
     /// Returns mutable versions
-    pub fn removed_versions_mut(&mut self) -> &mut RemovedVersions {
+    pub fn disabled_versions_mut(&mut self) -> &mut DisabledVersions {
         &mut self.disabled_versions
     }
 
@@ -339,7 +341,7 @@ impl FromBytes for ContractPackage {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (access_key, bytes) = URef::from_bytes(bytes)?;
         let (versions, bytes) = ContractVersions::from_bytes(bytes)?;
-        let (disabled_versions, bytes) = RemovedVersions::from_bytes(bytes)?;
+        let (disabled_versions, bytes) = DisabledVersions::from_bytes(bytes)?;
         let (groups, bytes) = BTreeMap::<Group, BTreeSet<URef>>::from_bytes(bytes)?;
         let result = ContractPackage {
             access_key,
@@ -535,14 +537,14 @@ impl Contract {
         &self.named_keys
     }
 
-    /// Returns a mutable reference to `named_keys`
-    pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
-        &mut self.named_keys
-    }
-
     /// Appends `keys` to `named_keys`
     pub fn named_keys_append(&mut self, keys: &mut NamedKeys) {
         self.named_keys.append(keys);
+    }
+
+    /// Removes given named key.
+    pub fn remove_named_key(&mut self, key: &str) -> Option<Key> {
+        self.named_keys.remove(key)
     }
 
     /// Determines if `Contract` is compatibile with a given `ProtocolVersion`.
@@ -970,21 +972,41 @@ mod tests {
 
     #[test]
     fn roundtrip_serialization() {
-        let contract_metadata = make_contract_package();
-        let bytes = contract_metadata.to_bytes().expect("should serialize");
-        let (decoded_metadata, rem) =
+        let contract_package = make_contract_package();
+        let bytes = contract_package.to_bytes().expect("should serialize");
+        let (decoded_package, rem) =
             ContractPackage::from_bytes(&bytes).expect("should deserialize");
-        assert_eq!(contract_metadata, decoded_metadata);
+        assert_eq!(contract_package, decoded_package);
         assert_eq!(rem.len(), 0);
     }
 
     #[test]
     fn should_remove_group() {
-        let mut contract_metadata = make_contract_package();
+        let mut contract_package = make_contract_package();
 
-        assert!(!contract_metadata.remove_group(&Group::new("Non-existent group")));
-        assert!(contract_metadata.remove_group(&Group::new("Group 1")));
-        assert!(!contract_metadata.remove_group(&Group::new("Group 1"))); // Group no longer exists
+        assert!(!contract_package.remove_group(&Group::new("Non-existent group")));
+        assert!(contract_package.remove_group(&Group::new("Group 1")));
+        assert!(!contract_package.remove_group(&Group::new("Group 1"))); // Group no longer exists
     }
 
+    #[test]
+    fn should_disable_contract_version() {
+        const CONTRACT_HASH: ContractHash = [123; 32];
+        let mut contract_package = make_contract_package();
+
+        assert_eq!(
+            contract_package.disable_contract_version(CONTRACT_HASH),
+            Err(Error::ContractNotFound)
+        );
+
+        let next_version = contract_package.insert_contract_version(1, CONTRACT_HASH);
+        assert!(contract_package.is_version_active(next_version));
+
+        assert_eq!(
+            contract_package.disable_contract_version(CONTRACT_HASH),
+            Ok(())
+        );
+        assert_eq!(contract_package.get_contract(next_version), None);
+        assert!(!contract_package.is_version_active(next_version));
+    }
 }

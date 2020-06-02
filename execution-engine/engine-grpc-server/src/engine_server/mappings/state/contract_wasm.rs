@@ -1,5 +1,5 @@
 use crate::engine_server::state;
-use engine_shared::contract_wasm::ContractWasm;
+use types::ContractWasm;
 
 impl From<ContractWasm> for state::ContractWasm {
     fn from(contract: ContractWasm) -> Self {
@@ -21,7 +21,7 @@ mod tests {
 
     use super::*;
     use crate::engine_server::mappings::test_utils;
-    use engine_shared::contract_wasm::{gens, ContractWasm};
+    use types::gens;
 
     proptest! {
         #[test]

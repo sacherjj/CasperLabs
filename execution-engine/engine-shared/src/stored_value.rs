@@ -3,10 +3,10 @@ use std::convert::TryFrom;
 use types::{
     bytesrepr::{self, FromBytes, ToBytes, U8_SERIALIZED_LENGTH},
     contracts::ContractPackage,
-    CLValue, Contract,
+    CLValue, Contract, ContractWasm,
 };
 
-use crate::{account::Account, contract_wasm::ContractWasm, TypeMismatch};
+use crate::{account::Account, TypeMismatch};
 
 #[repr(u8)]
 enum Tag {
@@ -57,7 +57,7 @@ impl StoredValue {
 
     pub fn as_contract_package(&self) -> Option<&ContractPackage> {
         match self {
-            StoredValue::ContractPackage(metadata) => Some(&metadata),
+            StoredValue::ContractPackage(contract_package) => Some(&contract_package),
             _ => None,
         }
     }
@@ -68,7 +68,7 @@ impl StoredValue {
             StoredValue::Account(_) => "Account".to_string(),
             StoredValue::ContractWasm(_) => "Contract".to_string(),
             StoredValue::Contract(_) => "Contract".to_string(),
-            StoredValue::ContractPackage(_) => "ContractMetadata".to_string(),
+            StoredValue::ContractPackage(_) => "ContractPackage".to_string(),
         }
     }
 }
@@ -120,7 +120,7 @@ impl TryFrom<StoredValue> for ContractPackage {
 
     fn try_from(stored_value: StoredValue) -> Result<Self, Self::Error> {
         match stored_value {
-            StoredValue::ContractPackage(metadata) => Ok(metadata),
+            StoredValue::ContractPackage(contract_package) => Ok(contract_package),
             _ => Err(TypeMismatch::new(
                 "ContractPackage".to_string(),
                 stored_value.type_name(),
@@ -153,7 +153,9 @@ impl ToBytes for StoredValue {
                 (Tag::ContractWasm, contract_wasm.to_bytes()?)
             }
             StoredValue::Contract(contract_header) => (Tag::Contract, contract_header.to_bytes()?),
-            StoredValue::ContractPackage(metadata) => (Tag::ContractPackage, metadata.to_bytes()?),
+            StoredValue::ContractPackage(contract_package) => {
+                (Tag::ContractPackage, contract_package.to_bytes()?)
+            }
         };
         result.push(tag as u8);
         result.append(&mut serialized_data);
@@ -167,7 +169,9 @@ impl ToBytes for StoredValue {
                 StoredValue::Account(account) => account.serialized_length(),
                 StoredValue::ContractWasm(contract_wasm) => contract_wasm.serialized_length(),
                 StoredValue::Contract(contract_header) => contract_header.serialized_length(),
-                StoredValue::ContractPackage(metadata) => metadata.serialized_length(),
+                StoredValue::ContractPackage(contract_package) => {
+                    contract_package.serialized_length()
+                }
             }
     }
 }
@@ -185,8 +189,11 @@ impl FromBytes for StoredValue {
                     (StoredValue::ContractWasm(contract_wasm), remainder)
                 })
             }
-            tag if tag == Tag::ContractPackage as u8 => ContractPackage::from_bytes(remainder)
-                .map(|(metadata, remainder)| (StoredValue::ContractPackage(metadata), remainder)),
+            tag if tag == Tag::ContractPackage as u8 => {
+                ContractPackage::from_bytes(remainder).map(|(contract_package, remainder)| {
+                    (StoredValue::ContractPackage(contract_package), remainder)
+                })
+            }
             tag if tag == Tag::Contract as u8 => Contract::from_bytes(remainder)
                 .map(|(contract, remainder)| (StoredValue::Contract(contract), remainder)),
             _ => Err(bytesrepr::Error::Formatting),
@@ -200,7 +207,8 @@ pub mod gens {
     use types::gens::cl_value_arb;
 
     use super::StoredValue;
-    use crate::{account::gens::account_arb, contract_wasm::gens::contract_wasm_arb};
+    use crate::account::gens::account_arb;
+    use types::gens::contract_wasm_arb;
 
     pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         prop_oneof![

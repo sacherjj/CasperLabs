@@ -50,7 +50,7 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
 
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
-    // Create contract metadata and store contract ver: 1.0.0 with "delegate" entry function
+    // Create contract package and store contract ver: 1.0.0 with "delegate" entry function
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
@@ -65,7 +65,7 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
         builder.exec(exec_request).expect_success().commit();
     }
 
-    // Calling initial version from contract metadata hash, should have no effects
+    // Calling initial version from contract package hash, should have no effects
     {
         let exec_request = {
             ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
@@ -142,7 +142,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
 
     builder.run_genesis(&*DEFAULT_RUN_GENESIS_REQUEST);
 
-    // Create contract metadata and store contract ver: 1.0.0
+    // Create contract package and store contract ver: 1.0.0
     {
         let exec_request = {
             let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CONTRACT_NAME);
@@ -176,7 +176,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
         .expect("should have hash");
 
     // TODO This does not seem to call properly
-    // Calling initial stored version from contract metadata hash, should have no effects
+    // Calling initial stored version from contract package hash, should have no effects
     {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);
         let args = runtime_args! {

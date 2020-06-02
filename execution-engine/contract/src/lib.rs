@@ -20,6 +20,7 @@
 //! use casperlabs_types::{Key, URef};
 //!
 //! const KEY: &str = "special_value";
+//! const ARG_VALUE: &str = "value";
 //!
 //! fn store(value: i32) {
 //!     // Store `value` under a new unforgeable reference.
@@ -36,7 +37,7 @@
 //! #[no_mangle]
 //! pub extern "C" fn call() {
 //!     // Get the optional first argument supplied to the argument.
-//!     let value: i32 = runtime::get_named_arg("value");
+//!     let value: i32 = runtime::get_named_arg(ARG_VALUE);
 //!     store(value);
 //! }
 //! # fn main() {}

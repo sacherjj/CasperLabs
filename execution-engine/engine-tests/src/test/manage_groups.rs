@@ -10,11 +10,11 @@ use engine_test_support::{
 };
 use lazy_static::lazy_static;
 use std::{collections::BTreeSet, iter::FromIterator};
-use types::{contracts, contracts::MAX_GROUP_UREFS, runtime_args, Group, Key, RuntimeArgs};
+use types::{contracts, contracts::MAX_GROUPS, runtime_args, Group, Key, RuntimeArgs};
 
 const CONTRACT_GROUPS: &str = "manage_groups.wasm";
-const METADATA_HASH_KEY: &str = "metadata_hash_key";
-const METADATA_ACCESS_KEY: &str = "metadata_access_key";
+const PACKAGE_HASH_KEY: &str = "package_hash_key";
+const PACKAGE_ACCESS_KEY: &str = "package_access_key";
 const CREATE_GROUP: &str = "create_group";
 const REMOVE_GROUP: &str = "remove_group";
 const EXTEND_GROUP_UREFS: &str = "extend_group_urefs";
@@ -60,23 +60,23 @@ fn should_create_and_remove_group() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
@@ -92,20 +92,20 @@ fn should_create_and_remove_group() {
     builder.exec(exec_request_2).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
-    assert_eq!(contract_metadata.groups().len(), 1);
-    let group_1 = contract_metadata
+        .expect("should be package");
+    assert_eq!(contract_package.groups().len(), 1);
+    let group_1 = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
         .expect("should have group");
     assert_eq!(group_1.len(), 2);
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
@@ -114,7 +114,7 @@ fn should_create_and_remove_group() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 REMOVE_GROUP,
                 args,
@@ -130,13 +130,13 @@ fn should_create_and_remove_group() {
     builder.exec(exec_request_3).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
+        .expect("should be package");
     assert_eq!(
-        contract_metadata.groups().get(&Group::new(GROUP_1_NAME)),
+        contract_package.groups().get(&Group::new(GROUP_1_NAME)),
         None
     );
 }
@@ -166,23 +166,23 @@ fn should_create_and_extend_user_group() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
@@ -198,20 +198,20 @@ fn should_create_and_extend_user_group() {
     builder.exec(exec_request_2).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
-    assert_eq!(contract_metadata.groups().len(), 1);
-    let group_1 = contract_metadata
+        .expect("should be package");
+    assert_eq!(contract_package.groups().len(), 1);
+    let group_1 = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
         .expect("should have group");
     assert_eq!(group_1.len(), 2);
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
@@ -221,7 +221,7 @@ fn should_create_and_extend_user_group() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 EXTEND_GROUP_UREFS,
                 args,
@@ -237,12 +237,12 @@ fn should_create_and_extend_user_group() {
     builder.exec(exec_request_3).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
-    let group_1_extended = contract_metadata
+        .expect("should be package");
+    let group_1_extended = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
         .expect("should have group");
@@ -277,23 +277,23 @@ fn should_create_and_remove_urefs_from_group() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
@@ -309,13 +309,13 @@ fn should_create_and_remove_urefs_from_group() {
     builder.exec(exec_request_2).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
-    assert_eq!(contract_metadata.groups().len(), 1);
-    let group_1 = contract_metadata
+        .expect("should be package");
+    assert_eq!(contract_package.groups().len(), 1);
+    let group_1 = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
         .expect("should have group");
@@ -324,7 +324,7 @@ fn should_create_and_remove_urefs_from_group() {
     let urefs_to_remove = Vec::from_iter(group_1.to_owned());
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
@@ -334,7 +334,7 @@ fn should_create_and_remove_urefs_from_group() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 REMOVE_GROUP_UREFS,
                 args,
@@ -350,12 +350,12 @@ fn should_create_and_remove_urefs_from_group() {
     builder.exec(exec_request_3).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
-    let group_1_modified = contract_metadata
+        .expect("should be package");
+    let group_1_modified = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
         .expect("should have group 1");
@@ -387,23 +387,23 @@ fn should_limit_max_urefs_while_extending() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
@@ -419,20 +419,20 @@ fn should_limit_max_urefs_while_extending() {
     builder.exec(exec_request_2).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
-    assert_eq!(contract_metadata.groups().len(), 1);
-    let group_1 = contract_metadata
+        .expect("should be package");
+    assert_eq!(contract_package.groups().len(), 1);
+    let group_1 = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
         .expect("should have group");
     assert_eq!(group_1.len(), 2);
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
@@ -442,7 +442,7 @@ fn should_limit_max_urefs_while_extending() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 EXTEND_GROUP_UREFS,
                 args,
@@ -456,7 +456,7 @@ fn should_limit_max_urefs_while_extending() {
     };
 
     let exec_request_4 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
@@ -467,7 +467,7 @@ fn should_limit_max_urefs_while_extending() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 EXTEND_GROUP_UREFS,
                 args,
@@ -483,16 +483,16 @@ fn should_limit_max_urefs_while_extending() {
     builder.exec(exec_request_3).expect_success().commit();
 
     let query_result = builder
-        .query(None, *metadata_hash, &[])
+        .query(None, *package_hash, &[])
         .expect("should have result");
-    let contract_metadata = query_result
+    let contract_package = query_result
         .as_contract_package()
-        .expect("should be metadata");
-    let group_1_modified = contract_metadata
+        .expect("should be package");
+    let group_1_modified = contract_package
         .groups()
         .get(&Group::new(GROUP_1_NAME))
         .expect("should have group 1");
-    assert_eq!(group_1_modified.len(), MAX_GROUP_UREFS as usize);
+    assert_eq!(group_1_modified.len(), MAX_GROUPS as usize);
 
     // Tries to exceed the limit by 1
     builder.exec(exec_request_4).commit();

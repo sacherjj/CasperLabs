@@ -86,7 +86,7 @@ impl ExecuteRequestBuilder {
         ExecuteRequestBuilder::new().push_deploy(deploy)
     }
 
-    /// Calls a versioned contract from contract metadata hash key_name
+    /// Calls a versioned contract from contract package hash key_name
     pub fn versioned_contract_call_by_hash_key_name(
         sender: PublicKey,
         hash_key_name: &str,

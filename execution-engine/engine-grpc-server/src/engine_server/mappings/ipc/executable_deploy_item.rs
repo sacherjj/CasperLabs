@@ -101,7 +101,7 @@ impl From<ExecutableDeployItem> for DeployPayload {
             } => {
                 let inner = result.mut_stored_package_by_name();
                 inner.set_name(name);
-                inner.set_version(version.into());
+                inner.set_version(version);
                 inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }
@@ -113,7 +113,7 @@ impl From<ExecutableDeployItem> for DeployPayload {
             } => {
                 let inner = result.mut_stored_package_by_hash();
                 inner.set_hash(hash.to_vec());
-                inner.set_version(version.into());
+                inner.set_version(version);
                 inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }

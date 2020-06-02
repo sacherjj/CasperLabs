@@ -68,7 +68,7 @@ message ContractPackage {
     }
     Key.URef access_key = 1;
     repeated Version active_versions = 2;
-    repeated ContractVersionKey removed_versions = 3;
+    repeated ContractVersionKey disabled_versions = 3;
     repeated Group groups = 4;
 }
 

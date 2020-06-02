@@ -13,7 +13,7 @@ use types::{
     contracts::{
         EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, CONTRACT_INITIAL_VERSION,
     },
-    runtime_args, CLType, ContractHash, ContractPackageHash, Key, RuntimeArgs, URef,
+    runtime_args, CLType, ContractHash, ContractPackageHash, Key, RuntimeArgs,
 };
 
 const PACKAGE_HASH_KEY: &str = "package_hash_key";
@@ -61,7 +61,7 @@ pub extern "C" fn add_new_key() {
 #[no_mangle]
 pub extern "C" fn add_new_key_as_session() {
     let contract_package_hash = runtime::get_key(PACKAGE_HASH_KEY)
-        .expect("should have metadata hash")
+        .expect("should have package hash")
         .into_hash()
         .unwrap_or_revert();
 
@@ -145,7 +145,7 @@ fn create_entrypoints_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(package_hash: ContractPackageHash, access_uref: URef) -> ContractHash {
+fn install_version_1(package_hash: ContractPackageHash) -> ContractHash {
     let contract_named_keys = {
         let contract_variable = storage::new_uref(0);
 
@@ -155,7 +155,7 @@ fn install_version_1(package_hash: ContractPackageHash, access_uref: URef) -> Co
     };
 
     let entry_points = create_entrypoints_1();
-    storage::add_contract_version(package_hash, access_uref, entry_points, contract_named_keys)
+    storage::add_contract_version(package_hash, entry_points, contract_named_keys)
 }
 
 #[no_mangle]
@@ -165,5 +165,5 @@ pub extern "C" fn call() {
 
     runtime::put_key(PACKAGE_HASH_KEY, contract_package_hash.into());
     runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
-    install_version_1(contract_package_hash, access_uref);
+    install_version_1(contract_package_hash);
 }

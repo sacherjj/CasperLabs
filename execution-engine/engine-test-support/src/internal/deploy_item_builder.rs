@@ -6,7 +6,7 @@ use engine_core::{
 };
 use types::{
     account::PublicKey, bytesrepr::ToBytes, contracts::ContractVersion, ContractHash, HashAddr,
-    RuntimeArgs, URef,
+    RuntimeArgs,
 };
 
 use crate::internal::utils;
@@ -66,18 +66,6 @@ impl DeployItemBuilder {
         self
     }
 
-    pub(crate) fn with_stored_payment_uref_addr(
-        self,
-        _uref_addr: Vec<u8>,
-        _args: RuntimeArgs,
-    ) -> Self {
-        todo!("with_stored_payment_uref_addr")
-    }
-
-    pub fn with_stored_payment_uref(self, _uref: URef, _args: RuntimeArgs) -> Self {
-        todo!("with_stored_payment_uref")
-    }
-
     pub fn with_stored_payment_named_key(
         mut self,
         uref_name: &str,
@@ -118,18 +106,6 @@ impl DeployItemBuilder {
             args,
         });
         self
-    }
-
-    pub(crate) fn with_stored_session_uref_addr(
-        self,
-        _uref_addr: Vec<u8>,
-        _args: RuntimeArgs,
-    ) -> Self {
-        todo!("with_stored_session_uref_addr")
-    }
-
-    pub fn with_stored_session_uref(self, _uref: URef, _args: RuntimeArgs) -> Self {
-        todo!("with_stored_session_uref")
     }
 
     pub fn with_stored_session_named_key(

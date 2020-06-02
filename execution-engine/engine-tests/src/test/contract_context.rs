@@ -103,14 +103,14 @@ fn should_calling_session_and_contract_has_correct_context() {
         .cloned()
         .expect("should be account");
 
-    let _metadata_hash = account
+    let _package_hash = account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
-        .expect("should have contract metadata");
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
         .get(PACKAGE_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .expect("should have package hash");
 
     let account = builder
         .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])

@@ -21,8 +21,8 @@ use types::{
         UpdateKeyFailure, Weight,
     },
     bytesrepr, AccessRights, BlockTime, CLType, CLValue, Contract, ContractPackage,
-    EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
-    KEY_HASH_LENGTH,
+    ContractPackageHash, EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion,
+    RuntimeArgs, URef, KEY_HASH_LENGTH,
 };
 
 use crate::{
@@ -181,12 +181,11 @@ where
         mut contract: Contract,
         name: &str,
     ) -> Result<(), Error> {
-        contract.named_keys_mut().remove(name);
-
+        if contract.remove_named_key(name).is_none() {
+            return Ok(());
+        }
         let contract_value = StoredValue::Contract(contract);
-
         self.tracking_copy.borrow_mut().write(key, contract_value);
-
         Ok(())
     }
 
@@ -228,11 +227,7 @@ where
                 let contract: Contract = self.read_gs_typed(&contract_hash)?;
                 self.named_keys.remove(name);
                 self.remove_key_from_contract(contract_hash, contract, name)
-            } /* contract_local @ Key::Local { .. } => {
-               *     let contract: Contract = self.read_gs_typed(&contract_local)?;
-               *     self.named_keys.remove(name);
-               *     self.remove_key_from_contract(contract_local, contract, name)
-               * } */
+            }
         }
     }
 
@@ -361,9 +356,6 @@ where
         } else {
             Ok(None)
         }
-
-        // let seed = self.seed();
-        // self.read_ls_with_seed(seed, key)
     }
 
     pub fn write_ls(&mut self, key_bytes: &[u8], cl_value: CLValue) -> Result<(), Error> {
@@ -375,9 +367,6 @@ where
             });
         }
         let hash: [u8; KEY_HASH_LENGTH] = key_bytes.try_into().unwrap();
-        // let seed = self.seed();
-        // let hash = hash()
-        // let key = Key::Hash(key_bytes);
         self.tracking_copy
             .borrow_mut()
             .write(hash.into(), StoredValue::CLValue(cl_value));
@@ -629,7 +618,6 @@ where
             Key::Account(_) => &self.base_key() == key,
             Key::Hash(_) => true,
             Key::URef(uref) => uref.is_readable(),
-            // Key::Local { .. } => false,
         }
     }
 
@@ -638,7 +626,6 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => &self.base_key() == key,
             Key::URef(uref) => uref.is_addable(),
-            // Key::Local { .. } => false,
         }
     }
 
@@ -647,7 +634,6 @@ where
         match key {
             Key::Account(_) | Key::Hash(_) => false,
             Key::URef(uref) => uref.is_writeable(),
-            // Key::Local { .. } => false,
         }
     }
 
@@ -856,17 +842,15 @@ where
         self.entry_point_type
     }
 
-    /// Extends given user group with new urefs
-    // pub fn extend_contract_user_group_urefs(&self, metadata_key: Key, access_key: URef, label:
-    // String, new_urefs_count: usize) ->  {
-    pub fn get_contract_metadata(
+    /// Gets given contract package with its access_key validated against current context.
+    pub(crate) fn get_validated_contract_package(
         &mut self,
-        metadata_key: Key,
-        access_key: URef,
+        package_hash: ContractPackageHash,
     ) -> Result<ContractPackage, Error> {
-        self.validate_key(&metadata_key)?;
-        self.validate_uref(&access_key)?;
-        let metadata: ContractPackage = self.read_gs_typed(&metadata_key)?;
-        Ok(metadata)
+        let package_hash_key = Key::from(package_hash);
+        self.validate_key(&package_hash_key)?;
+        let contract_package: ContractPackage = self.read_gs_typed(&Key::from(package_hash))?;
+        self.validate_uref(&contract_package.access_key())?;
+        Ok(contract_package)
     }
 }

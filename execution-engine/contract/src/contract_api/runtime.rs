@@ -74,7 +74,7 @@ pub fn call_contract<T: CLTyped + FromBytes>(
     deserialize_contract_result(bytes_written)
 }
 
-/// Invokes the specified `entry_point_name` of stored logic at a specific `contract_metadata_hash`
+/// Invokes the specified `entry_point_name` of stored logic at a specific `contract_package_hash`
 /// address, for a specific `contract_version`, passing the provided `runtime_args`
 ///
 /// If the stored contract calls [`ret`], then that value is returned from

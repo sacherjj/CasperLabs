@@ -8,8 +8,8 @@ import { Pair } from "../../../../contract-as/assembly/pair";
 import { RuntimeArgs } from "../../../../contract-as/assembly/runtime_args";
 
 const CONTRACT_INITIAL_VERSION: u8 = 1;
-const METADATA_HASH_KEY = "metadata_hash_key";
-const METADATA_ACCESS_KEY = "metadata_access_key";
+const PACKAGE_HASH_KEY = "package_hash_key";
+const PACKAGE_ACCESS_KEY = "package_access_key";
 const RESTRICTED_CONTRACT = "restricted_contract";
 const RESTRICTED_SESSION = "restricted_session";
 const RESTRICTED_SESSION_CALLER = "restricted_session_caller";
@@ -18,7 +18,7 @@ const RESTRICTED_CONTRACT_CALLER_AS_SESSION = "restricted_contract_caller_as_ses
 const UNCALLABLE_SESSION = "uncallable_session";
 const UNCALLABLE_CONTRACT = "uncallable_contract";
 const CALL_RESTRICTED_ENTRY_POINTS = "call_restricted_entry_points";
-
+const ARG_PACKAGE_HASH = "package_hash";
 
 
 export function restricted_session(): void { }
@@ -26,10 +26,10 @@ export function restricted_session(): void { }
 export function restricted_contract(): void { }
 
 export function restricted_session_caller(): void {
-  let metadata_hash_bytes = CL.getNamedArg("metadata_hash");
-  let metadataKey = Key.fromBytes(metadata_hash_bytes).unwrap();
+  let packageHashBytes = CL.getNamedArg(ARG_PACKAGE_HASH);
+  let packageKey = Key.fromBytes(packageHashBytes).unwrap();
   CL.callVersionedContract(
-    <Uint8Array>metadataKey.hash,
+    <Uint8Array>packageKey.hash,
     CONTRACT_INITIAL_VERSION,
     RESTRICTED_SESSION,
     new RuntimeArgs(),
@@ -37,10 +37,10 @@ export function restricted_session_caller(): void {
 }
 
 function contract_caller(): void {
-  let metadata_hash_bytes = CL.getNamedArg("metadata_hash");
-  let metadataKey = Key.fromBytes(metadata_hash_bytes).unwrap();
+  let packageHashBytes = CL.getNamedArg(ARG_PACKAGE_HASH);
+  let packageKey = Key.fromBytes(packageHashBytes).unwrap();
   CL.callVersionedContract(
-    <Uint8Array>metadataKey.hash,
+    <Uint8Array>packageKey.hash,
     CONTRACT_INITIAL_VERSION,
     RESTRICTED_CONTRACT,
     new RuntimeArgs(),
@@ -67,8 +67,8 @@ export function call_restricted_entry_points(): void {
 }
 
 
-function createGroup(packageHash: Uint8Array, accessURef: URef): URef {
-  let key = Key.create(CLValue.fromURef(accessURef));
+function createGroup(packageHash: Uint8Array): URef {
+  let key = Key.create(CLValue.fromU64(0));
   if (key === null) {
     Error.fromErrorCode(ErrorCode.Formatting).revert();
     return <URef>unreachable();
@@ -80,7 +80,6 @@ function createGroup(packageHash: Uint8Array, accessURef: URef): URef {
 
   let newURefs = CL.createContractUserGroup(
     packageHash,
-    accessURef,
     "Group 1",
     1,
     existingURefs,
@@ -113,10 +112,11 @@ function createEntryPoints(): CL.EntryPoints {
   );
   entryPoints.addEntryPoint(restricted_contract);
 
+  let restrictedSessionCallerParams = new Array<Pair<String, CLType>>();
+  restrictedSessionCallerParams.push(new Pair(ARG_PACKAGE_HASH, new CLType(CLTypeTag.Key)));
   let restricted_session_caller = new CL.EntryPoint(
     RESTRICTED_SESSION_CALLER,
-    new Array<Pair<String, CLType>>(),
-    // vec![Parameter::new("metadata_hash", CLType::Key)],
+    restrictedSessionCallerParams,
     new CLType(CLTypeTag.Unit),
     new CL.PublicAccess(),
     CL.EntryPointType.Session,
@@ -204,7 +204,6 @@ function createEntryPoints(): CL.EntryPoints {
 
 function installVersion1(
   contractPackageHash: Uint8Array,
-  accessURef: URef,
   restrictedURef: URef,
 ): void {
   let contractVariable = Key.create(CLValue.fromI32(0));
@@ -222,7 +221,6 @@ function installVersion1(
 
   let bytes = CL.addContractVersion(
     contractPackageHash,
-    accessURef,
     entryPoints,
     namedKeys,
   );
@@ -233,9 +231,9 @@ function installVersion1(
 
 export function call(): void {
   let createResult = CL.createContractPackageAtHash();
-  CL.putKey(METADATA_HASH_KEY, Key.fromHash(createResult.packageHash));
-  CL.putKey(METADATA_ACCESS_KEY, Key.fromURef(createResult.accessURef));
+  CL.putKey(PACKAGE_HASH_KEY, Key.fromHash(createResult.packageHash));
+  CL.putKey(PACKAGE_ACCESS_KEY, Key.fromURef(createResult.accessURef));
 
-  let restrictedURef = createGroup(createResult.packageHash, createResult.accessURef);
-  installVersion1(createResult.packageHash, createResult.accessURef, restrictedURef);
+  let restrictedURef = createGroup(createResult.packageHash);
+  installVersion1(createResult.packageHash, restrictedURef);
 }

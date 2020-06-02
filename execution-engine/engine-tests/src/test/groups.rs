@@ -14,13 +14,13 @@ use types::{
 };
 
 const CONTRACT_GROUPS: &str = "groups.wasm";
-const METADATA_HASH_KEY: &str = "metadata_hash_key";
-const METADATA_ACCESS_KEY: &str = "metadata_access_key";
+const PACKAGE_HASH_KEY: &str = "package_hash_key";
+const PACKAGE_ACCESS_KEY: &str = "package_access_key";
 const RESTRICTED_SESSION: &str = "restricted_session";
 const RESTRICTED_CONTRACT: &str = "restricted_contract";
 const RESTRICTED_SESSION_CALLER: &str = "restricted_session_caller";
 const UNRESTRICTED_CONTRACT_CALLER: &str = "unrestricted_contract_caller";
-const METADATA_HASH_ARG: &str = "metadata_hash";
+const PACKAGE_HASH_ARG: &str = "package_hash";
 const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_as_session";
@@ -62,24 +62,24 @@ fn should_call_group_restricted_session() {
         .cloned()
         .expect("should be account");
 
-    let _metadata_hash = account
+    let _package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {};
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_SESSION,
                 args,
@@ -127,23 +127,23 @@ fn should_call_group_restricted_session_caller() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_SESSION_CALLER,
                 args,
@@ -199,21 +199,21 @@ fn should_not_call_restricted_session_from_wrong_account() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_3 = {
         let args = runtime_args! {};
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_stored_versioned_contract_by_hash(
-                metadata_hash.into_hash().expect("should be hash"),
+                package_hash.into_hash().expect("should be hash"),
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_SESSION,
                 args,
@@ -279,23 +279,23 @@ fn should_not_call_restricted_session_caller_from_wrong_account() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_3 = {
         let args = runtime_args! {
-            "metadata_hash"=> metadata_hash.clone(),
+            "package_hash"=> package_hash.clone(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_stored_versioned_contract_by_hash(
-                metadata_hash.into_hash().expect("should be hash"),
+                package_hash.into_hash().expect("should be hash"),
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_SESSION_CALLER,
                 args,
@@ -352,26 +352,26 @@ fn should_call_group_restricted_contract() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_CONTRACT,
                 args,
@@ -426,26 +426,26 @@ fn should_not_call_group_restricted_contract_from_wrong_account() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_stored_versioned_contract_by_hash(
-                metadata_hash.into_hash().expect("should be hash"),
+                package_hash.into_hash().expect("should be hash"),
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_CONTRACT,
                 args,
@@ -495,23 +495,23 @@ fn should_call_group_unrestricted_contract_caller() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 UNRESTRICTED_CONTRACT_CALLER,
                 args,
@@ -563,26 +563,26 @@ fn should_call_unrestricted_contract_caller_from_different_account() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_stored_versioned_contract_by_hash(
-                metadata_hash.into_hash().expect("should be hash"),
+                package_hash.into_hash().expect("should be hash"),
                 CONTRACT_INITIAL_VERSION,
                 UNRESTRICTED_CONTRACT_CALLER,
                 args,
@@ -630,26 +630,26 @@ fn should_call_group_restricted_contract_as_session() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_hash(
-                metadata_hash.into_hash().expect("should be hash"),
+                package_hash.into_hash().expect("should be hash"),
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_CONTRACT_CALLER_AS_SESSION,
                 args,
@@ -697,26 +697,26 @@ fn should_call_group_restricted_contract_as_session_from_wrong_account() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_3 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
             .with_stored_versioned_contract_by_hash(
-                metadata_hash.into_hash().expect("should be hash"),
+                package_hash.into_hash().expect("should be hash"),
                 CONTRACT_INITIAL_VERSION,
                 RESTRICTED_CONTRACT_CALLER_AS_SESSION,
                 args,
@@ -766,26 +766,26 @@ fn should_not_call_uncallable_contract_from_deploy() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 UNCALLABLE_SESSION,
                 args,
@@ -810,12 +810,12 @@ fn should_not_call_uncallable_contract_from_deploy() {
 
     let exec_request_3 = {
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 CALL_RESTRICTED_ENTRY_POINTS,
                 args,
@@ -856,26 +856,26 @@ fn should_not_call_uncallable_session_from_deploy() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let exec_request_2 = {
-        // This inserts metadata as an argument because this test
+        // This inserts package as an argument because this test
         // can work from different accounts which might not have the same keys in their session
         // code.
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 UNCALLABLE_CONTRACT,
                 args,
@@ -900,12 +900,12 @@ fn should_not_call_uncallable_session_from_deploy() {
 
     let exec_request_3 = {
         let args = runtime_args! {
-            METADATA_HASH_ARG => *metadata_hash,
+            PACKAGE_HASH_ARG => package_hash.into_hash(),
         };
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 CONTRACT_INITIAL_VERSION,
                 CALL_RESTRICTED_ENTRY_POINTS,
                 args,

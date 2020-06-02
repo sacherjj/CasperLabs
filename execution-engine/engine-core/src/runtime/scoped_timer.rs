@@ -120,11 +120,11 @@ impl Drop for ScopedTimer {
             FunctionIndex::GetSystemContractIndex => "host_function_get_system_contract",
             FunctionIndex::GetMainPurseIndex => "host_function_get_main_purse",
             FunctionIndex::ReadHostBufferIndex => "host_function_read_host_buffer",
-            FunctionIndex::CreateContractMetadataAtHash => {
+            FunctionIndex::CreateContractPackageAtHash => {
                 "host_function_create_contract_package_at_hash"
             }
             FunctionIndex::AddContractVersion => "host_function_add_contract_version",
-            FunctionIndex::RemoveContractVersion => "host_remove_contract_version",
+            FunctionIndex::DisableContractVersion => "host_remove_contract_version",
             FunctionIndex::CallVersionedContract => "host_call_versioned_contract",
             FunctionIndex::CreateContractUserGroup => "create_contract_user_group",
             #[cfg(feature = "test-support")]
@@ -133,7 +133,7 @@ impl Drop for ScopedTimer {
             FunctionIndex::GetRuntimeArgIndex => "host_get_named_arg",
             FunctionIndex::RemoveContractUserGroupIndex => "host_remove_contract_user_group",
             FunctionIndex::ExtendContractUserGroupURefsIndex => {
-                "host_extend_contract_user_group_urefs"
+                "host_provision_contract_user_group_urefs"
             }
             FunctionIndex::RemoveContractUserGroupURefsIndex => {
                 "host_remove_contract_user_group_urefs"

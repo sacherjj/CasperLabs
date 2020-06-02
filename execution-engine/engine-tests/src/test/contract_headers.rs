@@ -8,8 +8,8 @@ use engine_test_support::{
 use types::{runtime_args, Key, RuntimeArgs, SemVer};
 
 const CONTRACT_HEADERS: &str = "contract_headers.wasm";
-const METADATA_HASH_KEY: &str = "metadata_hash_key";
-const METADATA_ACCESS_KEY: &str = "metadata_access_key";
+const PACKAGE_HASH_KEY: &str = "package_hash_key";
+const PACKAGE_ACCESS_KEY: &str = "package_access_key";
 const STEP_1: i32 = 5;
 const STEP_2: i32 = 6;
 const STEP_3: i32 = 42;
@@ -27,7 +27,7 @@ fn should_calling_session_and_contract_has_correct_context() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 SemVer::V1_0_0,
                 "session_code_test",
                 args,
@@ -45,7 +45,7 @@ fn should_calling_session_and_contract_has_correct_context() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 SemVer::V1_0_0,
                 "contract_code_test",
                 args,
@@ -63,7 +63,7 @@ fn should_calling_session_and_contract_has_correct_context() {
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
-                METADATA_HASH_KEY,
+                PACKAGE_HASH_KEY,
                 SemVer::V1_0_0,
                 "add_new_key_as_session",
                 args,
@@ -94,14 +94,14 @@ fn should_calling_session_and_contract_has_correct_context() {
         .cloned()
         .expect("should be account");
 
-    let metadata_hash = account
+    let package_hash = account
         .named_keys()
-        .get(METADATA_HASH_KEY)
-        .expect("should have contract metadata");
+        .get(PACKAGE_HASH_KEY)
+        .expect("should have contract package");
     let access_uref = account
         .named_keys()
-        .get(METADATA_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .get(PACKAGE_ACCESS_KEY)
+        .expect("should have package hash");
 
     let _foo = builder
         .get_exec_response(3)

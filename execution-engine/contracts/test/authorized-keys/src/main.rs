@@ -10,6 +10,9 @@ use types::{
     ApiError,
 };
 
+const ARG_KEY_MANAGEMENT_THRESHOLD: &str = "key_management_threshold";
+const ARG_DEPLOY_THRESHOLD: &str = "deploy_threshold";
+
 #[no_mangle]
 pub extern "C" fn call() {
     match account::add_associated_key(PublicKey::ed25519_from([123; 32]), Weight::new(100)) {
@@ -18,8 +21,8 @@ pub extern "C" fn call() {
         Ok(_) => {}
     };
 
-    let key_management_threshold: Weight = runtime::get_named_arg("key_management_threshold");
-    let deploy_threshold: Weight = runtime::get_named_arg("deploy_threshold");
+    let key_management_threshold: Weight = runtime::get_named_arg(ARG_KEY_MANAGEMENT_THRESHOLD);
+    let deploy_threshold: Weight = runtime::get_named_arg(ARG_DEPLOY_THRESHOLD);
 
     if key_management_threshold != Weight::new(0) {
         account::set_action_threshold(ActionType::KeyManagement, key_management_threshold)

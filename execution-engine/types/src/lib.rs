@@ -29,6 +29,7 @@ mod cl_type;
 mod cl_value;
 pub mod contracts;
 //mod contract_ref;
+mod contract_wasm;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
 mod key;
@@ -54,6 +55,7 @@ pub use contracts::{
     EntryPoints, Group, Parameter,
 };
 //pub use contract_ref::ContractRef;
+pub use contract_wasm::ContractWasm;
 #[doc(inline)]
 pub use key::{
     ContractHash, ContractPackageHash, ContractWasmHash, HashAddr, Key, BLAKE2B_DIGEST_LENGTH,

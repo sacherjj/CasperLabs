@@ -309,13 +309,10 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use types::{account::PublicKey, AccessRights, URef, U128, U256, U512};
+    use types::{account::PublicKey, AccessRights, ContractWasm, URef, U128, U256, U512};
 
     use super::*;
-    use crate::{
-        account::{Account, ActionThresholds, AssociatedKeys},
-        contract_wasm::ContractWasm,
-    };
+    use crate::account::{Account, ActionThresholds, AssociatedKeys};
 
     const ZERO_ARRAY: [u8; 32] = [0; 32];
     const ZERO_PUBLIC_KEY: PublicKey = PublicKey::ed25519_from(ZERO_ARRAY);

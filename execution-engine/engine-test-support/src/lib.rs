@@ -9,10 +9,11 @@
 //! use casperlabs_contract::contract_api::{runtime, storage};
 //! use casperlabs_types::{ApiError, Key};
 //! const KEY: &str = "special_value";
+//! const ARG_VALUE: &str = "value";
 //!
 //! #[no_mangle]
 //! pub extern "C" fn call() {
-//!     let value: String = runtime::get_named_arg("value");
+//!     let value: String = runtime::get_named_arg(ARG_VALUE);
 //!     let value_ref = storage::new_uref(value);
 //!     let value_key: Key = value_ref.into();
 //!     runtime::put_key(KEY, value_key);

@@ -162,19 +162,19 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
             ),
             "create_contract_package_at_hash" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 2][..], None),
-                FunctionIndex::CreateContractMetadataAtHash.into(),
+                FunctionIndex::CreateContractPackageAtHash.into(),
             ),
             "create_contract_user_group" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 9][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 8][..], Some(ValueType::I32)),
                 FunctionIndex::CreateContractUserGroup.into(),
             ),
             "add_contract_version" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 11][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 10][..], Some(ValueType::I32)),
                 FunctionIndex::AddContractVersion.into(),
             ),
-            "remove_contract_version" => FuncInstance::alloc_host(
+            "disable_contract_version" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
-                FunctionIndex::RemoveContractVersion.into(),
+                FunctionIndex::DisableContractVersion.into(),
             ),
             "call_contract" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
@@ -193,15 +193,15 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::GetRuntimeArgIndex.into(),
             ),
             "remove_contract_user_group" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
                 FunctionIndex::RemoveContractUserGroupIndex.into(),
             ),
-            "extend_contract_user_group_urefs" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
+            "provision_contract_user_group_urefs" => FuncInstance::alloc_host(
+                Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
                 FunctionIndex::ExtendContractUserGroupURefsIndex.into(),
             ),
             "remove_contract_user_group_urefs" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 7][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 6][..], Some(ValueType::I32)),
                 FunctionIndex::RemoveContractUserGroupURefsIndex.into(),
             ),
             #[cfg(feature = "test-support")]

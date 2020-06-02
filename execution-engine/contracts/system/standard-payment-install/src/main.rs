@@ -51,7 +51,7 @@ pub extern "C" fn install() {
     let named_keys = BTreeMap::new();
 
     let contract_key =
-        storage::add_contract_version(contract_package_hash, access_uref, entry_points, named_keys);
+        storage::add_contract_version(contract_package_hash, entry_points, named_keys);
 
     let return_value = CLValue::from_t(contract_key).unwrap_or_revert();
     runtime::ret(return_value);

@@ -6,7 +6,7 @@ extern crate alloc;
 use alloc::string::String;
 
 use contract::contract_api::runtime;
-use types::{runtime_args, ContractPackageHash, RuntimeArgs};
+use types::{contracts::ContractVersion, runtime_args, ContractPackageHash, RuntimeArgs};
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const PURSE_NAME_ARG_NAME: &str = "purse_name";
@@ -18,7 +18,7 @@ const ARG_VERSION: &str = "version";
 pub extern "C" fn call() {
     let contract_package_hash: ContractPackageHash = runtime::get_named_arg(ARG_CONTRACT_PACKAGE);
     let new_purse_name: String = runtime::get_named_arg(ARG_NEW_PURSE_NAME);
-    let version_number: u8 = runtime::get_named_arg(ARG_VERSION);
+    let version_number: ContractVersion = runtime::get_named_arg(ARG_VERSION);
 
     let args = runtime_args! {
         PURSE_NAME_ARG_NAME => new_purse_name,

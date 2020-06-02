@@ -33,9 +33,6 @@ impl SessionBuilder {
             Code::NamedKey(name, entry_point) => {
                 di_builder.with_stored_session_named_key(&name, &entry_point, session_args)
             }
-            Code::URef(uref) => {
-                di_builder.with_stored_session_uref_addr(uref.to_vec(), session_args)
-            }
             Code::Hash(hash, entry_point) => {
                 di_builder.with_stored_session_hash(hash, &entry_point, session_args)
             }
@@ -60,9 +57,6 @@ impl SessionBuilder {
                 self.di_builder
                     .with_stored_payment_named_key(&name, &entry_point, args)
             }
-            Code::URef(uref) => self
-                .di_builder
-                .with_stored_payment_uref_addr(uref.to_vec(), args),
             Code::Hash(hash, entry_point) => {
                 self.di_builder
                     .with_stored_payment_hash(hash, &entry_point, args)

@@ -50,10 +50,6 @@ pub enum Key {
     Hash(HashAddr),
     /// A `Key` which is a [`URef`], under which most types of data can be stored.
     URef(URef),
-    /* todo!(add contract related keys)
-    ContractPackage(ContractPackageHash),
-    ContractWasm(ContractWasmHash),
-    Contract(ContractHash), */
 }
 
 impl Key {
@@ -89,7 +85,6 @@ impl Key {
             }
             Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
             Key::URef(uref) => uref.as_string(),
-            // Key::Local { hash, .. } => format!("local-{}", base16::encode_lower(hash)),
         }
     }
 

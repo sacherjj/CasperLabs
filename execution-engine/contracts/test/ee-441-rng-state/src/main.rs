@@ -15,6 +15,8 @@ use types::{
     EntryPoints, Key, RuntimeArgs, URef, U512,
 };
 
+const ARG_FLAG: &str = "flag";
+
 #[no_mangle]
 pub extern "C" fn do_nothing() {
     // Doesn't advance RNG of the runtime
@@ -33,7 +35,7 @@ pub extern "C" fn do_something() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let flag: String = runtime::get_named_arg("flag");
+    let flag: String = runtime::get_named_arg(ARG_FLAG);
 
     let entry_points = {
         let mut entry_points = EntryPoints::new();

@@ -17,9 +17,7 @@ use parity_wasm::elements::Module;
 use wasmi::{ImportsBuilder, MemoryRef, ModuleInstance, ModuleRef, Trap, TrapKind};
 
 use ::mint::Mint;
-use engine_shared::{
-    account::Account, contract_wasm::ContractWasm, gas::Gas, stored_value::StoredValue,
-};
+use engine_shared::{account::Account, gas::Gas, stored_value::StoredValue};
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use proof_of_stake::ProofOfStake;
 use standard_payment::StandardPayment;
@@ -32,8 +30,8 @@ use types::{
     runtime_args, system_contract_errors,
     system_contract_errors::mint,
     AccessRights, ApiError, CLType, CLTyped, CLValue, ContractHash, ContractPackageHash,
-    ContractVersionKey, EntryPointType, Key, ProtocolVersion, RuntimeArgs, SystemContractType,
-    TransferResult, TransferredTo, URef, U128, U256, U512, UREF_SERIALIZED_LENGTH,
+    ContractVersionKey, ContractWasm, EntryPointType, Key, ProtocolVersion, RuntimeArgs,
+    SystemContractType, TransferResult, TransferredTo, URef, U128, U256, U512,
 };
 
 use crate::{
@@ -97,7 +95,6 @@ pub fn key_to_tuple(key: Key) -> Option<([u8; 32], AccessRights)> {
         Key::URef(uref) => Some((uref.addr(), uref.access_rights())),
         Key::Account(_) => None,
         Key::Hash(_) => None,
-        // Key::Local { .. } => None,
     }
 }
 
@@ -2302,9 +2299,9 @@ where
 
     fn create_contract_value(&mut self) -> Result<(StoredValue, URef), Error> {
         let access_key = self.context.new_unit_uref()?;
-        let contract_metadata = ContractPackage::new(access_key);
+        let contract_package = ContractPackage::new(access_key);
 
-        let value = StoredValue::ContractPackage(contract_metadata);
+        let value = StoredValue::ContractPackage(contract_package);
 
         Ok((value, access_key))
     }
@@ -2321,23 +2318,18 @@ where
     fn create_contract_user_group(
         &mut self,
         contract_package_hash: ContractPackageHash,
-        access_key: URef,
         label: String,
         num_new_urefs: u32,
         mut existing_urefs: BTreeSet<URef>,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
         let contract_package_key = contract_package_hash.into();
-        self.context.validate_key(&contract_package_key)?;
-        self.context.validate_uref(&access_key)?;
 
-        let mut metadata: ContractPackage = self.context.read_gs_typed(&contract_package_key)?;
+        let mut contract_package: ContractPackage = self
+            .context
+            .get_validated_contract_package(contract_package_hash)?;
 
-        if metadata.access_key() != access_key {
-            return Ok(Err(contracts::Error::InvalidAccessKey.into()));
-        }
-
-        let groups = metadata.groups_mut();
+        let groups = contract_package.groups_mut();
         let new_group = Group::new(label);
 
         // Ensure group does not already exist
@@ -2346,7 +2338,7 @@ where
         }
 
         // Ensure there are not too many groups
-        if groups.len() >= (contracts::MAX_GROUP_UREFS as usize) {
+        if groups.len() >= (contracts::MAX_GROUPS as usize) {
             return Ok(Err(contracts::Error::MaxGroupsExceeded.into()));
         }
 
@@ -2388,11 +2380,11 @@ where
             return Err(Error::Interpreter(error.into()));
         }
 
-        // Write updated metadata to the global state
-        self.context
-            .state()
-            .borrow_mut()
-            .write(contract_package_key, StoredValue::ContractPackage(metadata));
+        // Write updated package to the global state
+        self.context.state().borrow_mut().write(
+            contract_package_key,
+            StoredValue::ContractPackage(contract_package),
+        );
 
         Ok(Ok(()))
     }
@@ -2401,7 +2393,6 @@ where
     fn add_contract_version(
         &mut self,
         contract_package_hash: ContractPackageHash,
-        access_key: URef,
         entry_points: EntryPoints,
         mut named_keys: BTreeMap<String, Key>,
         output_ptr: u32,
@@ -2410,14 +2401,10 @@ where
     ) -> Result<Result<(), ApiError>, Error> {
         let contract_package_key = contract_package_hash.into();
         self.context.validate_key(&contract_package_key)?;
-        self.context.validate_uref(&access_key)?;
 
-        let mut contract_package: ContractPackage =
-            self.context.read_gs_typed(&contract_package_key)?;
-
-        if contract_package.access_key() != access_key {
-            return Ok(Err(contracts::Error::InvalidAccessKey.into()));
-        }
+        let mut contract_package: ContractPackage = self
+            .context
+            .get_validated_contract_package(contract_package_hash)?;
 
         let contract_wasm_hash = self.context.new_hash_address()?;
         let contract_wasm_key = Key::Hash(contract_wasm_hash);
@@ -2496,31 +2483,21 @@ where
         Ok(Ok(()))
     }
 
-    fn remove_contract_version(
+    fn disable_contract_version(
         &mut self,
         contract_package_hash: ContractPackageHash,
-        access_key: URef,
-        contract_version: ContractVersion,
+        contract_hash: ContractHash,
     ) -> Result<Result<(), ApiError>, Error> {
         let contract_package_key = contract_package_hash.into();
         self.context.validate_key(&contract_package_key)?;
-        self.context.validate_uref(&access_key)?;
 
-        let mut contract_package: ContractPackage =
-            self.context.read_gs_typed(&contract_package_key)?;
+        let mut contract_package: ContractPackage = self
+            .context
+            .get_validated_contract_package(contract_package_hash)?;
 
-        if contract_package.access_key() != access_key {
-            return Ok(Err(contracts::Error::InvalidAccessKey.into()));
+        if let Err(err) = contract_package.disable_contract_version(contract_hash) {
+            return Ok(Err(err.into()));
         }
-
-        let contract_version_key = ContractVersionKey::new(
-            self.context.protocol_version().value().major,
-            contract_version,
-        );
-
-        contract_package
-            .removed_versions_mut()
-            .insert(contract_version_key);
 
         self.context.state().borrow_mut().write(
             contract_package_key,
@@ -2968,12 +2945,6 @@ where
     }
 
     fn get_balance(&mut self, purse: URef) -> Result<Option<U512>, Error> {
-        // let seed = {
-        //     let mint_contract_hash = self.get_mint_contract();
-        //     let mint_contract: Contract =
-        // self.context.read_gs_typed(&mint_contract_hash.into())?;     mint_contract.
-        // contract_package_hash() };
-
         let key = purse.addr();
 
         let uref_key = match self.context.read_ls(&key)? {
@@ -3185,10 +3156,10 @@ where
     }
     pub fn validate_entry_point_access(
         &self,
-        metadata: &ContractPackage,
+        package: &ContractPackage,
         access: &EntryPointAccess,
     ) -> Result<(), Error> {
-        runtime_context::validate_entry_point_access_with(metadata, access, |uref| {
+        runtime_context::validate_entry_point_access_with(package, access, |uref| {
             self.context.validate_uref(uref).is_ok()
         })
     }
@@ -3196,21 +3167,14 @@ where
     /// Remove a user group from access to a contract
     fn remove_contract_user_group(
         &mut self,
-        metadata_key: Key,
-        access_key: URef,
-        label: String,
+        package_key: ContractPackageHash,
+        label: Group,
     ) -> Result<Result<(), ApiError>, Error> {
-        self.context.validate_key(&metadata_key)?;
-        self.context.validate_uref(&access_key)?;
-
-        let mut metadata: ContractPackage = self.context.read_gs_typed(&metadata_key)?;
-
-        if metadata.access_key() != access_key {
-            return Ok(Err(contracts::Error::InvalidAccessKey.into()));
-        }
+        let mut package: ContractPackage =
+            self.context.get_validated_contract_package(package_key)?;
 
         let group_to_remove = Group::new(label);
-        let groups = metadata.groups_mut();
+        let groups = package.groups_mut();
 
         // Ensure group exists in groups
         if groups.get(&group_to_remove).is_none() {
@@ -3219,57 +3183,46 @@ where
 
         // Remove group ensuring that it is not referenced by at least one entrypoint in active
         // versions.
-        if !metadata.remove_group(&group_to_remove) {
+        if !package.remove_group(&group_to_remove) {
             return Ok(Err(contracts::Error::GroupInUse.into()));
         }
 
-        // Write updated metadata to the global state
-        self.context
-            .state()
-            .borrow_mut()
-            .write(metadata_key, StoredValue::ContractPackage(metadata));
+        // Write updated package to the global state
+        self.context.state().borrow_mut().write(
+            Key::from(package_key),
+            StoredValue::ContractPackage(package),
+        );
         Ok(Ok(()))
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn extend_contract_user_group_urefs(
+    fn provision_contract_user_group_urefs(
         &mut self,
-        meta_key_ptr: u32,
-        meta_key_size: u32,
-        access_key_ptr: u32,
+        package_ptr: u32,
+        package_size: u32,
         label_ptr: u32,
         label_size: u32,
-        new_urefs_count: usize,
         output_size_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
-        let access_key = {
-            let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
-            bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-        };
+        let contract_package_hash = self.t_from_mem(package_ptr, package_size)?;
         let label: String = self.t_from_mem(label_ptr, label_size)?;
-        let mut metadata = self
+        let mut contract_package = self
             .context
-            .get_contract_metadata(metadata_key, access_key)?;
-
-        if metadata.access_key() != access_key {
-            return Ok(Err(contracts::Error::InvalidAccessKey.into()));
-        }
-
-        let groups = metadata.groups_mut();
+            .get_validated_contract_package(contract_package_hash)?;
+        let groups = contract_package.groups_mut();
 
         let group_label = Group::new(label);
 
         // Ensure there are not too many urefs
         let total_urefs: usize = groups.values().map(|urefs| urefs.len()).sum();
 
-        if total_urefs + new_urefs_count > contracts::MAX_TOTAL_UREFS {
+        if total_urefs + 1 > contracts::MAX_TOTAL_UREFS {
             return Ok(Err(contracts::Error::MaxTotalURefsExceeded.into()));
         }
 
         // Ensure given group exists and does not exceed limits
         let group = match groups.get_mut(&group_label) {
-            Some(group) if group.len() + new_urefs_count > contracts::MAX_GROUP_UREFS as usize => {
+            Some(group) if group.len() + 1 > contracts::MAX_GROUPS as usize => {
                 // Ensures there are not too many groups to fit in amount of new urefs
                 return Ok(Err(contracts::Error::MaxTotalURefsExceeded.into()));
             }
@@ -3278,22 +3231,20 @@ where
         };
 
         // Proceed with creating new URefs
-        let mut new_urefs = Vec::with_capacity(new_urefs_count as usize);
-        for _ in 0..new_urefs_count {
-            let u = self.context.new_unit_uref()?;
-            new_urefs.push(u);
+        let new_uref = self.context.new_unit_uref()?;
+        if !group.insert(new_uref) {
+            return Ok(Err(contracts::Error::URefAlreadyExists.into()));
         }
-        group.extend(new_urefs.iter());
 
         // check we can write to the host buffer
         if let Err(err) = self.check_host_buffer() {
             return Ok(Err(err));
         }
         // create CLValue for return value
-        let new_urefs_value = CLValue::from_t(new_urefs)?;
-        let value_size = new_urefs_value.inner_bytes().len();
+        let new_uref_value = CLValue::from_t(new_uref)?;
+        let value_size = new_uref_value.inner_bytes().len();
         // write return value to buffer
-        if let Err(err) = self.write_host_buffer(new_urefs_value) {
+        if let Err(err) = self.write_host_buffer(new_uref_value) {
             return Ok(Err(err));
         }
         // Write return value size to output location
@@ -3302,11 +3253,11 @@ where
             return Err(Error::Interpreter(error.into()));
         }
 
-        // Write updated metadata to the global state
-        self.context
-            .state()
-            .borrow_mut()
-            .write(metadata_key, StoredValue::ContractPackage(metadata));
+        // Write updated package to the global state
+        self.context.state().borrow_mut().write(
+            Key::from(contract_package_hash),
+            StoredValue::ContractPackage(contract_package),
+        );
 
         Ok(Ok(()))
     }
@@ -3314,31 +3265,23 @@ where
     #[allow(clippy::too_many_arguments)]
     fn remove_contract_user_group_urefs(
         &mut self,
-        meta_key_ptr: u32,
-        meta_key_size: u32,
-        access_key_ptr: u32,
+        package_ptr: u32,
+        package_size: u32,
         label_ptr: u32,
         label_size: u32,
         urefs_ptr: u32,
         urefs_size: u32,
     ) -> Result<Result<(), ApiError>, Error> {
-        let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
-        let access_key = {
-            let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
-            bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-        };
+        let contract_package_hash: ContractPackageHash =
+            self.t_from_mem(package_ptr, package_size)?;
         let label: String = self.t_from_mem(label_ptr, label_size)?;
         let urefs: BTreeSet<URef> = self.t_from_mem(urefs_ptr, urefs_size)?;
 
-        let mut metadata = self
+        let mut contract_package = self
             .context
-            .get_contract_metadata(metadata_key, access_key)?;
+            .get_validated_contract_package(contract_package_hash)?;
 
-        if metadata.access_key() != access_key {
-            return Ok(Err(contracts::Error::InvalidAccessKey.into()));
-        }
-
-        let groups = metadata.groups_mut();
+        let groups = contract_package.groups_mut();
         let group_label = Group::new(label);
 
         let group = match groups.get_mut(&group_label) {
@@ -3355,11 +3298,11 @@ where
                 return Ok(Err(contracts::Error::UnableToRemoveURef.into()));
             }
         }
-        // Write updated metadata to the global state
-        self.context
-            .state()
-            .borrow_mut()
-            .write(metadata_key, StoredValue::ContractPackage(metadata));
+        // Write updated package to the global state
+        self.context.state().borrow_mut().write(
+            Key::from(contract_package_hash),
+            StoredValue::ContractPackage(contract_package),
+        );
 
         Ok(Ok(()))
     }

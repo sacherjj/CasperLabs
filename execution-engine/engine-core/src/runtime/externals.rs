@@ -10,8 +10,7 @@ use types::{
     api_error,
     bytesrepr::{self, ToBytes},
     contracts::EntryPoints,
-    ContractHash, ContractPackageHash, Key, TransferredTo, URef, SEM_VER_SERIALIZED_LENGTH, U512,
-    UREF_SERIALIZED_LENGTH,
+    ContractHash, ContractPackageHash, Group, Key, TransferredTo, URef, U512,
 };
 
 use engine_shared::{gas::Gas, stored_value::StoredValue};
@@ -371,7 +370,7 @@ where
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
-            FunctionIndex::CreateContractMetadataAtHash => {
+            FunctionIndex::CreateContractPackageAtHash => {
                 // args(0) = pointer to wasm memory where to write 32-byte Hash address
                 // args(1) = pointer to wasm memory where to write 32-byte access key address
                 let (hash_dest_ptr, access_dest_ptr) = Args::parse(args)?;
@@ -382,19 +381,17 @@ where
             }
 
             FunctionIndex::CreateContractUserGroup => {
-                // args(0) = pointer to metadata key in wasm memory
-                // args(1) = size of metadata key in wasm memory
-                // args(2) = pointer to access key in wasm memory
-                // args(3) = pointer to group label in wasm memory
-                // args(4) = size of group label in wasm memory
-                // args(5) = number of new urefs to generate for the group
-                // args(6) = pointer to existing_urefs in wasm memory
-                // args(7) = size of existing_urefs in wasm memory
-                // args(8) = pointer to location to write size of output (written to host buffer)
+                // args(0) = pointer to package key in wasm memory
+                // args(1) = size of package key in wasm memory
+                // args(2) = pointer to group label in wasm memory
+                // args(3) = size of group label in wasm memory
+                // args(4) = number of new urefs to generate for the group
+                // args(5) = pointer to existing_urefs in wasm memory
+                // args(6) = size of existing_urefs in wasm memory
+                // args(7) = pointer to location to write size of output (written to host buffer)
                 let (
-                    meta_key_ptr,
-                    meta_key_size,
-                    access_key_ptr,
+                    package_key_ptr,
+                    package_key_size,
                     label_ptr,
                     label_size,
                     num_new_urefs,
@@ -404,18 +401,13 @@ where
                 ) = Args::parse(args)?;
 
                 let contract_package_hash: ContractPackageHash =
-                    self.t_from_mem(meta_key_ptr, meta_key_size)?;
-                let access_key = {
-                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
-                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-                };
+                    self.t_from_mem(package_key_ptr, package_key_size)?;
                 let label: String = self.t_from_mem(label_ptr, label_size)?;
                 let existing_urefs: BTreeSet<URef> =
                     self.t_from_mem(existing_urefs_ptr, existing_urefs_size)?;
 
                 let ret = self.create_contract_user_group(
                     contract_package_hash,
-                    access_key,
                     label,
                     num_new_urefs,
                     existing_urefs,
@@ -425,20 +417,18 @@ where
             }
 
             FunctionIndex::AddContractVersion => {
-                // args(0) = pointer to metadata key in wasm memory
-                // args(1) = size of metadata key in wasm memory
-                // args(2) = pointer to access key in wasm memory
-                // args(3) = pointer to entrypoints in wasm memory
-                // args(4) = size of entrypoints in wasm memory
-                // args(5) = pointer to named keys in wasm memory
-                // args(6) = size of named keys in wasm memory
-                // args(7) = pointer to output buffer for serialized key
-                // args(8) = size of output buffer
-                // args(9) = pointer to bytes written
+                // args(0) = pointer to package key in wasm memory
+                // args(1) = size of package key in wasm memory
+                // args(2) = pointer to entrypoints in wasm memory
+                // args(3) = size of entrypoints in wasm memory
+                // args(4) = pointer to named keys in wasm memory
+                // args(5) = size of named keys in wasm memory
+                // args(6) = pointer to output buffer for serialized key
+                // args(7) = size of output buffer
+                // args(8) = pointer to bytes written
                 let (
                     contract_package_hash_ptr,
                     contract_package_hash_size,
-                    access_key_ptr,
                     _version_ptr,
                     entry_points_ptr,
                     entry_points_size,
@@ -447,22 +437,16 @@ where
                     output_ptr,
                     output_size,
                     bytes_written_ptr,
-                ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
+                ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
 
                 let contract_package_hash: ContractPackageHash =
                     self.t_from_mem(contract_package_hash_ptr, contract_package_hash_size)?;
-
-                let access_key = {
-                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
-                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-                };
                 let entry_points: EntryPoints =
                     self.t_from_mem(entry_points_ptr, entry_points_size)?;
                 let named_keys: BTreeMap<String, Key> =
                     self.t_from_mem(named_keys_ptr, named_keys_size)?;
                 let ret = self.add_contract_version(
                     contract_package_hash,
-                    access_key,
                     entry_points,
                     named_keys,
                     output_ptr,
@@ -472,26 +456,18 @@ where
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
-            FunctionIndex::RemoveContractVersion => {
-                // args(0) = pointer to metadata key in wasm memory
-                // args(1) = size of metadata key in wasm memory
-                // args(2) = pointer to access key in wasm memory
-                // args(3) = pointer to contract version in wasm memory
-                let (meta_key_ptr, meta_key_size, access_key_ptr, version_ptr) = Args::parse(args)?;
+            FunctionIndex::DisableContractVersion => {
+                // args(0) = pointer to package hash in wasm memory
+                // args(1) = size of package hash in wasm memory
+                // args(2) = pointer to contract hash in wasm memory
+                // args(3) = size of contract hash in wasm memory
+                let (package_key_ptr, package_key_size, contract_hash_ptr, contract_hash_size) =
+                    Args::parse(args)?;
 
-                let contract_package_hash =
-                    self.key_from_mem(meta_key_ptr, meta_key_size)?.into_seed();
-                let access_key = {
-                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
-                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-                };
-                let version = {
-                    let bytes = self.bytes_from_mem(version_ptr, SEM_VER_SERIALIZED_LENGTH)?;
-                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-                };
+                let contract_package_hash = self.t_from_mem(package_key_ptr, package_key_size)?;
+                let contract_hash = self.t_from_mem(contract_hash_ptr, contract_hash_size)?;
 
-                let result =
-                    self.remove_contract_version(contract_package_hash, access_key, version)?;
+                let result = self.disable_contract_version(contract_package_hash, contract_hash)?;
 
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(result))))
             }
@@ -535,8 +511,8 @@ where
             }
 
             FunctionIndex::CallVersionedContract => {
-                // args(0) = pointer to contract_metadata_hash where contract is at in global state
-                // args(1) = size of contract_metadata_hash
+                // args(0) = pointer to contract_package_hash where contract is at in global state
+                // args(1) = size of contract_package_hash
                 // args(2) = pointer to contract version in wasm memory
                 // args(3) = pointer to method name in wasm memory
                 // args(4) = size of method name in wasm memory
@@ -544,8 +520,8 @@ where
                 // args(6) = size of arguments
                 // args(7) = pointer to result size (output)
                 let (
-                    contract_metadata_hash_ptr,
-                    contract_metadata_hash_size,
+                    contract_package_hash_ptr,
+                    contract_package_hash_size,
                     version,
                     entry_point_name_ptr,
                     entry_point_name_size,
@@ -554,8 +530,8 @@ where
                     result_size_ptr,
                 ) = Args::parse(args)?;
 
-                let contract_metadata_hash: ContractPackageHash =
-                    self.t_from_mem(contract_metadata_hash_ptr, contract_metadata_hash_size)?;
+                let contract_package_hash: ContractPackageHash =
+                    self.t_from_mem(contract_package_hash_ptr, contract_package_hash_size)?;
 
                 let entry_point_name: String =
                     self.t_from_mem(entry_point_name_ptr, entry_point_name_size)?;
@@ -565,7 +541,7 @@ where
                 };
 
                 let ret = self.call_versioned_contract_host_buffer(
-                    contract_metadata_hash,
+                    contract_package_hash,
                     version,
                     entry_point_name,
                     args_bytes,
@@ -604,67 +580,59 @@ where
             }
 
             FunctionIndex::RemoveContractUserGroupIndex => {
-                // args(0) = pointer to metadata key in wasm memory
-                // args(1) = size of metadata key in wasm memory
-                // args(2) = pointer to access key in wasm memory
-                // args(3) = pointer to contract version in wasm memory
-                // args(4) = pointer to label
-                // args(5) = label size
-                let (meta_key_ptr, meta_key_size, access_key_ptr, label_ptr, label_size) =
-                    Args::parse(args)?;
+                // args(0) = pointer to package key in wasm memory
+                // args(1) = size of package key in wasm memory
+                // args(2) = pointer to contract version in wasm memory
+                // args(3) = pointer to label
+                // args(4) = label size
+                let (package_key_ptr, package_key_size, label_ptr, label_size) = Args::parse(args)?;
 
-                let metadata_key = self.key_from_mem(meta_key_ptr, meta_key_size)?;
-                let access_key = {
-                    let bytes = self.bytes_from_mem(access_key_ptr, UREF_SERIALIZED_LENGTH)?;
-                    bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
-                };
-                let label: String = self.t_from_mem(label_ptr, label_size)?;
+                let package_key = self.t_from_mem(package_key_ptr, package_key_size)?;
+                let label: Group = self.t_from_mem(label_ptr, label_size)?;
 
-                let ret = self.remove_contract_user_group(metadata_key, access_key, label)?;
+                let ret = self.remove_contract_user_group(package_key, label)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             FunctionIndex::ExtendContractUserGroupURefsIndex => {
-                // args(0) = pointer to metadata key in wasm memory
-                // args(1) = size of metadata key in wasm memory
-                // args(2) = pointer to access key in wasm memory
-                // args(3) = pointer to label name
-                // args(4) = label size bytes
-                // args(5) = number of new urefs to be created
-                // args(6) = output of size value of host bytes data
-                let (
-                    meta_ptr,
-                    meta_size,
-                    access_ptr,
+                // args(0) = pointer to package key in wasm memory
+                // args(1) = size of package key in wasm memory
+                // args(2) = pointer to label name
+                // args(3) = label size bytes
+                // args(4) = output of size value of host bytes data
+                let (package_ptr, package_size, label_ptr, label_size, value_size_ptr): (
+                    _,
+                    _,
+                    _,
+                    u32,
+                    _,
+                ) = Args::parse(args)?;
+                let ret = self.provision_contract_user_group_urefs(
+                    package_ptr,
+                    package_size,
                     label_ptr,
                     label_size,
-                    new_urefs_count,
-                    value_size_ptr,
-                ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
-                let ret = self.extend_contract_user_group_urefs(
-                    meta_ptr,
-                    meta_size,
-                    access_ptr,
-                    label_ptr,
-                    label_size,
-                    new_urefs_count as usize,
                     value_size_ptr,
                 )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             FunctionIndex::RemoveContractUserGroupURefsIndex => {
-                // args(0) = pointer to metadata key in wasm memory
-                // args(1) = size of metadata key in wasm memory
-                // args(2) = pointer to access key in wasm memory
-                // args(3) = pointer to label name
-                // args(4) = label size bytes
-                // args(5) = pointer to urefs
-                // args(6) = size of urefs pointer
-                let (meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size) =
+                // args(0) = pointer to package key in wasm memory
+                // args(1) = size of package key in wasm memory
+                // args(2) = pointer to label name
+                // args(3) = label size bytes
+                // args(4) = pointer to urefs
+                // args(5) = size of urefs pointer
+                let (package_ptr, package_size, label_ptr, label_size, urefs_ptr, urefs_size) =
                     Args::parse(args)?;
                 let ret = self.remove_contract_user_group_urefs(
-                    meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size,
+                    package_ptr,
+                    package_size,
+                    label_ptr,
+                    label_size,
+                    urefs_ptr,
+                    urefs_size,
                 )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }

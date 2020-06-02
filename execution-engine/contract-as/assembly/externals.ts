@@ -146,17 +146,15 @@ export declare function read_host_buffer(dest_ptr: usize, dest_size: u32, bytes_
 export declare function remove_contract_user_group(
     contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
-    access_uref_ptr: usize,
     label_ptr: usize,
     label_size: usize): i32;
 /** @hidden */
-@external("env", "extend_contract_user_group_urefs")
-export declare function extend_contract_user_group_urefs(contract_package_hash_ptr: usize,
+@external("env", "provision_contract_user_group_urefs")
+export declare function provision_contract_user_group_urefs(
+    contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
-    access_uref_ptr: usize,
     label_ptr: usize,
     label_size: usize,
-    new_urefs_count: usize,
     value_size_ptr: usize,
 ): i32;
 /** @hidden */
@@ -164,7 +162,6 @@ export declare function extend_contract_user_group_urefs(contract_package_hash_p
 export declare function remove_contract_user_group_urefs(
     contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
-    access_uref_ptr: usize,
     label_ptr: usize,
     label_size: usize,
     urefs_ptr: usize,
@@ -178,7 +175,6 @@ export declare function create_contract_package_at_hash(hash_addr_ptr: usize, ac
 export declare function add_contract_version(
     contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
-    access_ptr: usize,
     version_ptr: usize,
     entry_points_ptr: usize,
     entry_points_size: usize,
@@ -193,11 +189,18 @@ export declare function add_contract_version(
 export declare function create_contract_user_group(
     contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
-    access_ptr: usize,
     label_ptr: usize,
     label_size: usize,
     num_new_urefs: u8,
     existing_urefs_ptr: usize,
     existing_urefs_size: usize,
     output_size_ptr: usize,
+): i32;
+/** @hidden */
+@external("env", "disable_contract_version")
+export declare function disable_contract_version(
+    contract_package_hash_ptr: usize,
+    contract_package_hash_size: usize,
+    contract_hash_ptr: usize,
+    contract_hash_size: usize,
 ): i32;

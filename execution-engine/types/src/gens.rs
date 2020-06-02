@@ -15,9 +15,9 @@ use proptest::{
 use crate::{
     account::{PublicKey, Weight},
     contracts::Parameters,
-    AccessRights, CLType, CLValue, Contract, EntryPoint, EntryPointAccess, EntryPointType,
-    EntryPoints, Group, Key, NamedArg, Parameter, Phase, ProtocolVersion, SemVer, URef, U128, U256,
-    U512,
+    AccessRights, CLType, CLValue, Contract, ContractWasm, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Group, Key, NamedArg, Parameter, Phase, ProtocolVersion, SemVer,
+    URef, U128, U256, U512,
 };
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
@@ -63,7 +63,6 @@ pub fn key_arb() -> impl Strategy<Value = Key> {
         public_key_arb().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
         uref_arb().prop_map(Key::URef),
-        // (u8_slice_32(), u8_slice_32()).prop_map(|(seed, key)| Key::local(seed, &key))
     ]
 }
 
@@ -294,4 +293,8 @@ pub fn contract_arb() -> impl Strategy<Value = Contract> {
                 )
             },
         )
+}
+
+pub fn contract_wasm_arb() -> impl Strategy<Value = ContractWasm> {
+    vec(any::<u8>(), 1..1000).prop_map(ContractWasm::new)
 }
