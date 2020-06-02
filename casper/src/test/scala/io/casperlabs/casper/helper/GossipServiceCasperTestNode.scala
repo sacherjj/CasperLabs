@@ -501,12 +501,6 @@ object GossipServiceCasperTestNodeFactory {
 
         server <- GossipServiceServer[F](
                    backend = new GossipServiceServer.Backend[F] {
-                     override def hasDeploy(deployHash: DeployHash): F[Boolean] =
-                       deployStorage.reader.getByHash(deployHash).map(_.isDefined)
-
-                     override def hasBlock(blockHash: ByteString): F[Boolean] =
-                       isInDag(blockHash)
-
                      override def getBlockSummary(
                          blockHash: ByteString
                      ): F[Option[consensus.BlockSummary]] =

@@ -586,12 +586,6 @@ package object gossiping {
                     ): F[Option[DeploySummary]] =
                       DeployStorage[F].reader.getDeploySummary(deployHash)
 
-                    override def hasDeploy(deployHash: DeployHash): F[Boolean] =
-                      DeployStorage[F].reader.contains(deployHash)
-
-                    override def hasBlock(blockHash: ByteString): F[Boolean] =
-                      isInDag(blockHash)
-
                     override def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]] =
                       BlockStorage[F]
                         .getBlockSummary(blockHash)
