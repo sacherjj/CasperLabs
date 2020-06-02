@@ -120,7 +120,8 @@ object Configuration extends ParserImplicits {
       cacheMaxSizeBytes: Long,
       cacheNeighborhoodBefore: Int,
       cacheNeighborhoodAfter: Int,
-      deployStreamChunkSize: Int
+      deployStreamChunkSize: Int,
+      dagStreamChunkSize: Int
   ) extends SubConfig
 
   case class Grpc(

@@ -159,7 +159,8 @@ class ConfigurationSpec
       cacheMaxSizeBytes = 1,
       cacheNeighborhoodBefore = 1,
       cacheNeighborhoodAfter = 1,
-      deployStreamChunkSize = 1
+      deployStreamChunkSize = 1,
+      dagStreamChunkSize = 1
     )
     val kamonSettings = Configuration.Kamon(
       prometheus = false,

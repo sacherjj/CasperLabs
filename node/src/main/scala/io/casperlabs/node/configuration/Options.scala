@@ -555,6 +555,11 @@ private[configuration] final case class Options private (
     )
 
     @scallop
+    val blockstorageDagStreamChunkSize = gen[Int](
+      "How many records or rank ranges to pull from the DB in a chunk of a stream."
+    )
+
+    @scallop
     val casperValidatorPublicKey =
       gen[String](
         "base-64 or PEM encoding of the public key to use for signing a proposed blocks. " +

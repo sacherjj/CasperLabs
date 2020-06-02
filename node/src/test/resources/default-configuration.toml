@@ -108,6 +108,7 @@ cache-max-size-bytes = 1
 cache-neighborhood-before = 1
 cache-neighborhood-after = 1
 deploy-stream-chunk-size = 1
+dag-stream-chunk-size = 1
 
 [metrics]
 prometheus = false

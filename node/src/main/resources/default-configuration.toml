@@ -200,6 +200,9 @@ cache-neighborhood-after = 6
 # How many records to pull from the DB in a chunk of a stream.
 deploy-stream-chunk-size = 10
 
+# How many records or rank ranges to pull from the DB in a chunk of a stream.
+dag-stream-chunk-size = 10
+
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]
 
