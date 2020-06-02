@@ -444,4 +444,16 @@ class SQLiteDagStorageTest
 
   override def createTestResource: Task[DagStorage[Task] with EraStorage[Task]] =
     SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
+
+  "ranges" should "divide up the start and end to chunks" in {
+    SQLiteDagStorage.ranges(10)(7, 33) shouldBe Seq(
+      7  -> 16,
+      17 -> 26,
+      27 -> 33
+    )
+  }
+
+  it should "return empty list for backwards boundaries" in {
+    SQLiteDagStorage.ranges(10)(67, 0) shouldBe empty
+  }
 }
