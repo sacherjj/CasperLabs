@@ -215,13 +215,15 @@ trait DownloadManagerCompanion extends DownloadManagerTypes {
   }
   object DownloadedCache {
     object Marker
-    def apply[F[_]: Sync, K <: Object](expiry: FiniteDuration = 1.hour): DownloadedCache[F, K] =
-      DownloadedCache(
-        CacheBuilder
-          .newBuilder()
-          .expireAfterWrite(expiry.toSeconds, TimeUnit.SECONDS)
-          .build[K, Marker.type]()
-      )
+    def apply[F[_]: Sync, K <: Object](expiry: FiniteDuration = 1.hour): F[DownloadedCache[F, K]] =
+      Sync[F].delay {
+        DownloadedCache(
+          CacheBuilder
+            .newBuilder()
+            .expireAfterWrite(expiry.toSeconds, TimeUnit.SECONDS)
+            .build[K, Marker.type]()
+        )
+      }
   }
 }
 

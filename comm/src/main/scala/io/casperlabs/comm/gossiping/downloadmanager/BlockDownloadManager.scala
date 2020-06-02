@@ -56,7 +56,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
         workersRef  <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
         semaphore   <- Semaphore[F](maxParallelDownloads.toLong)
         signal      <- MVar[F].empty[Signal[F]]
-        recentCache = DownloadedCache[F, ByteString]()
+        recentCache <- DownloadedCache[F, ByteString]()
         manager = new BlockDownloadManagerImpl[F](
           this,
           isShutdown,
