@@ -43,6 +43,12 @@ class SQLiteDagStorage[F[_]: Sync](
   import SQLiteDagStorage.{ranges, StreamOps}
   implicit val MT: MonadThrowable[F] = Sync[F]
 
+  private def toStream[T](items: Iterable[T]): fs2.Stream[F, T] =
+    fs2.Stream.fromIterator[F](items.toIterator)
+
+  private def toStream[T](items: F[List[T]]): fs2.Stream[F, T] =
+    fs2.Stream.eval(items).flatMap(toStream(_))
+
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
 
@@ -253,10 +259,9 @@ class SQLiteDagStorage[F[_]: Sync](
       startBlockNumber: Long,
       endBlockNumber: Long
   ): fs2.Stream[F, Vector[BlockInfo]] =
-    fs2.Stream
-      .fromIterator[F](ranges(chunkSize)(startBlockNumber, endBlockNumber).toIterator)
-      .flatMap {
-        case (startBlockNumber, endBlockNumber) =>
+    toStream(ranges(chunkSize)(startBlockNumber, endBlockNumber)).flatMap {
+      case (startBlockNumber, endBlockNumber) =>
+        toStream {
           (fr"""
             SELECT j_rank, """ ++ blockInfoCols() ++ fr"""
             FROM   block_metadata
@@ -264,10 +269,10 @@ class SQLiteDagStorage[F[_]: Sync](
             ORDER BY j_rank
             """)
             .query[(Long, BlockInfo)]
-            .streamWithChunkSize(chunkSize)
+            .to[List]
             .transact(readXa)
-            .groupByRank
-      }
+        }
+    }.groupByRank
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
     fs2.Stream.eval(getMaxJRank).flatMap(topoSort(startBlockNumber, _))

@@ -289,6 +289,15 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
         Fragment.const(s"${alias}.body")
       }
 
+    private def toStream[T](items: Iterator[T]): fs2.Stream[F, T] =
+      fs2.Stream.fromIterator[F](items)
+
+    private def toStream[T](items: Iterable[T]): fs2.Stream[F, T] =
+      toStream(items.toIterator)
+
+    private def toStream[T](items: F[List[T]]): fs2.Stream[F, T] =
+      fs2.Stream.eval(items).flatMap(toStream(_))
+
     override def contains(deployHash: DeployHash) =
       sql"SELECT 1 FROM deploys WHERE hash=${deployHash}"
         .query[Int]
@@ -397,16 +406,16 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
     override def getByHashes(
         deployHashes: Set[DeployHash]
     ): fs2.Stream[F, Deploy] =
-      fs2.Stream
-        .fromIterator[F](deployHashes.toList.grouped(chunkSize))
+      toStream(deployHashes.toList.grouped(chunkSize))
         .map(NonEmptyList.fromList(_))
         .flatMap {
           case None =>
-            fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator)
+            toStream(List.empty[Deploy])
           case Some(batch) =>
             val q = fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE " ++ Fragments
               .in(fr"hash", batch) // "hash IN (…)"
-            q.query[Deploy].streamWithChunkSize(chunkSize).transact(readXa)
+            // Read batch into a list, which will be slowly drained by the stream consumer.
+            toStream(q.query[Deploy].to[List].transact(readXa))
         }
 
     def getByHash(deployHash: DeployHash): F[Option[Deploy]] =
@@ -605,4 +614,5 @@ object SQLiteDeployStorage {
       _ <- Metrics[F].setGauge("pending_deploys", 0L)
       _ <- Metrics[F].setGauge("processed_deploys", 0L)
     } yield ()
+
 }
