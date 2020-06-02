@@ -43,16 +43,18 @@ object DeployDownloadManagerImpl extends DownloadManagerCompanion {
   ): Resource[F, DeployDownloadManager[F]] =
     Resource.make {
       for {
-        isShutdown <- Ref.of(false)
-        itemsRef   <- Ref.of(Map.empty[ByteString, Item[F]])
-        workersRef <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
-        semaphore  <- Semaphore[F](maxParallelDownloads.toLong)
-        signal     <- MVar[F].empty[Signal[F]]
+        isShutdown  <- Ref.of(false)
+        itemsRef    <- Ref.of(Map.empty[ByteString, Item[F]])
+        workersRef  <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
+        semaphore   <- Semaphore[F](maxParallelDownloads.toLong)
+        signal      <- MVar[F].empty[Signal[F]]
+        recentCache = DownloadedCache[F, ByteString]()
         manager = new DeployDownloadManagerImpl[F](
           this,
           isShutdown,
           itemsRef,
           workersRef,
+          recentCache,
           semaphore,
           signal,
           connectToGossip,
@@ -87,6 +89,8 @@ class DeployDownloadManagerImpl[F[_]](
     val itemsRef: Ref[F, Map[ByteString, DeployDownloadManagerImpl.Item[F]]],
     // Keep track of ongoing downloads so we can cancel them.
     val workersRef: Ref[F, Map[ByteString, Fiber[F, Unit]]],
+    // Keep a cache of recently downloaded items.
+    val recentlyDownloaded: DeployDownloadManagerImpl.DownloadedCache[F, ByteString],
     // Limit parallel downloads.
     val semaphore: Semaphore[F],
     // Single item control signals for the manager loop.
