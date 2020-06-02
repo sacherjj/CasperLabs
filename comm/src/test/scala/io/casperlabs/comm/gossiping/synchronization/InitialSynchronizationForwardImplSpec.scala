@@ -295,6 +295,7 @@ object InitialSynchronizationForwardImplSpec extends ArbitraryConsensus {
     override def addSource(id: ByteString, source: Node): Task[Task[Unit]] =
       Task.now(Task.unit)
 
+    override def wasDownloaded(id: ByteString): Task[Boolean] = Task.now(false)
   }
 
   class MockGossipService(produceDag: Task[Vector[BlockSummary]], correct: Boolean)
