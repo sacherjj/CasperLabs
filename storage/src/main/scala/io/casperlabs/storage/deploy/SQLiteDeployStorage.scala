@@ -397,13 +397,17 @@ class SQLiteDeployStorage[F[_]: Time: Sync](
     override def getByHashes(
         deployHashes: Set[DeployHash]
     ): fs2.Stream[F, Deploy] =
-      NonEmptyList
-        .fromList[ByteString](deployHashes.toList)
-        .fold(fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator))(nel => {
-          val q = fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE " ++ Fragments
-            .in(fr"hash", nel) // "hash IN (…)"
-          q.query[Deploy].streamWithChunkSize(chunkSize).transact(readXa)
-        })
+      fs2.Stream
+        .fromIterator[F](deployHashes.toList.grouped(chunkSize))
+        .map(NonEmptyList.fromList(_))
+        .flatMap {
+          case None =>
+            fs2.Stream.fromIterator[F](List.empty[Deploy].toIterator)
+          case Some(batch) =>
+            val q = fr"SELECT summary, " ++ bodyCol() ++ fr" FROM deploys WHERE " ++ Fragments
+              .in(fr"hash", batch) // "hash IN (…)"
+            q.query[Deploy].streamWithChunkSize(chunkSize).transact(readXa)
+        }
 
     def getByHash(deployHash: DeployHash): F[Option[Deploy]] =
       getByHashes(Set(deployHash)).compile.last

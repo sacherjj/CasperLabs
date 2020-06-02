@@ -198,7 +198,7 @@ cache-neighborhood-before = 5
 cache-neighborhood-after = 6
 
 # How many records to pull from the DB in a chunk of a stream.
-deploy-stream-chunk-size = 20
+deploy-stream-chunk-size = 10
 
 # io.casperlabs.node.configuration.Configuration.GrpcServer
 [grpc]
