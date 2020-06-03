@@ -446,7 +446,7 @@ class SQLiteDagStorageTest
     SQLiteStorage.create[Task](readXa = xa, writeXa = xa)
 
   "ranges" should "divide up the start and end to chunks" in {
-    SQLiteDagStorage.ranges(10)(7, 33) shouldBe Seq(
+    SQLiteDagStorage.ranges(10)(7, 33).toList shouldBe List(
       7  -> 16,
       17 -> 26,
       27 -> 33

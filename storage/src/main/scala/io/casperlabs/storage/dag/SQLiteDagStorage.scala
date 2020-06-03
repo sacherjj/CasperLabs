@@ -43,12 +43,6 @@ class SQLiteDagStorage[F[_]: Sync](
   import SQLiteDagStorage.{ranges, StreamOps}
   implicit val MT: MonadThrowable[F] = Sync[F]
 
-  private def toStream[T](items: Iterable[T]): fs2.Stream[F, T] =
-    fs2.Stream.fromIterator[F](items.toIterator)
-
-  private def toStream[T](items: F[List[T]]): fs2.Stream[F, T] =
-    fs2.Stream.eval(items).flatMap(toStream(_))
-
   override def getRepresentation: F[DagRepresentation[F]] =
     (this: DagRepresentation[F]).pure[F]
 
@@ -258,27 +252,40 @@ class SQLiteDagStorage[F[_]: Sync](
   override def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockInfo]] =
-    toStream(ranges(chunkSize)(startBlockNumber, endBlockNumber)).flatMap {
-      case (startBlockNumber, endBlockNumber) =>
-        toStream {
-          (fr"""
-            SELECT j_rank, """ ++ blockInfoCols() ++ fr"""
-            FROM   block_metadata
-            WHERE  j_rank >= $startBlockNumber AND j_rank <= $endBlockNumber
-            ORDER BY j_rank
-            """)
-            .query[(Long, BlockInfo)]
-            .to[List]
-            .transact(readXa)
+  ): fs2.Stream[F, Vector[BlockInfo]] = {
+    val cols = blockInfoCols()
+    // Query a list of ranks at a time, releasing the database connection in between.
+    val batches = ranges(chunkSize)(startBlockNumber, endBlockNumber)
+    val batchStream: fs2.Stream[F, List[(Long, BlockInfo)]] =
+      fs2.Stream
+        .fromIterator[F](batches.toIterator)
+        .flatMap {
+          case (startBlockNumber, endBlockNumber) =>
+            // Return the range as a list first so we can check if it's empty and quit early.
+            fs2.Stream.eval {
+              (fr"""
+              SELECT j_rank, """ ++ cols ++ fr"""
+              FROM   block_metadata
+              WHERE  j_rank >= $startBlockNumber AND j_rank <= $endBlockNumber
+              ORDER BY j_rank
+              """)
+                .query[(Long, BlockInfo)]
+                .to[List]
+                .transact(readXa)
+            }
         }
-    }.groupByRank
+
+    batchStream
+      .takeWhile(_.nonEmpty)
+      .flatMap(xs => fs2.Stream.fromIterator[F](xs.toIterator))
+      .groupByRank
+  }
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
     fs2.Stream.eval(getMaxJRank).flatMap(topoSort(startBlockNumber, _))
 
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
-    fs2.Stream.eval(getMaxJRank).flatMap(x => topoSort(x - tailLength + 1, x))
+    fs2.Stream.eval(getMaxJRank).flatMap(x => topoSort(math.max(x - tailLength + 1, 0), x))
 
   private def getMaxJRank: F[Long] =
     sql"""SELECT max(j_rank) FROM block_metadata"""
@@ -596,8 +603,8 @@ object SQLiteDagStorage {
       F
     ]
 
-  def ranges(chunkSize: Int)(startBlockNumber: Long, endBlockNumber: Long): Seq[(Long, Long)] =
-    (startBlockNumber to endBlockNumber by chunkSize.toLong).map { from =>
+  def ranges(chunkSize: Int)(startBlockNumber: Long, endBlockNumber: Long): Stream[(Long, Long)] =
+    (startBlockNumber to endBlockNumber by chunkSize.toLong).toStream.map { from =>
       from -> math.min(from + chunkSize - 1, endBlockNumber)
     }
 }
