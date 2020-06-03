@@ -75,7 +75,7 @@ object EventStream {
         import Event.Value._
 
         val accountFilter: ByteString => Boolean =
-          request.getDeployFilter.accountHashes.toSet match {
+          request.getDeployFilter.accountPublicKeyHashes.toSet match {
             case hashes if hashes.nonEmpty => hashes.contains
             case _                         => _ => true
           }
@@ -87,7 +87,7 @@ object EventStream {
           }
 
         def deployFilter(d: Deploy) =
-          accountFilter(d.getHeader.accountHash) && deployHashFilter(d.deployHash)
+          accountFilter(d.getHeader.accountPublicKeyHash) && deployHashFilter(d.deployHash)
 
         event => {
           event.value match {
