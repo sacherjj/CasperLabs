@@ -221,9 +221,8 @@ object SignatureAlgorithm {
     private val PrivateKeyLength = 32
     private val PublicKeyLength  = 65
     private val provider         = new BouncyCastleProvider()
-    private val curveName        = "secp256k1"
 
-    override def name: String = curveName
+    override def name: String = "secp256k1"
 
     /**
       * Expects the key to be in PEM format without parameters section or raw key encoded in base64.
@@ -301,7 +300,7 @@ object SignatureAlgorithm {
 
     override def newKeyPair: (PrivateKey, PublicKey) = {
       val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
-      kpg.initialize(new ECGenParameterSpec(curveName), SecureRandomUtil.secureRandomNonBlocking)
+      kpg.initialize(new ECGenParameterSpec(name), SecureRandomUtil.secureRandomNonBlocking)
       val kp = kpg.generateKeyPair
 
       val padded =
