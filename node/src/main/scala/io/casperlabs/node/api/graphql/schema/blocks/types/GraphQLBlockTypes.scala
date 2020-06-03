@@ -84,7 +84,7 @@ class GraphQLBlockTypes(
         "account",
         AccountType,
         "Account related information".some,
-        resolve = c => c.value.getHeader.accountHash
+        resolve = c => c.value.getHeader.accountPublicKeyHash
       ),
       Field(
         "timestamp",

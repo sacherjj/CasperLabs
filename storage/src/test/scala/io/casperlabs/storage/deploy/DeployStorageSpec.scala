@@ -204,7 +204,7 @@ trait DeployStorageSpec
         val discarded = sample(arbDeploy.arbitrary)
         val wrongAccount =
           processed
-            .withHeader(processed.getHeader.withAccountHash(sample(genHash)))
+            .withHeader(processed.getHeader.withAccountPublicKeyHash(sample(genHash)))
             .withDeployHash(sample(genHash))
         for {
           //given
@@ -213,7 +213,9 @@ trait DeployStorageSpec
           _ <- writer.addAsDiscarded(discarded)
           _ <- writer.addAsFinalized(finalized)
           //when
-          p <- reader.readProcessedByAccount(PublicKeyHash(processed.getHeader.accountHash))
+          p <- reader.readProcessedByAccount(
+                PublicKeyHash(processed.getHeader.accountPublicKeyHash)
+              )
           //should
         } yield {
           p shouldBe List(processed)
@@ -467,7 +469,7 @@ trait DeployStorageSpec
     deploys(Random.nextInt(deploys.size)).deployHash
 
   private def chooseAccount(deploys: List[Deploy]): PublicKeyHashBS =
-    PublicKeyHash(deploys(Random.nextInt(deploys.size)).getHeader.accountHash)
+    PublicKeyHash(deploys(Random.nextInt(deploys.size)).getHeader.accountPublicKeyHash)
 
   private implicit class DeployStorageWriterOps(writer: DeployStorageWriter[Task]) {
     def addAsPending(d: Deploy): Task[Unit]   = writer.addAsPending(List(d))
