@@ -111,16 +111,16 @@ class ChainSpecTest extends WordSpecLike with Matchers with Inspectors {
 
           // The parser should handle Base64 and Base16 as well; the file has a mixture of both.
           // This is just a reminder, it doesn't matter what we use here.
-          accounts(0).publicKey shouldBe ByteString.copyFrom(
+          accounts(0).publicKeyHash shouldBe ByteString.copyFrom(
             Base64.tryDecode("o8C2vZUXgaDKX3pfXmSJxeNfkHueLMrgiP1wIbSYHvo=").get
           )
-          accounts(1).publicKey shouldBe ByteString.copyFrom(
+          accounts(1).publicKeyHash shouldBe ByteString.copyFrom(
             Base16.decode("d6f1494392d44f085433a83fd620584c074627df2353e1d95e7f616392d02907")
           )
-          accounts(2).publicKey shouldBe ByteString.copyFrom(
+          accounts(2).publicKeyHash shouldBe ByteString.copyFrom(
             Base16.decode("6ddcc278909af5b923d9eb88e043d4349dc0034ad95fdc2b4692b67395adfd16")
           )
-          accounts(3).publicKey shouldBe ByteString.copyFrom(
+          accounts(3).publicKeyHash shouldBe ByteString.copyFrom(
             Base64.tryDecode("V3dfs7swdXYE68RTvQObGZ6PCadHZKwWkPc25zS33hg=").get
           )
 
