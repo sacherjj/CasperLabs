@@ -20,9 +20,9 @@ const STANDARD_PAYMENT_INSTALL: &str = "standard_payment_install.wasm";
 const INTEGRATION_TESTS_RS_CONTENTS: &str = r#"#[cfg(test)]
 mod tests {
     use casperlabs_engine_test_support::{Code, Error, SessionBuilder, TestContextBuilder, Value};
-    use casperlabs_types::{account::PublicKey, U512};
+    use casperlabs_types::{account::AccountHash, U512};
 
-    const MY_ACCOUNT: PublicKey = PublicKey::ed25519_from([7u8; 32]);
+    const MY_ACCOUNT: AccountHash = AccountHash::new([7u8; 32]);
     // define KEY constant to match that in the contract
     const KEY: &str = "special_value";
     const VALUE: &str = "hello world";

@@ -13,7 +13,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, URef, U512};
+use types::{account::AccountHash, Key, URef, U512};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";
@@ -23,7 +23,7 @@ const CONTRACT_TRANSFER_TO_PURSE: &str = "transfer_to_purse.wasm";
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
 const PER_RUN_FUNDING: u64 = 10_000_000;
-const TARGET_ADDR: PublicKey = PublicKey::ed25519_from([127; 32]);
+const TARGET_ADDR: AccountHash = AccountHash::new([127; 32]);
 
 /// Converts an integer into an array of type [u8; 32] by converting integer
 /// into its big endian representation and embedding it at the end of the
@@ -34,10 +34,10 @@ fn make_deploy_hash(i: u64) -> [u8; 32] {
     result
 }
 
-fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmTestBuilder {
+fn bootstrap(data_dir: &Path, accounts: &[AccountHash], amount: U512) -> LmdbWasmTestBuilder {
     let accounts_bytes: Vec<Vec<u8>> = accounts
         .iter()
-        .map(|public_key| public_key.as_bytes().to_vec())
+        .map(|account_hash| account_hash.as_bytes().to_vec())
         .collect();
 
     let exec_request = ExecuteRequestBuilder::standard(
@@ -64,7 +64,7 @@ fn bootstrap(data_dir: &Path, accounts: &[PublicKey], amount: U512) -> LmdbWasmT
 
 fn create_purses(
     builder: &mut LmdbWasmTestBuilder,
-    source: PublicKey,
+    source: AccountHash,
     total_purses: u64,
     purse_amount: U512,
 ) -> Vec<URef> {
@@ -102,7 +102,7 @@ fn create_purses(
 /// batch determined by value of TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_execs(
     builder: &mut LmdbWasmTestBuilder,
-    account: PublicKey,
+    account: AccountHash,
     should_commit: bool,
 ) {
     let amount = U512::one();
@@ -125,7 +125,7 @@ fn transfer_to_account_multiple_execs(
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_deploys(
     builder: &mut LmdbWasmTestBuilder,
-    account: PublicKey,
+    account: AccountHash,
     should_commit: bool,
 ) {
     let mut exec_builder = ExecuteRequestBuilder::new();

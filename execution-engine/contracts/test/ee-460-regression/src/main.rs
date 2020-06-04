@@ -5,7 +5,7 @@ use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, U512};
+use types::{account::AccountHash, ApiError, U512};
 
 #[no_mangle]
 pub extern "C" fn call() {
@@ -13,7 +13,7 @@ pub extern "C" fn call() {
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 
-    let public_key = PublicKey::ed25519_from([42; 32]);
-    let result = system::transfer_to_account(public_key, amount);
+    let account_hash = AccountHash::new([42; 32]);
+    let result = system::transfer_to_account(account_hash, amount);
     assert_eq!(result, Err(ApiError::Transfer))
 }

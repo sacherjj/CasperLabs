@@ -1,13 +1,13 @@
 mod erc20_test;
 
 use engine_test_support::{DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE};
-use types::{account::PublicKey, U512};
+use types::{account::AccountHash, U512};
 
 use erc20_test::ERC20Test;
 
-const ACCOUNT_1: PublicKey = DEFAULT_ACCOUNT_ADDR;
-const ACCOUNT_2: PublicKey = PublicKey::ed25519_from([2u8; 32]);
-const ACCOUNT_3: PublicKey = PublicKey::ed25519_from([3u8; 32]);
+const ACCOUNT_1: AccountHash = DEFAULT_ACCOUNT_ADDR;
+const ACCOUNT_2: AccountHash = AccountHash::new([2u8; 32]);
+const ACCOUNT_3: AccountHash = AccountHash::new([3u8; 32]);
 
 #[ignore]
 #[test]

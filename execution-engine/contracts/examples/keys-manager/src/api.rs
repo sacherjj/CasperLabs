@@ -1,7 +1,7 @@
 use alloc::string::String;
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
 use types::{
-    account::{PublicKey, Weight},
+    account::{AccountHash, Weight},
     bytesrepr::FromBytes,
     CLTyped,
 };
@@ -13,7 +13,7 @@ pub const SET_DEPLOYMENT_THRESHOLD: &str = "set_deployment_threshold";
 pub const SET_KEY_MANAGEMENT_THRESHOLD: &str = "set_key_management_threshold";
 
 pub enum Api {
-    SetKeyWeight(PublicKey, Weight),
+    SetKeyWeight(AccountHash, Weight),
     SetDeploymentThreshold(Weight),
     SetKeyManagementThreshold(Weight),
 }

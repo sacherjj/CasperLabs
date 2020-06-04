@@ -165,11 +165,11 @@ object GrpcCasperService {
         ): Task[ListDeployInfosResponse] =
           TaskLike[F].apply {
             for {
-              accountHashBase16 <- validateAccountPublicKeyHash[F](
-                                    request.accountHashBase16,
-                                    request.accountHash,
-                                    adaptToInvalidArgument
-                                  )
+              accountPublicKeyHashBase16 <- validateAccountPublicKeyHash[F](
+                                             request.accountPublicKeyHashBase16,
+                                             request.accountPublicKeyHash,
+                                             adaptToInvalidArgument
+                                           )
               (pageSize, pageTokenParams) <- MonadThrowable[F].fromTry(
                                               DeployInfoPagination
                                                 .parsePageToken(
@@ -177,15 +177,15 @@ object GrpcCasperService {
                                                   request.pageToken
                                                 )
                                             )
-              accountHash = PublicKeyHash(
+              accountPublicKeyHash = PublicKeyHash(
                 ByteString.copyFrom(
-                  Base16.decode(accountHashBase16)
+                  Base16.decode(accountPublicKeyHashBase16)
                 )
               )
               deploys <- DeployStorage[F]
                           .reader(request.view)
                           .getDeploysByAccount(
-                            accountHash,
+                            accountPublicKeyHash,
                             pageSize,
                             pageTokenParams.lastTimeStamp,
                             pageTokenParams.lastDeployHash,

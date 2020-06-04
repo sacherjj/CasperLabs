@@ -6,13 +6,13 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{ActionType, AddKeyFailure, PublicKey, Weight},
+    account::{AccountHash, ActionType, AddKeyFailure, Weight},
     ApiError,
 };
 
 #[no_mangle]
 pub extern "C" fn call() {
-    match account::add_associated_key(PublicKey::ed25519_from([123; 32]), Weight::new(100)) {
+    match account::add_associated_key(AccountHash::new([123; 32]), Weight::new(100)) {
         Err(AddKeyFailure::DuplicateKey) => {}
         Err(_) => runtime::revert(ApiError::User(50)),
         Ok(_) => {}

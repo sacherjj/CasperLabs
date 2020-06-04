@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use types::{
-    account::PublicKey, Key, BLAKE2B_DIGEST_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
+    account::AccountHash, Key, BLAKE2B_DIGEST_LENGTH, KEY_LOCAL_LENGTH, KEY_LOCAL_SEED_LENGTH,
 };
 
 use crate::engine_server::{
@@ -50,7 +50,7 @@ impl TryFrom<state::Key> for Key {
         let key = match pb_key {
             Key_oneof_value::address(pb_account) => {
                 let account = mappings::vec_to_array(pb_account.account, "Protobuf Key::Account")?;
-                Key::Account(PublicKey::ed25519_from(account))
+                Key::Account(AccountHash::new(account))
             }
             Key_oneof_value::hash(pb_hash) => {
                 let hash = mappings::vec_to_array(pb_hash.hash, "Protobuf Key::Hash")?;

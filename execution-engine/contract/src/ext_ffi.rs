@@ -53,14 +53,14 @@ extern "C" {
     pub fn revert(status: u32) -> !;
     pub fn is_valid_uref(uref_ptr: *const u8, uref_size: usize) -> i32;
     pub fn add_associated_key(
-        public_key_ptr: *const u8,
-        public_key_size: usize,
+        account_hash_ptr: *const u8,
+        account_hash_size: usize,
         weight: i32,
     ) -> i32;
-    pub fn remove_associated_key(public_key_ptr: *const u8, public_key_size: usize) -> i32;
+    pub fn remove_associated_key(account_hash_ptr: *const u8, account_hash_size: usize) -> i32;
     pub fn update_associated_key(
-        public_key_ptr: *const u8,
-        public_key_size: usize,
+        account_hash_ptr: *const u8,
+        account_hash_size: usize,
         weight: i32,
     ) -> i32;
     pub fn set_action_threshold(permission_level: u32, threshold: i32) -> i32;

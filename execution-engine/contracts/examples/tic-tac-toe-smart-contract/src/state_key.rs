@@ -1,14 +1,14 @@
 use alloc::vec::Vec;
 
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{self, ToBytes},
 };
 
 pub struct StateKey([u8; 64]);
 
 impl StateKey {
-    pub fn new(x_player: PublicKey, o_player: PublicKey) -> StateKey {
+    pub fn new(x_player: AccountHash, o_player: AccountHash) -> StateKey {
         let mut result = [0u8; 64];
         for (i, j) in x_player
             .as_bytes()

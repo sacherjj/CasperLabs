@@ -5,7 +5,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, ContractRef, Key, URef, U512};
+use types::{account::AccountHash, ApiError, ContractRef, Key, URef, U512};
 
 fn set_refund_purse(pos: &ContractRef, p: &URef) {
     runtime::call_contract(pos.clone(), ("set_refund_purse", *p))
@@ -21,7 +21,7 @@ fn submit_payment(pos: &ContractRef, amount: U512) {
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
 }
 
-fn finalize_payment(pos: &ContractRef, amount_spent: U512, account: PublicKey) {
+fn finalize_payment(pos: &ContractRef, amount_spent: U512, account: AccountHash) {
     runtime::call_contract(pos.clone(), ("finalize_payment", amount_spent, account))
 }
 
@@ -38,7 +38,7 @@ pub extern "C" fn call() {
     let maybe_amount_spent: Option<U512> = runtime::get_arg(2)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let maybe_account: Option<PublicKey> = runtime::get_arg(3)
+    let maybe_account: Option<AccountHash> = runtime::get_arg(3)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 

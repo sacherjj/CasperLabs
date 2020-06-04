@@ -3,7 +3,7 @@ use std::convert::TryFrom;
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     api_error,
     bytesrepr::{self, ToBytes},
     Key, TransferredTo, U512,
@@ -312,36 +312,37 @@ where
             }
 
             FunctionIndex::AddAssociatedKeyFuncIndex => {
-                // args(0) = pointer to array of bytes of a public key
-                // args(1) = size of a public key
+                // args(0) = pointer to array of bytes of an account hash
+                // args(1) = size of an account hash
                 // args(2) = weight of the key
-                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
+                let (account_hash_ptr, account_hash_size, weight_value): (u32, u32, u8) =
                     Args::parse(args)?;
                 let value = self.add_associated_key(
-                    public_key_ptr,
-                    public_key_size as usize,
+                    account_hash_ptr,
+                    account_hash_size as usize,
                     weight_value,
                 )?;
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
             FunctionIndex::RemoveAssociatedKeyFuncIndex => {
-                // args(0) = pointer to array of bytes of a public key
-                // args(1) = size of a public key
-                let (public_key_ptr, public_key_size): (_, u32) = Args::parse(args)?;
-                let value = self.remove_associated_key(public_key_ptr, public_key_size as usize)?;
+                // args(0) = pointer to array of bytes of an account hash
+                // args(1) = size of an account hash
+                let (account_hash_ptr, account_hash_size): (_, u32) = Args::parse(args)?;
+                let value =
+                    self.remove_associated_key(account_hash_ptr, account_hash_size as usize)?;
                 Ok(Some(RuntimeValue::I32(value)))
             }
 
             FunctionIndex::UpdateAssociatedKeyFuncIndex => {
-                // args(0) = pointer to array of bytes of a public key
-                // args(1) = size of a public key
+                // args(0) = pointer to array of bytes of an account hash
+                // args(1) = size of an account hash
                 // args(2) = weight of the key
-                let (public_key_ptr, public_key_size, weight_value): (u32, u32, u8) =
+                let (account_hash_ptr, account_hash_size, weight_value): (u32, u32, u8) =
                     Args::parse(args)?;
                 let value = self.update_associated_key(
-                    public_key_ptr,
-                    public_key_size as usize,
+                    account_hash_ptr,
+                    account_hash_size as usize,
                     weight_value,
                 )?;
                 Ok(Some(RuntimeValue::I32(value)))
@@ -369,13 +370,13 @@ where
             }
 
             FunctionIndex::TransferToAccountIndex => {
-                // args(0) = pointer to array of bytes of a public key
-                // args(1) = length of array of bytes of a public key
+                // args(0) = pointer to array of bytes of an account hash
+                // args(1) = length of array of bytes of an account hash
                 // args(2) = pointer to array of bytes of an amount
                 // args(3) = length of array of bytes of an amount
                 let (key_ptr, key_size, amount_ptr, amount_size): (u32, u32, u32, u32) =
                     Args::parse(args)?;
-                let public_key: PublicKey = {
+                let account_hash: AccountHash = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
@@ -383,15 +384,15 @@ where
                     let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let ret = self.transfer_to_account(public_key, amount)?;
+                let ret = self.transfer_to_account(account_hash, amount)?;
                 Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
             }
 
             FunctionIndex::TransferFromPurseToAccountIndex => {
                 // args(0) = pointer to array of bytes in Wasm memory of a source purse
                 // args(1) = length of array of bytes in Wasm memory of a source purse
-                // args(2) = pointer to array of bytes in Wasm memory of a public key
-                // args(3) = length of array of bytes in Wasm memory of a public key
+                // args(2) = pointer to array of bytes in Wasm memory of an account hash
+                // args(3) = length of array of bytes in Wasm memory of an account hash
                 // args(4) = pointer to array of bytes in Wasm memory of an amount
                 // args(5) = length of array of bytes in Wasm memory of an amount
                 let (source_ptr, source_size, key_ptr, key_size, amount_ptr, amount_size): (
@@ -407,7 +408,7 @@ where
                     let bytes = self.bytes_from_mem(source_ptr, source_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let public_key: PublicKey = {
+                let account_hash: AccountHash = {
                     let bytes = self.bytes_from_mem(key_ptr, key_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
@@ -415,7 +416,8 @@ where
                     let bytes = self.bytes_from_mem(amount_ptr, amount_size as usize)?;
                     bytesrepr::deserialize(bytes).map_err(Error::BytesRepr)?
                 };
-                let ret = self.transfer_from_purse_to_account(source_purse, public_key, amount)?;
+                let ret =
+                    self.transfer_from_purse_to_account(source_purse, account_hash, amount)?;
                 Ok(Some(RuntimeValue::I32(TransferredTo::i32_from(ret))))
             }
 

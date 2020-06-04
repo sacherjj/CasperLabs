@@ -10,8 +10,11 @@ use types::ProtocolVersion;
 pub enum Error {
     #[fail(display = "Invalid hash length: expected {}, actual {}", _0, _1)]
     InvalidHashLength { expected: usize, actual: usize },
-    #[fail(display = "Invalid public key length: expected {}, actual {}", _0, _1)]
-    InvalidPublicKeyLength { expected: usize, actual: usize },
+    #[fail(
+        display = "Invalid account hash length: expected {}, actual {}",
+        _0, _1
+    )]
+    InvalidAccountHashLength { expected: usize, actual: usize },
     #[fail(display = "Invalid protocol version: {}", _0)]
     InvalidProtocolVersion(ProtocolVersion),
     #[fail(display = "Invalid upgrade config")]

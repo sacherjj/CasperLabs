@@ -5,7 +5,7 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key};
+use types::{account::AccountHash, Key};
 
 const CONTRACT_LIST_NAMED_KEYS: &str = "list_named_keys.wasm";
 const NEW_NAME_ACCOUNT: &str = "Account";
@@ -32,10 +32,10 @@ fn should_list_named_keys() {
     };
 
     let new_named_keys = {
-        let public_key = PublicKey::ed25519_from([1; 32]);
+        let account_hash = AccountHash::new([1; 32]);
         let mut named_keys = BTreeMap::new();
         assert!(named_keys
-            .insert(NEW_NAME_ACCOUNT.to_string(), Key::Account(public_key))
+            .insert(NEW_NAME_ACCOUNT.to_string(), Key::Account(account_hash))
             .is_none());
         assert!(named_keys
             .insert(NEW_NAME_HASH.to_string(), Key::Hash([2; 32]))

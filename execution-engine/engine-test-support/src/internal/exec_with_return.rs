@@ -15,7 +15,7 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase,
+    account::AccountHash, bytesrepr::FromBytes, BlockTime, CLTyped, CLValue, Key, Phase,
     ProtocolVersion, URef, U512,
 };
 
@@ -31,7 +31,7 @@ const INIT_FN_STORE_ID: u32 = 0;
 pub fn exec<S, T>(
     config: EngineConfig,
     builder: &mut WasmTestBuilder<S>,
-    address: PublicKey,
+    address: AccountHash,
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],

@@ -6,7 +6,7 @@ use num_traits::{FromPrimitive, ToPrimitive};
 
 use tic_tac_toe_logic::player::Player;
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{self, FromBytes, ToBytes},
     AccessRights, CLType, CLTyped, URef,
 };
@@ -18,16 +18,16 @@ const PLAYER_DATA_BYTES_SIZE: usize = 1 + 32 + 32;
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub struct PlayerData {
     piece: Player,
-    opponent: PublicKey,
+    opponent: AccountHash,
     status_key: URef,
 }
 
 impl PlayerData {
-    pub fn read_local(key: PublicKey) -> Option<PlayerData> {
+    pub fn read_local(key: AccountHash) -> Option<PlayerData> {
         storage::read_local(&key).unwrap_or_revert_with(Error::PlayerDataDeserialization)
     }
 
-    pub fn write_local(key: PublicKey, piece: Player, opponent: PublicKey, status_key: URef) {
+    pub fn write_local(key: AccountHash, piece: Player, opponent: AccountHash, status_key: URef) {
         let data = PlayerData {
             piece,
             opponent,
@@ -41,7 +41,7 @@ impl PlayerData {
         self.piece
     }
 
-    pub fn opponent(&self) -> PublicKey {
+    pub fn opponent(&self) -> AccountHash {
         self.opponent
     }
 
@@ -86,7 +86,7 @@ impl FromBytes for PlayerData {
         let status_key: [u8; 32] = bytes[33..]
             .try_into()
             .map_err(|_| bytesrepr::Error::Formatting)?;
-        let opponent = PublicKey::ed25519_from(opponent_key);
+        let opponent = AccountHash::new(opponent_key);
         let status_key = URef::new(status_key, AccessRights::READ_ADD_WRITE);
         Ok((
             PlayerData {
@@ -102,7 +102,7 @@ impl FromBytes for PlayerData {
 #[cfg(test)]
 mod tests {
     use super::PlayerData;
-    use types::{account::PublicKey, bytesrepr, AccessRights, URef};
+    use types::{account::AccountHash, bytesrepr, AccessRights, URef};
 
     use tic_tac_toe_logic::player::Player;
 
@@ -110,7 +110,7 @@ mod tests {
     fn player_data_round_trip() {
         let player_data = PlayerData {
             piece: Player::X,
-            opponent: PublicKey::ed25519_from([3u8; 32]),
+            opponent: AccountHash::new([3u8; 32]),
             status_key: URef::new([5u8; 32], AccessRights::READ_ADD_WRITE),
         };
         bytesrepr::test_serialization_roundtrip(&player_data);

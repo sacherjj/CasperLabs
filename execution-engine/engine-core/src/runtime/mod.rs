@@ -23,7 +23,7 @@ use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use proof_of_stake::ProofOfStake;
 use standard_payment::StandardPayment;
 use types::{
-    account::{ActionType, PublicKey, Weight},
+    account::{AccountHash, ActionType, Weight},
     bytesrepr::{self, FromBytes, ToBytes},
     system_contract_errors,
     system_contract_errors::mint,
@@ -1860,7 +1860,7 @@ where
                     return Err(err);
                 }
 
-                let validator: PublicKey = runtime.context.get_caller();
+                let validator: AccountHash = runtime.context.get_caller();
                 let amount: U512 = Self::get_argument(&args, 1)?;
                 let source_uref: URef = Self::get_argument(&args, 2)?;
                 runtime
@@ -1874,7 +1874,7 @@ where
                     return Err(err);
                 }
 
-                let validator: PublicKey = runtime.context.get_caller();
+                let validator: AccountHash = runtime.context.get_caller();
                 let maybe_amount: Option<U512> = Self::get_argument(&args, 1)?;
                 runtime
                     .unbond(validator, maybe_amount)
@@ -1897,7 +1897,7 @@ where
             }
             METHOD_FINALIZE_PAYMENT => {
                 let amount_spent: U512 = Self::get_argument(&args, 1)?;
-                let account: PublicKey = Self::get_argument(&args, 2)?;
+                let account: AccountHash = Self::get_argument(&args, 2)?;
                 runtime
                     .finalize_payment(amount_spent, account)
                     .map_err(Self::reverter)?;
@@ -2332,21 +2332,21 @@ where
 
     fn add_associated_key(
         &mut self,
-        public_key_ptr: u32,
-        public_key_size: usize,
+        account_hash_ptr: u32,
+        account_hash_size: usize,
         weight_value: u8,
     ) -> Result<i32, Trap> {
-        let public_key = {
-            // Public key as serialized bytes
-            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
-            // Public key deserialized
-            let source: PublicKey =
+        let account_hash = {
+            // Account hash as serialized bytes
+            let source_serialized = self.bytes_from_mem(account_hash_ptr, account_hash_size)?;
+            // Account hash deserialized
+            let source: AccountHash =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
         let weight = Weight::new(weight_value);
 
-        match self.context.add_associated_key(public_key, weight) {
+        match self.context.add_associated_key(account_hash, weight) {
             Ok(_) => Ok(0),
             // This relies on the fact that `AddKeyFailure` is represented as
             // i32 and first variant start with number `1`, so all other variants
@@ -2360,18 +2360,18 @@ where
 
     fn remove_associated_key(
         &mut self,
-        public_key_ptr: u32,
-        public_key_size: usize,
+        account_hash_ptr: u32,
+        account_hash_size: usize,
     ) -> Result<i32, Trap> {
-        let public_key = {
-            // Public key as serialized bytes
-            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
-            // Public key deserialized
-            let source: PublicKey =
+        let account_hash = {
+            // Account hash as serialized bytes
+            let source_serialized = self.bytes_from_mem(account_hash_ptr, account_hash_size)?;
+            // Account hash deserialized
+            let source: AccountHash =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
-        match self.context.remove_associated_key(public_key) {
+        match self.context.remove_associated_key(account_hash) {
             Ok(_) => Ok(0),
             Err(Error::RemoveKeyFailure(e)) => Ok(e as i32),
             Err(e) => Err(e.into()),
@@ -2380,21 +2380,21 @@ where
 
     fn update_associated_key(
         &mut self,
-        public_key_ptr: u32,
-        public_key_size: usize,
+        account_hash_ptr: u32,
+        account_hash_size: usize,
         weight_value: u8,
     ) -> Result<i32, Trap> {
-        let public_key = {
-            // Public key as serialized bytes
-            let source_serialized = self.bytes_from_mem(public_key_ptr, public_key_size)?;
-            // Public key deserialized
-            let source: PublicKey =
+        let account_hash = {
+            // Account hash as serialized bytes
+            let source_serialized = self.bytes_from_mem(account_hash_ptr, account_hash_size)?;
+            // Account hash deserialized
+            let source: AccountHash =
                 bytesrepr::deserialize(source_serialized).map_err(Error::BytesRepr)?;
             source
         };
         let weight = Weight::new(weight_value);
 
-        match self.context.update_associated_key(public_key, weight) {
+        match self.context.update_associated_key(account_hash, weight) {
             Ok(_) => Ok(0),
             // This relies on the fact that `UpdateKeyFailure` is represented as
             // i32 and first variant start with number `1`, so all other variants
@@ -2491,7 +2491,7 @@ where
     fn transfer_to_new_account(
         &mut self,
         source: URef,
-        target: PublicKey,
+        target: AccountHash,
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let mint_contract_key = self.get_mint_contract_uref().into();
@@ -2565,7 +2565,7 @@ where
     /// `target` account. If that account does not exist, creates one.
     fn transfer_to_account(
         &mut self,
-        target: PublicKey,
+        target: AccountHash,
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let source = self.context.get_main_purse()?;
@@ -2577,7 +2577,7 @@ where
     fn transfer_from_purse_to_account(
         &mut self,
         source: URef,
-        target: PublicKey,
+        target: AccountHash,
         amount: U512,
     ) -> Result<TransferResult, Error> {
         let target_key = Key::Account(target);

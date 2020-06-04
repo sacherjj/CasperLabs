@@ -6,7 +6,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{PublicKey, Weight},
+    account::{AccountHash, Weight},
     ApiError,
 };
 
@@ -15,7 +15,7 @@ const MOD_WEIGHT: u8 = 2;
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = runtime::get_arg(0)
+    let account: AccountHash = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
 

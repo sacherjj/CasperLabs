@@ -39,10 +39,10 @@ fn data_dir() -> PathBuf {
 fn main() {
     let data_dir = data_dir();
 
-    let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
-    let account_1_public_key = profiling::account_1_public_key();
+    let genesis_account_hash = DEFAULT_ACCOUNT_ADDR;
+    let account_1_account_hash = profiling::account_1_account_hash();
     let account_1_initial_amount = profiling::account_1_initial_amount();
-    let account_2_public_key = profiling::account_2_public_key();
+    let account_2_account_hash = profiling::account_2_account_hash();
 
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -51,13 +51,13 @@ fn main() {
             .with_session_code(
                 STATE_INITIALIZER_CONTRACT,
                 (
-                    account_1_public_key,
+                    account_1_account_hash,
                     account_1_initial_amount,
-                    account_2_public_key,
+                    account_2_account_hash,
                 ),
             )
             .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[genesis_account_hash])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
