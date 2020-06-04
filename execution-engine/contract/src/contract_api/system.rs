@@ -4,7 +4,7 @@ use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
-    account::PublicKey, api_error, bytesrepr, ApiError, ContractRef, SystemContractType,
+    account::AccountHash, api_error, bytesrepr, ApiError, ContractRef, SystemContractType,
     TransferResult, TransferredTo, URef, U512, UREF_SERIALIZED_LENGTH,
 };
 
@@ -103,7 +103,7 @@ pub fn get_balance(purse: URef) -> Option<U512> {
 
 /// Transfers `amount` of motes from the default purse of the account to `target`
 /// account.  If `target` does not exist it will be created.
-pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
+pub fn transfer_to_account(target: AccountHash, amount: U512) -> TransferResult {
     let (target_ptr, target_size, _bytes1) = contract_api::to_ptr(target);
     let (amount_ptr, amount_size, _bytes2) = contract_api::to_ptr(amount);
     let return_code =
@@ -115,7 +115,7 @@ pub fn transfer_to_account(target: PublicKey, amount: U512) -> TransferResult {
 /// it will be created.
 pub fn transfer_from_purse_to_account(
     source: URef,
-    target: PublicKey,
+    target: AccountHash,
     amount: U512,
 ) -> TransferResult {
     let (source_ptr, source_size, _bytes1) = contract_api::to_ptr(source);

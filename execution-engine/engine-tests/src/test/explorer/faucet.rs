@@ -2,10 +2,10 @@ use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, ApiError, U512};
+use types::{account::AccountHash, ApiError, U512};
 
 const FAUCET_CONTRACT: &str = "faucet.wasm";
-const NEW_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([99u8; 32]);
+const NEW_ACCOUNT_ADDR: AccountHash = AccountHash::new([99u8; 32]);
 
 #[ignore]
 #[test]

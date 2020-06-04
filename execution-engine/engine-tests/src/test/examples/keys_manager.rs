@@ -4,23 +4,23 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::account::{PublicKey, Weight};
+use types::account::{AccountHash, Weight};
 
 const CONTRACT_WASM: &str = "keys_manager.wasm";
 const METHOD_SET_KEY_WEIGHT: &str = "set_key_weight";
 const METHOD_SET_DEPLOYMENT_THRESHOLD: &str = "set_deployment_threshold";
 const METHOD_SET_KEY_MANAGEMENT_THRESHOLD: &str = "set_key_management_threshold";
 
-const ALICE: PublicKey = DEFAULT_ACCOUNT_ADDR;
-const BOB: PublicKey = PublicKey::ed25519_from([2u8; 32]);
+const ALICE: AccountHash = DEFAULT_ACCOUNT_ADDR;
+const BOB: AccountHash = AccountHash::new([2u8; 32]);
 
 struct KeysManagerTest {
     pub builder: TestBuilder,
-    pub sender: PublicKey,
+    pub sender: AccountHash,
 }
 
 impl KeysManagerTest {
-    pub fn new(sender: PublicKey) -> KeysManagerTest {
+    pub fn new(sender: AccountHash) -> KeysManagerTest {
         let mut builder = TestBuilder::default();
         builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST).commit();
         KeysManagerTest { builder, sender }
@@ -31,7 +31,7 @@ impl KeysManagerTest {
         self
     }
 
-    pub fn set_key_weight(mut self, key: PublicKey, weight: Weight) -> Self {
+    pub fn set_key_weight(mut self, key: AccountHash, weight: Weight) -> Self {
         let request = ExecuteRequestBuilder::standard(
             self.sender,
             CONTRACT_WASM,
@@ -58,11 +58,12 @@ impl KeysManagerTest {
         self.update_threshold(METHOD_SET_KEY_MANAGEMENT_THRESHOLD, threshold)
     }
 
-    pub fn assert_keys(self, mut expected: Vec<(PublicKey, Weight)>) -> Self {
+    pub fn assert_keys(self, mut expected: Vec<(AccountHash, Weight)>) -> Self {
         // Get and sort existing keys.
         let account = self.builder.get_account(self.sender).unwrap();
         let keys_iter = account.get_associated_keys();
-        let mut keys: Vec<(PublicKey, Weight)> = keys_iter.map(|pair| (*pair.0, *pair.1)).collect();
+        let mut keys: Vec<(AccountHash, Weight)> =
+            keys_iter.map(|pair| (*pair.0, *pair.1)).collect();
         keys.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
         // Sort and parse expected keys.

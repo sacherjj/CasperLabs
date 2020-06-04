@@ -5,7 +5,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
     CLTyped, URef, U512,
 };
@@ -120,19 +120,19 @@ fn mark_as_initialized() {
     set_key(INIT_FLAG_KEY, 1);
 }
 
-fn set_admin_account(admin: PublicKey) {
+fn set_admin_account(admin: AccountHash) {
     set_key(ADMIN_KEY, admin);
 }
 
-fn admin_account() -> PublicKey {
+fn admin_account() -> AccountHash {
     key(ADMIN_KEY)
 }
 
-fn set_recipient_account(recipient: PublicKey) {
+fn set_recipient_account(recipient: AccountHash) {
     set_key(RECIPIENT_KEY, recipient);
 }
 
-fn recipient_account() -> PublicKey {
+fn recipient_account() -> AccountHash {
     key(RECIPIENT_KEY)
 }
 

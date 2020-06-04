@@ -6,7 +6,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{PublicKey, Weight},
+    account::{AccountHash, Weight},
     ApiError,
 };
 
@@ -28,7 +28,7 @@ impl Into<ApiError> for Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = runtime::get_arg(Arg::Account as u32)
+    let account: AccountHash = runtime::get_arg(Arg::Account as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let weight_val: u32 = runtime::get_arg(Arg::Weight as u32)

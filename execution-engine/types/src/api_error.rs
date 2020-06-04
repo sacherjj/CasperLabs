@@ -8,7 +8,7 @@ use core::{
 use crate::{
     account::{
         AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, TryFromIntError,
-        TryFromSliceForPublicKeyError, UpdateKeyFailure,
+        TryFromSliceForAccountHashError, UpdateKeyFailure,
     },
     bytesrepr,
     system_contract_errors::{mint, pos},
@@ -364,19 +364,19 @@ pub enum ApiError {
     /// Out of memory error.
     OutOfMemory,
     /// There are already [`MAX_ASSOCIATED_KEYS`](crate::account::MAX_ASSOCIATED_KEYS)
-    /// [`PublicKey`](crate::account::PublicKey)s associated with the given account.
+    /// [`AccountHash`](crate::account::AccountHash)s associated with the given account.
     MaxKeysLimit,
-    /// The given [`PublicKey`](crate::account::PublicKey) is already associated with the given
+    /// The given [`AccountHash`](crate::account::AccountHash) is already associated with the given
     /// account.
     DuplicateKey,
     /// Caller doesn't have sufficient permissions to perform the given action.
     PermissionDenied,
-    /// The given [`PublicKey`](crate::account::PublicKey) is not associated with the given
+    /// The given [`AccountHash`](crate::account::AccountHash) is not associated with the given
     /// account.
     MissingKey,
-    /// Removing/updating the given associated [`PublicKey`](crate::account::PublicKey) would cause
-    /// the total [`Weight`](crate::account::Weight) of all remaining `PublicKey`s to fall below
-    /// one of the action thresholds for the given account.
+    /// Removing/updating the given associated [`AccountHash`](crate::account::AccountHash) would
+    /// cause the total [`Weight`](crate::account::Weight) of all remaining `AccountHash`s to
+    /// fall below one of the action thresholds for the given account.
     ThresholdViolation,
     /// Setting the key-management threshold to a value lower than the deployment threshold is
     /// disallowed.
@@ -478,8 +478,8 @@ impl From<TryFromIntError> for ApiError {
     }
 }
 
-impl From<TryFromSliceForPublicKeyError> for ApiError {
-    fn from(_error: TryFromSliceForPublicKeyError) -> Self {
+impl From<TryFromSliceForAccountHashError> for ApiError {
+    fn from(_error: TryFromSliceForAccountHashError) -> Self {
         ApiError::Deserialize
     }
 }

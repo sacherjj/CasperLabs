@@ -2,7 +2,7 @@ import * as externals from "./externals";
 import {URef, AccessRights} from "./uref";
 import {Error, ErrorCode} from "./error";
 import {CLValue} from "./clvalue";
-import {Key, PublicKey} from "./key";
+import {Key, AccountHash} from "./key";
 import {toBytesString,
         toBytesVecT,
         fromBytesMap,
@@ -303,24 +303,24 @@ export function getBlockTime(): u64 {
 }
 
 /**
- * Returns the caller of the current context, i.e. the [[PublicKey]] of the
+ * Returns the caller of the current context, i.e. the [[AccountHash]] of the
  * account which made the deploy request.
  */
-export function getCaller(): PublicKey {
+export function getCaller(): AccountHash {
   let outputSize = new Uint32Array(1);
   let ret = externals.get_caller(outputSize.dataStart);
   const error = Error.fromResult(ret);
   if (error !== null) {
     error.revert();
-    return <PublicKey>unreachable();
+    return <AccountHash>unreachable();
   }
-  const publicKeyBytes = readHostBuffer(outputSize[0]);
-  const publicKeyResult = PublicKey.fromBytes(publicKeyBytes);
-  if (publicKeyResult.hasError()) {
+  const accountHashBytes = readHostBuffer(outputSize[0]);
+  const accountHashResult = AccountHash.fromBytes(accountHashBytes);
+  if (accountHashResult.hasError()) {
     Error.fromErrorCode(ErrorCode.Deserialize).revert();
-    return <PublicKey>unreachable();
+    return <AccountHash>unreachable();
   }
-  return publicKeyResult.value;
+  return accountHashResult.value;
 }
 
 /**

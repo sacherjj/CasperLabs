@@ -7,7 +7,7 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
-    account::PublicKey,
+    account::AccountHash,
     api_error,
     bytesrepr::{self, FromBytes},
     ApiError, BlockTime, CLTyped, CLValue, ContractRef, Key, Phase, URef,
@@ -134,9 +134,9 @@ pub fn get_arg<T: FromBytes>(i: u32) -> Option<Result<T, bytesrepr::Error>> {
     Some(bytesrepr::deserialize(arg_bytes))
 }
 
-/// Returns the caller of the current context, i.e. the [`PublicKey`] of the account which made the
-/// deploy request.
-pub fn get_caller() -> PublicKey {
+/// Returns the caller of the current context, i.e. the [`AccountHash`] of the account which made
+/// the deploy request.
+pub fn get_caller() -> AccountHash {
     let output_size = {
         let mut output_size = MaybeUninit::uninit();
         let ret = unsafe { ext_ffi::get_caller(output_size.as_mut_ptr()) };

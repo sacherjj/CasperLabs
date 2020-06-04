@@ -9,7 +9,7 @@ use contract::{
     contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::AccountHash, ApiError, Key, URef, U512};
 
 const DONATION_AMOUNT: u64 = 1;
 // Different name just to make sure any routine that deals with named keys coming from different
@@ -48,7 +48,7 @@ impl Into<ApiError> for ContractError {
     }
 }
 
-fn get_maintainer_public_key() -> Result<PublicKey, ApiError> {
+fn get_maintainer_account_hash() -> Result<AccountHash, ApiError> {
     // Obtain maintainer address from the contract's named keys
     let maintainer_key = runtime::get_key(MAINTAINER).ok_or(ApiError::GetKey)?;
     maintainer_key
@@ -72,7 +72,7 @@ fn transfer_funds() -> Result<(), ApiError> {
     // Donation box is the purse funds will be transferred into
     let donation_purse = get_donation_purse()?;
     // This is the address of account which installed the contract
-    let maintainer_public_key = get_maintainer_public_key()?;
+    let maintainer_account_hash = get_maintainer_account_hash()?;
 
     match method.as_str() {
         TRANSFER_FROM_PURSE_TO_PURSE => {
@@ -89,12 +89,12 @@ fn transfer_funds() -> Result<(), ApiError> {
 
             system::transfer_from_purse_to_account(
                 main_purse,
-                maintainer_public_key,
+                maintainer_account_hash,
                 U512::from(DONATION_AMOUNT),
             )?;
         }
         TRANSFER_TO_ACCOUNT => {
-            system::transfer_to_account(maintainer_public_key, U512::from(DONATION_AMOUNT))?;
+            system::transfer_to_account(maintainer_account_hash, U512::from(DONATION_AMOUNT))?;
         }
         GET_MAIN_PURSE => {
             let _main_purse = account::get_main_purse();

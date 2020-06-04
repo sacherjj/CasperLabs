@@ -12,7 +12,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{ActionType, PublicKey, Weight},
+    account::{AccountHash, ActionType, Weight},
     ApiError, BlockTime, CLValue, Key, Phase, U512,
 };
 
@@ -141,7 +141,7 @@ pub extern "C" fn call() {
     let seed: u64 = runtime::get_arg(Arg::Seed as u32)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let (random_bytes, source_account, destination_account): (Vec<u8>, PublicKey, PublicKey) =
+    let (random_bytes, source_account, destination_account): (Vec<u8>, AccountHash, AccountHash) =
         runtime::get_arg(Arg::Others as u32)
             .unwrap_or_revert_with(ApiError::MissingArgument)
             .unwrap_or_revert_with(ApiError::InvalidArgument);

@@ -1,7 +1,7 @@
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{account::PublicKey, bytesrepr::FromBytes, CLTyped, ContractRef};
+use types::{account::AccountHash, bytesrepr::FromBytes, CLTyped, ContractRef};
 
 use crate::error::Error;
 
@@ -10,7 +10,7 @@ pub const MOVE: &str = "move";
 pub const CONCEDE: &str = "concede";
 
 pub enum Api {
-    Start(PublicKey, PublicKey),
+    Start(AccountHash, AccountHash),
     Move(u32, u32),
     Concede,
 }

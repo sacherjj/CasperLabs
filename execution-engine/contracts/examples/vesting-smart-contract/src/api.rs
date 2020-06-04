@@ -1,7 +1,7 @@
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{account::PublicKey, bytesrepr::FromBytes, CLTyped, ContractRef, URef, U512};
+use types::{account::AccountHash, bytesrepr::FromBytes, CLTyped, ContractRef, URef, U512};
 
 use crate::error::Error;
 
@@ -25,8 +25,8 @@ pub struct VestingConfig {
 
 #[allow(clippy::large_enum_variant)]
 pub enum Api {
-    Deploy(String, PublicKey, PublicKey, VestingConfig),
-    Init(PublicKey, PublicKey, VestingConfig),
+    Deploy(String, AccountHash, AccountHash, VestingConfig),
+    Init(AccountHash, AccountHash, VestingConfig),
     Pause,
     Unpause,
     WithdrawProxy(U512),

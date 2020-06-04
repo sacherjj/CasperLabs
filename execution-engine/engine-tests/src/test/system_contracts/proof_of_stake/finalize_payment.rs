@@ -12,7 +12,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, Key, URef, U512};
+use types::{account::AccountHash, Key, URef, U512};
 
 const CONTRACT_FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -20,8 +20,8 @@ const FINALIZE_PAYMENT: &str = "pos_finalize_payment.wasm";
 const LOCAL_REFUND_PURSE: &str = "local_refund_purse";
 const POS_REFUND_PURSE_NAME: &str = "pos_refund_purse";
 
-const SYSTEM_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
-const ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const SYSTEM_ADDR: AccountHash = AccountHash::new([0u8; 32]);
+const ACCOUNT_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 
 fn initialize() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();
@@ -85,7 +85,7 @@ fn finalize_payment_should_refund_to_specified_purse() {
     let refund_purse_flag: u8 = 1;
     // Don't need to run finalize_payment manually, it happens during
     // the deploy because payment code is enabled.
-    let args: (U512, u8, Option<U512>, Option<PublicKey>) =
+    let args: (U512, u8, Option<U512>, Option<AccountHash>) =
         (payment_amount, refund_purse_flag, None, None);
 
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
@@ -106,14 +106,14 @@ fn finalize_payment_should_refund_to_specified_purse() {
     );
 
     let exec_request = {
-        let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
+        let genesis_account_hash = DEFAULT_ACCOUNT_ADDR;
 
         let deploy = DeployItemBuilder::new()
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_deploy_hash([1; 32])
             .with_session_code("do_nothing.wasm", ())
             .with_payment_code(FINALIZE_PAYMENT, args)
-            .with_authorization_keys(&[genesis_public_key])
+            .with_authorization_keys(&[genesis_account_hash])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
@@ -193,7 +193,7 @@ fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) ->
 
 fn get_named_account_balance(
     builder: &InMemoryWasmTestBuilder,
-    account_address: PublicKey,
+    account_address: AccountHash,
     name: &str,
 ) -> Option<U512> {
     let account_key = Key::Account(account_address);

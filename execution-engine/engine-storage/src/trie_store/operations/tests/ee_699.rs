@@ -1,3 +1,4 @@
+// TODO: With AccountHash replacing Keys, does this need to stay?
 use proptest::{arbitrary, array, collection, prop_oneof, strategy::Strategy};
 
 use engine_shared::{make_array_newtype, newtypes::Blake2bHash};
@@ -134,7 +135,7 @@ impl FromBytes for PublicKey {
     }
 }
 
-fn public_key_arb() -> impl Strategy<Value = PublicKey> {
+fn account_hash_arb() -> impl Strategy<Value = PublicKey> {
     prop_oneof![
         basic_arb().prop_map(PublicKey::Basic),
         similar_arb().prop_map(PublicKey::Similar),
@@ -163,9 +164,9 @@ impl ToBytes for TestKey {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
         let mut ret = Vec::with_capacity(self.serialized_length());
         match self {
-            TestKey::Account(public_key) => {
+            TestKey::Account(account_hash) => {
                 ret.push(KEY_ACCOUNT_ID);
-                ret.extend(&public_key.to_bytes()?)
+                ret.extend(&account_hash.to_bytes()?)
             }
             TestKey::Hash(hash) => {
                 ret.push(KEY_HASH_ID);
@@ -186,7 +187,7 @@ impl ToBytes for TestKey {
     fn serialized_length(&self) -> usize {
         U8_SERIALIZED_LENGTH
             + match self {
-                TestKey::Account(public_key) => public_key.serialized_length(),
+                TestKey::Account(account_hash) => account_hash.serialized_length(),
                 TestKey::Hash(hash) => hash.serialized_length(),
                 TestKey::URef(uref) => uref.serialized_length(),
                 TestKey::Local(local) => local.serialized_length(),
@@ -221,7 +222,7 @@ impl FromBytes for TestKey {
 
 fn test_key_arb() -> impl Strategy<Value = TestKey> {
     prop_oneof![
-        public_key_arb().prop_map(TestKey::Account),
+        account_hash_arb().prop_map(TestKey::Account),
         gens::u8_slice_32().prop_map(TestKey::Hash),
         gens::uref_arb().prop_map(TestKey::URef),
         (gens::u8_slice_32(), gens::u8_slice_32())

@@ -1,7 +1,7 @@
 use alloc::string::String;
 
 use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{account::PublicKey, bytesrepr::FromBytes, CLTyped, ContractRef, URef, U512};
+use types::{account::AccountHash, bytesrepr::FromBytes, CLTyped, ContractRef, URef, U512};
 
 use crate::error::Error;
 
@@ -24,15 +24,15 @@ pub const SELL: &str = "sell";
 pub enum Api {
     Deploy(String, U512),
     InitErc20(U512),
-    BalanceOf(PublicKey),
+    BalanceOf(AccountHash),
     TotalSupply,
-    Transfer(PublicKey, U512),
-    TransferFrom(PublicKey, PublicKey, U512),
-    Approve(PublicKey, U512),
-    Allowance(PublicKey, PublicKey),
-    AssertBalance(PublicKey, U512),
+    Transfer(AccountHash, U512),
+    TransferFrom(AccountHash, AccountHash, U512),
+    Approve(AccountHash, U512),
+    Allowance(AccountHash, AccountHash),
+    AssertBalance(AccountHash, U512),
     AssertTotalSupply(U512),
-    AssertAllowance(PublicKey, PublicKey, U512),
+    AssertAllowance(AccountHash, AccountHash, U512),
     BuyProxy(U512),
     Buy(URef),
     SellProxy(U512),
@@ -67,8 +67,8 @@ impl Api {
                 Api::InitErc20(amount)
             }
             BALANCE_OF => {
-                let public_key: PublicKey = get_arg(arg_shift + 1);
-                Api::BalanceOf(public_key)
+                let account_hash: AccountHash = get_arg(arg_shift + 1);
+                Api::BalanceOf(account_hash)
             }
             TOTAL_SUPPLY => Api::TotalSupply,
             TRANSFER => {

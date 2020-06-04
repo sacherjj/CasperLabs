@@ -12,26 +12,26 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use tic_tac_toe_logic::game_state::{CellState, GameState, N_CELLS};
-use types::account::PublicKey;
+use types::account::AccountHash;
 
 use crate::{error::Error, state_key::StateKey};
 
 const GAME_STATE_BYTES_SIZE: usize = N_CELLS + 1;
 
-pub fn read_local(x_player: PublicKey, o_player: PublicKey) -> Option<GameState> {
+pub fn read_local(x_player: AccountHash, o_player: AccountHash) -> Option<GameState> {
     let state_key = StateKey::new(x_player, o_player);
     let value: Option<Vec<u8>> =
         storage::read_local(&state_key).unwrap_or_revert_with(Error::GameStateDeserialization);
     value.and_then(from_value)
 }
 
-pub fn write_local(x_player: PublicKey, o_player: PublicKey, state: &GameState) {
+pub fn write_local(x_player: AccountHash, o_player: AccountHash, state: &GameState) {
     let state_key = StateKey::new(x_player, o_player);
     let value = to_value(state).unwrap_or_revert();
     storage::write_local(state_key, value);
 }
 
-pub fn game_status_key(a: &PublicKey, b: &PublicKey) -> String {
+pub fn game_status_key(a: &AccountHash, b: &AccountHash) -> String {
     if a > b {
         format!("Game {} vs {}", a, b)
     } else {
@@ -39,7 +39,7 @@ pub fn game_status_key(a: &PublicKey, b: &PublicKey) -> String {
     }
 }
 
-pub fn update_game_status(state: &GameState, x_player: PublicKey, o_player: PublicKey) {
+pub fn update_game_status(state: &GameState, x_player: AccountHash, o_player: AccountHash) {
     let name = game_status_key(&x_player, &o_player);
     let key = runtime::get_key(&name).unwrap_or_revert();
     let uref = key.try_into().unwrap_or_revert();

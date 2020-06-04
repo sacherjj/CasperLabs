@@ -9,7 +9,7 @@ use contract::{
     contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::AccountHash, ApiError, Key, URef, U512};
 
 const TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME: &str = "transfer_purse_to_account";
 const TRANSFER_FUNCTION_NAME: &str = "transfer";
@@ -19,7 +19,7 @@ const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
 #[no_mangle]
 pub extern "C" fn transfer() {
     let source: URef = account::get_main_purse();
-    let destination: PublicKey = runtime::get_arg(0)
+    let destination: AccountHash = runtime::get_arg(0)
         .unwrap_or_revert_with(ApiError::MissingArgument)
         .unwrap_or_revert_with(ApiError::InvalidArgument);
     let amount: U512 = runtime::get_arg(1)

@@ -12,7 +12,7 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{self, FromBytes},
     BlockTime, CLTyped, CLValue, Key, Phase, ProtocolVersion,
 };
@@ -88,7 +88,7 @@ impl Executor {
         args: Vec<u8>,
         base_key: Key,
         account: &Account,
-        authorized_keys: BTreeSet<PublicKey>,
+        authorized_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
@@ -226,7 +226,7 @@ impl Executor {
         named_keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
@@ -376,7 +376,7 @@ impl Executor {
         keys: &'a mut BTreeMap<String, Key>,
         base_key: Key,
         account: &'a Account,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
@@ -449,7 +449,7 @@ impl Executor {
         keys: &mut BTreeMap<String, Key>,
         base_key: Key,
         account: &Account,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
