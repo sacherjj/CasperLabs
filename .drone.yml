@@ -163,6 +163,7 @@ steps:
     - pull_request
     changeset:
       includes:
+      - "**/engine-core/**"
       - "**/contract-as/**"
       - "**/contracts-as/**"
 
