@@ -138,7 +138,7 @@ extern "C" {
         label_ptr: *const u8,
         label_size: usize,
     ) -> i32;
-    pub fn provision_contract_user_group_urefs(
+    pub fn provision_contract_user_group_uref(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
         label_ptr: *const u8,

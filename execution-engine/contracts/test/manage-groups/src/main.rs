@@ -71,9 +71,8 @@ pub extern "C" fn extend_group_urefs() {
 
     // Provisions additional urefs inside group
     for _ in 1..=new_urefs_count {
-        let _new_urefs =
-            storage::provision_contract_user_group_urefs(package_hash_key, &group_name)
-                .unwrap_or_revert();
+        let _new_urefs = storage::provision_contract_user_group_uref(package_hash_key, &group_name)
+            .unwrap_or_revert();
     }
 }
 

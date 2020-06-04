@@ -14,10 +14,10 @@ impl From<ContractPackage> for state::ContractPackage {
         let mut contract_package = state::ContractPackage::new();
         contract_package.set_access_key(value.access_key().into());
 
-        for &removed_version in value.disabled_versions().iter() {
+        for &disabled_version in value.disabled_versions().iter() {
             contract_package
                 .mut_disabled_versions()
-                .push(removed_version.into())
+                .push(disabled_version.into())
         }
 
         for (existing_group, urefs) in value.groups().iter() {
@@ -55,10 +55,10 @@ impl TryFrom<state::ContractPackage> for ContractPackage {
             let header = active_version.take_contract_hash().as_slice().try_into()?;
             contract_package.versions_mut().insert(version, header);
         }
-        for removed_version in value.take_disabled_versions().into_iter() {
+        for disabled_version in value.take_disabled_versions().into_iter() {
             contract_package
                 .disabled_versions_mut()
-                .insert(removed_version.try_into()?);
+                .insert(disabled_version.try_into()?);
         }
 
         let groups = contract_package.groups_mut();

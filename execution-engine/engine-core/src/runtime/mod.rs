@@ -3196,7 +3196,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn provision_contract_user_group_urefs(
+    fn provision_contract_user_group_uref(
         &mut self,
         package_ptr: u32,
         package_size: u32,

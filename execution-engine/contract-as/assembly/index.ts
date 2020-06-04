@@ -581,7 +581,7 @@ export function extendContractUserGroupURefs(
 ): URef {
   let label_bytes = toBytesString(label);
   let size = new Uint32Array(1);
-  let ret = externals.provision_contract_user_group_urefs(
+  let ret = externals.provision_contract_user_group_uref(
     packageHash.dataStart,
     packageHash.length,
     label_bytes.dataStart,

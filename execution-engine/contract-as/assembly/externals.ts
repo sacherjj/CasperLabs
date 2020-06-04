@@ -149,8 +149,8 @@ export declare function remove_contract_user_group(
     label_ptr: usize,
     label_size: usize): i32;
 /** @hidden */
-@external("env", "provision_contract_user_group_urefs")
-export declare function provision_contract_user_group_urefs(
+@external("env", "provision_contract_user_group_uref")
+export declare function provision_contract_user_group_uref(
     contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
     label_ptr: usize,

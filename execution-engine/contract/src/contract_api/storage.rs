@@ -12,7 +12,7 @@ use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
     contracts::{ContractVersion, EntryPoints},
-    AccessRights, ApiError, CLTyped, CLValue, ContractHash, ContractPackageHash, Key, SemVer, URef,
+    AccessRights, ApiError, CLTyped, CLValue, ContractHash, ContractPackageHash, Key, URef,
     UREF_SERIALIZED_LENGTH,
 };
 
@@ -221,7 +221,7 @@ pub fn create_contract_user_group(
 }
 
 /// Extends specified group with new urefss
-pub fn provision_contract_user_group_urefs(
+pub fn provision_contract_user_group_uref(
     package_hash: ContractPackageHash,
     label: &str,
 ) -> Result<URef, ApiError> {
@@ -230,7 +230,7 @@ pub fn provision_contract_user_group_urefs(
     let value_size = {
         let mut value_size = MaybeUninit::uninit();
         let ret = unsafe {
-            ext_ffi::provision_contract_user_group_urefs(
+            ext_ffi::provision_contract_user_group_uref(
                 package_ptr,
                 package_size,
                 label_ptr,
@@ -325,18 +325,19 @@ pub fn add_contract_version(
 /// `call_versioned_contract`. Note that this contract must have been created by
 /// `create_contract` or `create_contract_package_at_hash` first.
 pub fn remove_contract_version(
-    contract_package_hash: Key,
-    version: SemVer,
+    contract_package_hash: ContractPackageHash,
+    contract_hash: ContractHash,
 ) -> Result<(), ApiError> {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);
-    let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
+    let (contract_hash_ptr, contract_hash_size, _bytes2) = contract_api::to_ptr(contract_hash);
 
     let result = unsafe {
         ext_ffi::disable_contract_version(
             contract_package_hash_ptr,
             contract_package_hash_size,
-            version_ptr,
+            contract_hash_ptr,
+            contract_hash_size,
         )
     };
 

@@ -27,9 +27,8 @@ mod block_time;
 pub mod bytesrepr;
 mod cl_type;
 mod cl_value;
-pub mod contracts;
-//mod contract_ref;
 mod contract_wasm;
+pub mod contracts;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
 mod key;

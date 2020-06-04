@@ -196,7 +196,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 Signature::new(&[ValueType::I32; 4][..], Some(ValueType::I32)),
                 FunctionIndex::RemoveContractUserGroupIndex.into(),
             ),
-            "provision_contract_user_group_urefs" => FuncInstance::alloc_host(
+            "provision_contract_user_group_uref" => FuncInstance::alloc_host(
                 Signature::new(&[ValueType::I32; 5][..], Some(ValueType::I32)),
                 FunctionIndex::ExtendContractUserGroupURefsIndex.into(),
             ),

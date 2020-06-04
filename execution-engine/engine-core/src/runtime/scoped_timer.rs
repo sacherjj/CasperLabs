@@ -133,7 +133,7 @@ impl Drop for ScopedTimer {
             FunctionIndex::GetRuntimeArgIndex => "host_get_named_arg",
             FunctionIndex::RemoveContractUserGroupIndex => "host_remove_contract_user_group",
             FunctionIndex::ExtendContractUserGroupURefsIndex => {
-                "host_provision_contract_user_group_urefs"
+                "host_provision_contract_user_group_uref"
             }
             FunctionIndex::RemoveContractUserGroupURefsIndex => {
                 "host_remove_contract_user_group_urefs"

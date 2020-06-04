@@ -607,7 +607,7 @@ where
                     u32,
                     _,
                 ) = Args::parse(args)?;
-                let ret = self.provision_contract_user_group_urefs(
+                let ret = self.provision_contract_user_group_uref(
                     package_ptr,
                     package_size,
                     label_ptr,

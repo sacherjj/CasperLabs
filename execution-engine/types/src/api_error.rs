@@ -188,7 +188,7 @@ const HEADER_ERROR_MAX: u32 = HEADER_ERROR_OFFSET + u8::MAX as u32;
 /// 64_769 => ContractHeaderError::PreviouslyUsedVersion
 /// # );
 /// # show_and_check!(
-/// 64_770 => ContractHeaderError::VersionNotFound
+/// 64_770 => ContractHeaderError::ContractNotFound
 /// # );
 /// # show_and_check!(
 /// 64_771 => ContractHeaderError::GroupAlreadyExists
