@@ -16,7 +16,6 @@ import io.casperlabs.catscontrib.TaskContrib._
 import io.casperlabs.comm.discovery.Node
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey}
-import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
 import io.casperlabs.ipc
 import io.casperlabs.ipc.ChainSpec.DeployConfig
 import io.casperlabs.ipc.DeployResult.Value.ExecutionResult
@@ -46,7 +45,7 @@ import scala.util.Random
 /** Base class for test nodes with fields used by tests exposed as public. */
 abstract class HashSetCasperTestNode[F[_]](
     val local: Node,
-    sk: PrivateKey,
+    val validatorId: ValidatorIdentity,
     val genesis: Block,
     maybeMakeEE: Option[HashSetCasperTestNode.MakeExecutionEngineService[F]]
 )(
@@ -66,8 +65,6 @@ abstract class HashSetCasperTestNode[F[_]](
   implicit val broadcaster: Broadcaster[F]
 
   val lastFinalizedBlockHashContainer: Ref[F, BlockHash]
-
-  val validatorId = ValidatorIdentity(Ed25519.tryToPublic(sk).get, sk, Ed25519)
 
   val ownValidatorKey = validatorId.publicKeyHashBS
 
@@ -139,7 +136,7 @@ trait HashSetCasperTestNodeFactory {
 
   def standaloneF[F[_]](
       genesis: Block,
-      sk: PrivateKey,
+      validatorId: ValidatorIdentity,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
   )(
@@ -153,13 +150,13 @@ trait HashSetCasperTestNodeFactory {
 
   def standaloneEff(
       genesis: Block,
-      sk: PrivateKey,
+      validatorId: ValidatorIdentity,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1
   )(
       implicit scheduler: Scheduler
   ): TestNode[Task] =
-    standaloneF[Task](genesis, sk, storageSize, faultToleranceThreshold)(
+    standaloneF[Task](genesis, validatorId, storageSize, faultToleranceThreshold)(
       ConcurrentEffect[Task],
       Parallel[Task],
       Timer[Task],
@@ -168,7 +165,7 @@ trait HashSetCasperTestNodeFactory {
     ).unsafeRunSync
 
   def networkF[F[_]](
-      sks: IndexedSeq[PrivateKey],
+      validatorIds: IndexedSeq[ValidatorIdentity],
       genesis: Block,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
@@ -183,14 +180,14 @@ trait HashSetCasperTestNodeFactory {
   ): F[IndexedSeq[TestNode[F]]]
 
   def networkEff(
-      sks: IndexedSeq[PrivateKey],
+      validatorIds: IndexedSeq[ValidatorIdentity],
       genesis: Block,
       storageSize: Long = 1024L * 1024 * 10,
       faultToleranceThreshold: Double = 0.1,
       maybeMakeEE: Option[MakeExecutionEngineService[Task]] = None
   )(implicit scheduler: Scheduler): Task[IndexedSeq[TestNode[Task]]] =
     networkF[Task](
-      sks,
+      validatorIds,
       genesis,
       storageSize,
       faultToleranceThreshold,

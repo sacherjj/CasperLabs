@@ -65,9 +65,11 @@ class CreateBlockAPITest
   implicit val deployRelaying = new NoOpsDeployRelaying[Task]
 
   private val (validatorKeys, validators) = {
-    val (sks, pks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-    val hs         = pks.map(pk => Keys.PublicKeyHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk))))
-    sks -> hs
+    val validatorIds = (1 to 4) map { _ =>
+      val (sk, pk) = Ed25519.newKeyPair
+      ValidatorIdentity(pk, sk, Ed25519)
+    }
+    validatorIds -> validatorIds.map(_.publicKeyHashBS)
   }
   private val bonds                                   = createBonds(validators)
   private val BlockMsgWithTransform(Some(genesis), _) = createGenesis(bonds)
