@@ -7,7 +7,7 @@
 //! # use contract as casperlabs_contract;
 //! # use types as casperlabs_types;
 //! use casperlabs_contract::contract_api::{runtime, storage};
-//! use casperlabs_types::{ApiError, Key};
+//! use casperlabs_types::Key;
 //! const KEY: &str = "special_value";
 //! const ARG_VALUE: &str = "value";
 //!
@@ -24,11 +24,12 @@
 //! ```no_run
 //! # use types as casperlabs_types;
 //! use casperlabs_engine_test_support::{Code, Error, SessionBuilder, TestContextBuilder, Value};
-//! use casperlabs_types::{account::PublicKey, U512};
+//! use casperlabs_types::{account::PublicKey, U512, RuntimeArgs, runtime_args};
 //!
 //! const MY_ACCOUNT: PublicKey = PublicKey::ed25519_from([7u8; 32]);
 //! const KEY: &str = "special_value";
 //! const VALUE: &str = "hello world";
+//! const ARG_MESSAGE: &str = "message";
 //!
 //! let mut context = TestContextBuilder::new()
 //!     .with_account(MY_ACCOUNT, U512::from(128_000_000))
@@ -38,7 +39,9 @@
 //! // relative to the current working dir (e.g. 'wasm/contract.wasm') can also be used, as can
 //! // absolute paths.
 //! let session_code = Code::from("contract.wasm");
-//! let session_args = (VALUE,);
+//! let session_args = runtime_args! {
+//!     ARG_MESSAGE => VALUE,
+//! };
 //! let session = SessionBuilder::new(session_code, session_args)
 //!     .with_address(MY_ACCOUNT)
 //!     .with_authorization_keys(&[MY_ACCOUNT])
