@@ -43,7 +43,7 @@ pub extern "C" fn create_group() {
     let total_existing_urefs: u64 = runtime::get_named_arg(TOTAL_EXISTING_UREFS_ARG);
     let existing_urefs: Vec<URef> = (0..total_existing_urefs).map(storage::new_uref).collect();
 
-    let _new_urefs = storage::create_contract_user_group(
+    let _new_uref = storage::create_contract_user_group(
         package_hash_key,
         &group_name,
         total_urefs as u8,
@@ -71,7 +71,7 @@ pub extern "C" fn extend_group_urefs() {
 
     // Provisions additional urefs inside group
     for _ in 1..=new_urefs_count {
-        let _new_urefs = storage::provision_contract_user_group_uref(package_hash_key, &group_name)
+        let _new_uref = storage::provision_contract_user_group_uref(package_hash_key, &group_name)
             .unwrap_or_revert();
     }
 }
