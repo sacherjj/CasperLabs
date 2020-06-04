@@ -8,7 +8,8 @@ from casperlabs_client import CasperLabsClient
 @pytest.fixture(scope="session")
 def account_keys_directory():
     with tempfile.TemporaryDirectory() as directory:
-        CasperLabsClient.keygen(directory)
+        client = CasperLabsClient()
+        client.keygen(directory)
         yield Path(directory)
 
 

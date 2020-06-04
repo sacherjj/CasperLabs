@@ -182,7 +182,35 @@ class CasperLabsClient:
         chain_name: str = None,
     ):
         """
-        Create a protobuf deploy object. See deploy for description of parameters.
+        Create a protobuf deploy object.
+
+        :param from_addr:      Purse address that will be used to pay for the deployment.
+        :param payment:        Path to the file with payment code.
+        :param session:        Path to the file with session code.
+        :param public_key:     Path to a file with public key (Ed25519)
+        :param private_key:    Path to a file with private key (Ed25519)
+        :param session_args:   List of ABI encoded arguments of session contract
+        :param payment_args:   List of ABI encoded arguments of payment contract
+        :param payment_amount: Amount to be used with standard payment
+        :param session_hash:   Hash of the stored contract to be called in the
+                               session; base16 encoded.
+        :param session_name:   Name of the stored contract (associated with the
+                               executing account) to be called in the session.
+        :param session_uref:   URef of the stored contract to be called in the
+                               session; base16 encoded.
+        :param payment_hash:   Hash of the stored contract to be called in the
+                               payment; base16 encoded.
+        :param payment_name:   Name of the stored contract (associated with the
+                               executing account) to be called in the payment.
+        :param payment_uref:   URef of the stored contract to be called in the
+                               payment; base16 encoded.
+        :param ttl_millis:     Time to live. Time (in milliseconds) that the
+                               deploy will remain valid for.
+        :param dependencies:   List of deploy hashes (base16 encoded) which
+                               must be executed before this deploy.
+        :param chain_name:     Name of the chain to optionally restrict the
+                               deploy from being accidentally included anywhere else.
+        :return:               deploy object
         """
         deploy_data = DeployData.from_args(
             dict(
@@ -208,7 +236,16 @@ class CasperLabsClient:
         return deploy_data.make_protobuf()
 
     @api
-    def sign_deploy(self, deploy, public_key, private_key_file, deploy_file=None):
+    def sign_deploy(self, public_key, private_key_file, deploy=None, deploy_file=None):
+        """
+        Sign a deploy with the given keys.  Source of deploy may be deploy object or file containing deploy.
+
+        :param public_key:          Public key to use for signing
+        :param private_key_file:    File containing Private key
+        :param deploy:              Deploy as object
+        :param deploy_file:         File containing deploy
+        :return: signed deploy object
+        """
         if deploy is None:
             if deploy_file is None:
                 raise ValueError("Must have either deploy or deploy_file")
@@ -352,7 +389,11 @@ class CasperLabsClient:
 
     @api
     def send_deploy(self, deploy=None, deploy_file=None) -> str:
-        """  """
+        """  Sends deploy to network from either deploy object or file.
+
+        :param deploy:       Encoded deploy object.
+        :param deploy_file:  File holding deploy to send
+        """
         if deploy is None:
             if deploy_file is None:
                 raise ValueError("Must have either deploy or deploy_file.")
@@ -581,32 +622,33 @@ class CasperLabsClient:
         )
         return self.query_state(blockHash, key, path, keyType)
 
-    @staticmethod
     @api
-    def keygen(directory: str) -> None:
+    def keygen(self, directory: str) -> None:
         """ Generates account keys into existing directory.
             Existing files in directory will be overwritten
 
         :param directory:       # existing output directory
 
         Generated files:
-           account-id           # validator ID in Base64 format; can be used in accounts.csv
-                                # derived from validator.public.pem
-           account-id-hex       # validator ID in hex, derived from validator.public.pem
+           account-hash         # Hash of public key to use in the system as base 64
+           account-hash-hex     # Hash of public ket to use in the system as hex
            account-private.pem  # ed25519 private key
            account-public.pem   # ed25519 public key"""
 
         directory = Path(directory).resolve()
         private_path = directory / consts.ACCOUNT_PRIVATE_KEY_FILENAME
         public_path = directory / consts.ACCOUNT_PUBLIC_KEY_FILENAME
-        id_path = directory / consts.ACCOUNT_ID_FILENAME
-        id_hex_path = directory / consts.ACCOUNT_ID_HEX_FILENAME
+        hash_path = directory / consts.ACCOUNT_HASH_FILENAME
+        hash_hex_path = directory / consts.ACCOUNT_HASH_HEX_FILENAME
 
         (private_pem, public_pem, public_bytes) = crypto.generate_keys()
         io.write_binary_file(private_path, private_pem)
         io.write_binary_file(public_path, public_pem)
-        io.write_file(id_path, reformat.encode_base64(public_bytes))
-        io.write_file(id_hex_path, public_bytes.hex())
+        account_hash = self.account_hash(
+            consts.ED25519_KEY_ALGORITHM, public_key_path=public_path
+        )
+        io.write_file(hash_path, reformat.encode_base64(account_hash))
+        io.write_file(hash_hex_path, account_hash.hex())
 
     @api
     def balance(self, address: str, block_hash: str):

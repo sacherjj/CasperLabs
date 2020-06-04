@@ -46,4 +46,4 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
     if file_path:
         io.write_binary_file(file_path, account_hash)
     else:
-        sys.stdout.buffer.write(account_hash)
+        sys.stdout.buffer.write(account_hash.hex().encode("UTF-8"))

@@ -18,6 +18,7 @@ def retry_wrapper(function, *args):
             return function(*args)
         except _Rendezvous as e:
             if e.code() == grpc.StatusCode.UNAVAILABLE and i < NUMBER_OF_RETRIES - 1:
+                # TODO: Look at using backoff PyPi package.
                 delay += delay
                 logging.warning(f"Retrying after {e} in {delay} seconds")
                 time.sleep(delay)

@@ -60,7 +60,7 @@ class ContractCode(abc.ABC):
         except Exception:
             return False
 
-    def encode(self) -> consensus.Deploy.Code:
+    def to_protobuf(self) -> consensus.Deploy.Code:
         """ Encode contract into consensus.Deploy.Code """
         if self.wasm_file_path:
             return consensus.Deploy.Code(

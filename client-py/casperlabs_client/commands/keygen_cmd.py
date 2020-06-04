@@ -10,11 +10,10 @@ HELP: str = """Generates account keys into existing directory
 Usage: casperlabs-client keygen <existing output directory>
 Command will override existing files!
 Generated files:
-   account-id          # validator ID in Base64 format; can be used in accounts.csv
-                         # derived from validator.public.pem
-   account-id-hex      # validator ID in hex, derived from validator.public.pem
-   account-private.pem # ed25519 private key
-   account-public.pem  # ed25519 public key"""
+   account-hash         # Hash of public key for use on the system as file
+   account-hash-hex     # Hash of public key for use on the system as hex text
+   account-private.pem  # ed25519 private key
+   account-public.pem   # ed25519 public key"""
 OPTIONS = [
     [
         ("directory",),

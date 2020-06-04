@@ -155,14 +155,6 @@ OPTIONS = [
         ("--timeout-seconds",),
         dict(type=int, default=consts.STATUS_TIMEOUT, help="Timeout in seconds"),
     ],
-    [
-        ("--account-hash",),
-        dict(
-            required=True,
-            type=str,
-            help="Account hash based on account public key. Generated with `account-hash` command.",
-        ),
-    ],
 ]
 OPTIONS_WITH_PRIVATE = [
     [

@@ -14,8 +14,10 @@ BUNDLED_TRANSFER_WASM: str = "transfer_to_account_u512.wasm"
 
 ACCOUNT_PRIVATE_KEY_FILENAME: str = "account-private.pem"
 ACCOUNT_PUBLIC_KEY_FILENAME: str = "account-public.pem"
-ACCOUNT_ID_FILENAME: str = "account-id"
-ACCOUNT_ID_HEX_FILENAME: str = "account-id-hex"
+ACCOUNT_HASH_FILENAME: str = "account-hash"
+ACCOUNT_HASH_HEX_FILENAME: str = "account-hash-hex"
+
+ACCOUNT_HASH_LENGTH: int = 32
 
 VALIDATOR_PRIVATE_KEY_FILENAME = "validator-private.pem"
 VALIDATOR_PUBLIC_KEY_FILENAME = "validator-public.pem"

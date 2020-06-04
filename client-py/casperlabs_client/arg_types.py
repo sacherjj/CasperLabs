@@ -4,7 +4,7 @@ from pathlib import Path
 import semver
 
 
-def natural(number):
+def positive_integer(number):
     """Check number is an integer greater than 0"""
     n = int(number)
     if n < 1:

@@ -2,7 +2,7 @@ import argparse
 from typing import Dict
 
 from casperlabs_client import CasperLabsClient
-from casperlabs_client.arg_types import natural
+from casperlabs_client.arg_types import positive_integer
 from casperlabs_client.decorators import guarded_command
 
 
@@ -36,7 +36,9 @@ def dot_output(file_name):
 OPTIONS = [
     [
         ("-d", "--depth"),
-        dict(required=True, type=natural, help="depth in terms of block height"),
+        dict(
+            required=True, type=positive_integer, help="depth in terms of block height"
+        ),
     ],
     [
         ("-o", "--out"),

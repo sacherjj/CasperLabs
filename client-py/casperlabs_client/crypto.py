@@ -69,7 +69,7 @@ def public_address(public_key):
 def generate_certificates(private_key, public_key):
     today = datetime.datetime.today()
     one_day = datetime.timedelta(1, 0, 0)
-    address = public_address(public_key)  # .map(Base16.encode).getOrElse("local")
+    address = public_address(public_key)  # .map(Base16.to_protobuf).getOrElse("local")
     owner = f"CN={address}"
 
     builder = x509.CertificateBuilder()

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Dict
 
-from . import consensus_pb2 as consensus
+from . import consensus_pb2 as consensus, consts
 import time
 
 from casperlabs_client import crypto
@@ -54,11 +54,8 @@ class DeployData:
 
         account_hash = args.get("account_hash")
         ttl_millis = args.get("ttl_millis")
-        dependencies = args.get("dependencies")
-        if dependencies:
-            dependencies = [bytes.fromhex(d) for d in dependencies]
-        else:
-            dependencies = []
+        dependencies_hex = args.get("dependencies") or []
+        dependencies = [bytes.fromhex(d) for d in dependencies_hex]
         chain_name = args.get("chain_name", "")
         private_key = args.get("private_key")
 
@@ -72,7 +69,7 @@ class DeployData:
             chain_name,
             private_key,
         )
-        if len(deploy.from_addr) != 32:
+        if len(deploy.from_addr) != consts.ACCOUNT_HASH_LENGTH:
             raise Exception(
                 "--from must be 32 bytes encoded as 64 characters long hexadecimal"
             )
@@ -90,7 +87,8 @@ class DeployData:
         self.session_code.validate()
 
         body = consensus.Deploy.Body(
-            session=self.session_code.encode(), payment=self.payment_code.encode()
+            session=self.session_code.to_protobuf(),
+            payment=self.payment_code.to_protobuf(),
         )
         body_hash = crypto.blake2b_hash((body.SerializeToString()))
 

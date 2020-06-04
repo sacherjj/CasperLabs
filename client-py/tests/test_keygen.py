@@ -5,8 +5,8 @@ def test_account_key_files_are_created(account_keys_directory):
     for filename in (
         consts.ACCOUNT_PRIVATE_KEY_FILENAME,
         consts.ACCOUNT_PUBLIC_KEY_FILENAME,
-        consts.ACCOUNT_ID_FILENAME,
-        consts.ACCOUNT_ID_HEX_FILENAME,
+        consts.ACCOUNT_HASH_FILENAME,
+        consts.ACCOUNT_HASH_HEX_FILENAME,
     ):
         file_path = account_keys_directory / filename
         assert file_path.exists(), f"File {file_path} not found."
