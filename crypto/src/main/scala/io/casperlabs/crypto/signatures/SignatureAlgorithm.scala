@@ -61,15 +61,10 @@ sealed trait SignatureAlgorithm {
 
 object SignatureAlgorithm {
 
-  /**
-    * TODO: Temporarily disabled `secp256k1` because of errors,
-    * because some parts of the node complain if validator ID's size
-    * doesn't equal to 32 bytes
-    */
   def unapply(alg: String): Option[SignatureAlgorithm] = alg match {
-    case "ed25519" => Some(Ed25519)
-    //    case "secp256k1" => Some(Secp256k1)
-    case _ => None
+    case "ed25519"   => Some(Ed25519)
+    case "secp256k1" => Some(Secp256k1)
+    case _           => None
   }
 
   /**

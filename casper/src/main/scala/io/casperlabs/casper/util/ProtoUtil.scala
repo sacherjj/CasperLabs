@@ -566,16 +566,17 @@ object ProtoUtil {
   def deploy(
       timestamp: Long,
       sessionCode: ByteString = ByteString.EMPTY,
-      ttl: FiniteDuration = 1.minute
+      ttl: FiniteDuration = 1.minute,
+      signatureAlgorithm: SignatureAlgorithm = Ed25519
   ): Deploy = {
-    val (sk, pk) = Ed25519.newKeyPair
+    val (sk, pk) = signatureAlgorithm.newKeyPair
     val b = Deploy
       .Body()
       .withSession(Deploy.Code().withWasm(sessionCode))
       .withPayment(Deploy.Code().withWasm(sessionCode))
     val h = Deploy
       .Header()
-      .withAccountPublicKeyHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk)))
+      .withAccountPublicKeyHash(ByteString.copyFrom(signatureAlgorithm.publicKeyHash(pk)))
       .withTimestamp(timestamp)
       .withBodyHash(protoHash(b))
       .withTtlMillis(ttl.toMillis.toInt)
@@ -583,7 +584,7 @@ object ProtoUtil {
       .withHeader(h)
       .withBody(b)
       .withHashes
-      .sign(sk, pk)
+      .approve(signatureAlgorithm, sk, pk)
 
   }
 
