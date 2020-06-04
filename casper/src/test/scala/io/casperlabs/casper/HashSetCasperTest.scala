@@ -35,6 +35,8 @@ import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 
 import scala.concurrent.duration._
 import scala.collection.immutable
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Secp256k1
 
 /** Run tests using the GossipService and co. */
 class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasperTestNodeFactory
@@ -83,14 +85,19 @@ abstract class HashSetCasperTest
 
   implicit val timeEff = new LogicalTime[Task]
 
-  private def makeValidatorIdentity = {
-    val (sk, pk) = Ed25519.newKeyPair
-    ValidatorIdentity(pk, sk, Ed25519)
+  private def makeValidatorIdentity(alg: SignatureAlgorithm) = {
+    val (sk, pk) = alg.newKeyPair
+    ValidatorIdentity(pk, sk, alg)
   }
   private val otherValidatorKey =
-    makeValidatorIdentity
+    makeValidatorIdentity(Ed25519)
+
   private val (validatorKeys, validators) = {
-    val validatorIds = (1 to 4) map (_ => makeValidatorIdentity)
+    val validatorIds = (1 to 4) map (_ % 2) map {
+      case 0 => Ed25519
+      case 1 => Secp256k1
+    } map (makeValidatorIdentity)
+
     validatorIds -> validatorIds.map(_.publicKeyHashBS)
   }
   private val wallets = validators.map(key => (key, 10001L)).toMap
