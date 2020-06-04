@@ -351,7 +351,7 @@ class NodeRuntime private[node] (
             conf.server.shutdownTimeout,
             ingressScheduler,
             maybeApiSslContext,
-            maybeValidatorId.isEmpty
+            isDeployEnabled = maybeValidatorId.nonEmpty || conf.server.deployGossipEnabled
           )
 
       _ <- api.Servers.httpServerR[Task](
