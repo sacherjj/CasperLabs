@@ -1367,10 +1367,11 @@ abstract class HashSetCasperTest
         .withBlockHash(blockHash)
         .withHeader(header)
         .withBody(body)
+    val validatorId = validatorKeys(1)
     ProtoUtil.signBlock(
       blockThatPointsToInvalidBlock,
-      validatorKeys(1).privateKey,
-      Ed25519
+      validatorId.privateKey,
+      validatorId.signatureAlgorithm
     )
   }
 }
