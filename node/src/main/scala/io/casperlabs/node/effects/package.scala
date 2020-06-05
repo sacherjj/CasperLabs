@@ -191,4 +191,26 @@ package object effects {
 
     update.forever.background
   }
+
+  def periodicThreadPoolMetrics[F[_]: Concurrent: Timer: Metrics](
+      schedulerFactory: SchedulerFactory,
+      updatePeriod: FiniteDuration = 15.seconds
+  ): Resource[F, F[Unit]] = {
+    implicit val metricsSource = Metrics.BaseSource / "threads"
+    val update = for {
+      poolStats <- Sync[F].delay(schedulerFactory.getStats)
+      _ <- poolStats.toList.traverse {
+            case (name, stats) =>
+              for {
+                _ <- Metrics[F].setGauge(s"$name-pool-size", stats.poolSize.toLong)
+                _ <- Metrics[F]
+                      .setGauge(s"$name-active-thread-count", stats.activeThreadCount.toLong)
+                _ <- Metrics[F].setGauge(s"$name-task-queue-size", stats.taskQueueSize)
+              } yield ()
+          }
+      _ <- Timer[F].sleep(updatePeriod)
+    } yield ()
+
+    update.forever.background
+  }
 }

@@ -40,7 +40,6 @@ import io.casperlabs.node.api.{EventStream, VersionInfo}
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
-import io.casperlabs.node.effects.SchedulerFactory
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.casperlabs.storage.SQLiteStorage
@@ -144,6 +143,7 @@ class NodeRuntime private[node] (
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
       _ <- effects.periodicStorageSizeMetrics(conf)
+      _ <- effects.periodicThreadPoolMetrics(schedulerFactory)
 
       implicit0(
         storage: SQLiteStorage.CombinedStorage[Task]

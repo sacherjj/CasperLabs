@@ -1,4 +1,4 @@
-package io.casperlabs.node.effects
+package io.casperlabs.node
 
 import java.util.concurrent._
 import monix.execution.Scheduler
@@ -16,6 +16,12 @@ class SchedulerFactory private (
     reporter: UncaughtExceptionReporter
 ) {
   import SchedulerFactory._
+
+  /** Collect statistics for all pools created by this factory. */
+  def getStats: Map[String, PoolStats] =
+    poolMap.toSeq.map {
+      case (name, pool) => name -> pool.getStats
+    }.toMap
 
   def fixedPool(
       name: String,
@@ -58,7 +64,7 @@ class SchedulerFactory private (
     )
 
   private def register(name: String, scheduler: ExecutorScheduler): ExecutorScheduler = {
-    val pool: Pool = scheduler.executor match {
+    val pool = scheduler.executor match {
       case executor: ForkJoinPool =>
         Pool {
           PoolStats(

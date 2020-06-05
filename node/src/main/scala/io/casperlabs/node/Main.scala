@@ -6,7 +6,6 @@ import io.casperlabs.catscontrib.effect.implicits.syncId
 import io.casperlabs.ipc.ChainSpec
 import io.casperlabs.node.configuration._
 import io.casperlabs.node.configuration.Configuration.Command.Run
-import io.casperlabs.node.effects.SchedulerFactory
 import io.casperlabs.shared._
 import monix.eval.Task
 import monix.execution.Scheduler
