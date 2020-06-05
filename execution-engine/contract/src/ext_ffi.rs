@@ -16,8 +16,6 @@ extern "C" {
     pub fn add_local(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
     pub fn new_uref(uref_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
     pub fn load_named_keys(total_keys: *mut usize, result_size: *mut usize) -> i32;
-    pub fn get_arg(index: usize, dest_ptr: *mut u8, dest_size: usize) -> i32;
-    pub fn get_arg_size(index: usize, dest_size: *mut usize) -> i32;
     pub fn ret(value_ptr: *const u8, value_size: usize) -> !;
     pub fn get_key(
         name_ptr: *const u8,

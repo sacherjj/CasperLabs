@@ -91,7 +91,7 @@ pub struct WasmTestBuilder<S> {
 
 impl<S> WasmTestBuilder<S> {
     fn initialize_logging() {
-        let log_settings = Settings::new(LevelFilter::Debug).with_style(Style::HumanReadable);
+        let log_settings = Settings::new(LevelFilter::Error).with_style(Style::HumanReadable);
         let _ = logging::initialize(log_settings);
     }
 }

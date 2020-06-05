@@ -1,12 +1,12 @@
 //@ts-nocheck
 import * as CL from "../../../../contract-as/assembly";
-import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
+import {Error} from "../../../../contract-as/assembly/error";
 import {fromBytesString} from "../../../../contract-as/assembly/bytesrepr";
 import {Key} from "../../../../contract-as/assembly/key";
 import {putKey} from "../../../../contract-as/assembly";
 import {CLValue} from "../../../../contract-as/assembly/clvalue";
-import {URef} from "../../../../contract-as/assembly/uref";
 import { RuntimeArgs } from "../../../../contract-as/assembly/runtime_args";
+import {Pair} from "../../../../contract-as/assembly/pair";
 
 const METHOD_VERSION = "version";
 const HASH_KEY_NAME = "purse_holder";
@@ -14,10 +14,6 @@ const ENTRY_POINT_NAME = "entry_point";
 const PURSE_NAME = "purse_name";
 
 enum CustomError {
-  MissingMethodNameArg = 2,
-  InvalidMethodNameArg = 3,
-  MissingPurseNameArg = 4,
-  InvalidPurseNameArg = 5,
   UnableToGetVersion = 6,
   UnableToStoreVersion = 7,
   InvalidVersion = 8
@@ -53,8 +49,9 @@ export function call(): void {
     let contractHash = CL.getNamedArg(HASH_KEY_NAME);
     let purseNameBytes = CL.getNamedArg(PURSE_NAME);
     let purseName = fromBytesString(purseNameBytes).unwrap();
-    let args = new Map<String, CLValue>();
-    args.set(PURSE_NAME, CLValue.fromString(purseName));
-    CL.callContract(contractHash, entryPointName, RuntimeArgs.fromMap(args));
+    let runtimeArgs = RuntimeArgs.fromArray([
+      new Pair(PURSE_NAME, CLValue.fromString(purseName)),
+    ]);
+    CL.callContract(contractHash, entryPointName, runtimeArgs);
   }
 }

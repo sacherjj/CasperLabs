@@ -36,6 +36,9 @@ fn should_fail_when_bonding_amount_is_zero_ee_597_regression() {
         assert!(error_message.contains(&format!("{:?}", ApiError::Unhandled)));
     } else {
         // Error::BondTooSmall => 5,
-        assert!(error_message.contains(&format!("{:?}", ApiError::ProofOfStake(5))));
+        assert!(
+            error_message.contains(&format!("{:?}", ApiError::ProofOfStake(5))),
+            error_message
+        );
     }
 }

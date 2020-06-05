@@ -9,19 +9,14 @@ import {toBytesString,
         fromBytesMap,
         fromBytesString,
         toBytesStringList,
-        toBytesU32,
         Result,
         Ref,
-        toBytesArrayU8,
         toBytesMap,
         toBytesVecT,
-        fromBytesStringList,
         fromBytesArray} from "./bytesrepr";
-import {U512} from "./bignum";
-import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH, UREF_ADDR_LENGTH, KEY_HASH_LENGTH} from "./constants";
-import {Pair} from "./pair";
+import {KEY_UREF_SERIALIZED_LENGTH, UREF_ADDR_LENGTH, KEY_HASH_LENGTH} from "./constants";
 import {RuntimeArgs} from "./runtime_args";
-import {encodeUTF8, typedToArray, arrayToTyped} from "./utils";
+import {encodeUTF8} from "./utils";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -150,11 +145,11 @@ export function getSystemContract(systemContract: SystemContract): Uint8Array {
  * stored contract calls [[Error.revert]], then execution stops and [[callContract]] doesn't return.
  * Otherwise [[callContract]] returns null.
  *
- * @param key A key under which a contract is stored
+ * @param contractHash A key under which a contract is stored
  * @param args A list of values
  * @returns Bytes of the contract's return value.
  */
-export function callContract(key: Uint8Array, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
+export function callContract(contractHash: Uint8Array, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
   let argBytes = runtimeArgs.toBytes();
   let entryPointNameBytes = toBytesString(entryPointName);
 
@@ -162,8 +157,8 @@ export function callContract(key: Uint8Array, entryPointName: String, runtimeArg
   resultSize.fill(0);
 
   let ret = externals.call_contract(
-      <usize>key.dataStart,
-      key.length,
+      <usize>contractHash.dataStart,
+      contractHash.length,
       entryPointNameBytes.dataStart,
       entryPointNameBytes.length,
       argBytes.dataStart,

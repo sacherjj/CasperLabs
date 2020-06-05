@@ -59,9 +59,11 @@ export enum CLTypeTag {
 }
 
 export class CLType {
+    tag: CLTypeTag;
     bytes: Array<u8>;
 
     constructor(tag: CLTypeTag, extra: Array<u8> | null = null) {
+        this.tag = tag;
         this.bytes = [<u8>tag];
         if (extra !== null) {
             this.bytes = this.bytes.concat(<Array<u8>>extra);
@@ -98,14 +100,14 @@ export class CLType {
  */
 export class CLValue {
     bytes: u8[];
-    tag: CLType;
+    clType: CLType;
 
     /**
-     * Constructs a new `CLValue` with given underlying data and type tag.
+     * Constructs a new `CLValue` with given underlying data and type.
      */
-    constructor(bytes: u8[], tag: CLType) {
+    constructor(bytes: u8[], clType: CLType) {
         this.bytes = bytes;
-        this.tag = tag;
+        this.clType = clType;
     }
 
     /**
@@ -169,7 +171,7 @@ export class CLValue {
      */
     toBytes(): u8[] {
         let data = toBytesArrayU8(this.bytes);
-        data = data.concat(this.tag.bytes);
+        data = data.concat(this.clType.bytes);
         return data;
     }
 }

@@ -33,6 +33,7 @@ pub trait ProofOfStake:
         let timestamp = self.get_block_time();
         // Transfer `amount` from the `source` purse to PoS internal purse. POS_PURSE is a constant,
         // it is the URef of the proof-of-stake contract's own purse.
+
         self.transfer_purse_to_purse(source, target, amount)
             .map_err(|_| Error::BondTransferFailed)?;
         internal::bond(self, amount, validator, timestamp)?;

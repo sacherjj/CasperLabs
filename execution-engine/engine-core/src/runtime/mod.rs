@@ -1753,6 +1753,8 @@ where
         const METHOD_SET_REFUND_PURSE: &str = "set_refund_purse";
         const METHOD_GET_REFUND_PURSE: &str = "get_refund_purse";
         const METHOD_FINALIZE_PAYMENT: &str = "finalize_payment";
+        const ARG_AMOUNT: &str = "amount";
+        const ARG_PURSE: &str = "purse";
 
         let state = self.context.state();
         let access_rights = {
@@ -1812,8 +1814,8 @@ where
                 }
 
                 let validator: PublicKey = runtime.context.get_caller();
-                let amount: U512 = Self::get_named_argument(&args, "amount")?;
-                let source_uref: URef = Self::get_named_argument(&args, "source")?;
+                let amount: U512 = Self::get_named_argument(&args, ARG_AMOUNT)?;
+                let source_uref: URef = Self::get_named_argument(&args, ARG_PURSE)?;
                 runtime
                     .bond(validator, amount, source_uref)
                     .map_err(Self::reverter)?;
