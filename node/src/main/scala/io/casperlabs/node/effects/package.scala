@@ -7,6 +7,7 @@ import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl._
+import com.zaxxer.hikari.metrics.MetricsTrackerFactory
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
@@ -95,7 +96,8 @@ package object effects {
   def doobieTransactors(
       conf: Configuration,
       connectEC: (String, Int, Int) => ExecutionContext,
-      transactEC: (String, Int) => ExecutionContext
+      transactEC: (String, Int) => ExecutionContext,
+      metricsTrackerFactory: MetricsTrackerFactory
   ): Resource[Task, (Transactor[Task], Transactor[Task])] = {
     val serverDataDir = conf.server.dataDir
     val readThreads   = conf.server.dbReadThreads.value
@@ -128,6 +130,7 @@ package object effects {
       config.addDataSourceProperty("journal_mode", "WAL")
       config.setConnectionTimeout(connectionTimeout.toMillis)
       config.setPoolName(poolName)
+      config.setMetricsTrackerFactory(metricsTrackerFactory)
       config
     }
 

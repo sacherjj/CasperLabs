@@ -134,14 +134,18 @@ class NodeRuntime private[node] (
                                                                           conf.server.maxMessageSize.value,
                                                                           conf.server.engineParallelism.value
                                                                         )
+      databaseMetrics = diagnostics.HikariMetricsTrackerFactory()
+
       //TODO: We may want to adjust threading model for better performance
       (writeTransactor, readTransactor) <- effects.doobieTransactors(
                                             conf,
                                             connectEC = dbConnScheduler,
-                                            transactEC = dbIOScheduler
+                                            transactEC = dbIOScheduler,
+                                            metricsTrackerFactory = databaseMetrics
                                           )
       _ <- Resource.liftF(runRdmbsMigrations(conf.server.dataDir))
 
+      _ <- databaseMetrics.periodicPoolMetrics()
       _ <- effects.periodicStorageSizeMetrics(conf)
       _ <- effects.periodicThreadPoolMetrics(schedulerFactory)
 
