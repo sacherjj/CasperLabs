@@ -40,6 +40,7 @@ import io.casperlabs.node.api.{EventStream, VersionInfo}
 import io.casperlabs.node.api.graphql.FinalizedBlocksStream
 import io.casperlabs.node.casper.consensus.Consensus
 import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.node.effects.SchedulerFactory
 import io.casperlabs.shared._
 import io.casperlabs.smartcontracts.{ExecutionEngineService, GrpcExecutionEngineService}
 import io.casperlabs.storage.SQLiteStorage
@@ -65,38 +66,36 @@ class NodeRuntime private[node] (
 )(
     implicit log: Log[Task],
     logId: Log[Id],
-    uncaughtExceptionHandler: UncaughtExceptionHandler
+    schedulerFactory: SchedulerFactory
 ) {
   import NodeRuntime.RelayingProxy
 
   private[this] val loopScheduler =
-    Scheduler.fixedPool("loop", 2, reporter = uncaughtExceptionHandler)
+    schedulerFactory.fixedPool("loop", 2)
 
   // Bounded thread pool for incoming traffic. Limited thread pool size so loads of request cannot exhaust all resources.
   private[this] val ingressScheduler = {
     val cpus  = java.lang.Runtime.getRuntime.availableProcessors()
     val multi = conf.server.parallelismCpuMultiplier.value
-    Scheduler.forkJoin(
+    schedulerFactory.forkJoin(
       parallelism = Math.max((cpus * multi).toInt, conf.server.minParallelism.value),
       maxThreads = conf.server.ingressThreads.value,
-      name = "ingress-io",
-      reporter = uncaughtExceptionHandler
+      name = "ingress-io"
     )
   }
 
   // Unbounded thread pool for outgoing, blocking IO. It is recommended to have unlimited thread pools for waiting on IO.
   private[this] val egressScheduler =
-    Scheduler.cached("egress-io", 2, Int.MaxValue, reporter = uncaughtExceptionHandler)
+    schedulerFactory.cached("egress-io", 2, Int.MaxValue)
 
   private[this] def dbConnScheduler(name: String, connections: Int, threads: Int) =
-    Scheduler.cached(
+    schedulerFactory.cached(
       s"db-conn-$name",
       connections,
-      math.max(connections, threads),
-      reporter = uncaughtExceptionHandler
+      math.max(connections, threads)
     )
   private[this] def dbIOScheduler(name: String, connections: Int) =
-    Scheduler.cached(s"db-io-$name", connections, Int.MaxValue, reporter = uncaughtExceptionHandler)
+    schedulerFactory.cached(s"db-io-$name", connections, Int.MaxValue)
 
   implicit val raiseIOError: RaiseIOError[Task] = IOError.raiseIOErrorThroughSync[Task]
 
@@ -526,9 +525,9 @@ object NodeRuntime {
   )(
       implicit
       scheduler: Scheduler,
+      schedulerFactory: SchedulerFactory,
       log: Log[Task],
-      logId: Log[Id],
-      uncaughtExceptionHandler: UncaughtExceptionHandler
+      logId: Log[Id]
   ): Task[NodeRuntime] =
     for {
       id      <- NodeEnvironment.create(conf)
