@@ -127,7 +127,7 @@ package object effects {
       config.addDataSourceProperty("busy_timeout", "5000")
       config.addDataSourceProperty("journal_mode", "WAL")
       config.setConnectionTimeout(connectionTimeout.toMillis)
-      config.setPoolName(s"${poolName}-pool")
+      config.setPoolName(poolName)
       config
     }
 
