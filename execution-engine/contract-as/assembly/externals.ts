@@ -38,7 +38,8 @@ export declare function call_contract(contract_hash_ptr: usize, contract_hash_si
 export declare function call_versioned_contract(
     contract_package_hash_ptr: usize,
     contract_package_hash_size: usize,
-    version: u8,
+    contract_version_ptr: usize,
+    contract_version_size: usize,
     entry_point_name_ptr: usize,
     entry_point_name_size: usize,
     runtime_args_ptr: usize,

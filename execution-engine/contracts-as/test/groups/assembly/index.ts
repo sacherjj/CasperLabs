@@ -6,6 +6,9 @@ import { URef } from "../../../../contract-as/assembly/uref";
 import { CLValue, CLType, CLTypeTag } from "../../../../contract-as/assembly/clvalue";
 import { Pair } from "../../../../contract-as/assembly/pair";
 import { RuntimeArgs } from "../../../../contract-as/assembly/runtime_args";
+import { Option } from "../../../../contract-as/assembly/option";
+import { toBytesU32 } from "../../../../contract-as/assembly/bytesrepr";
+import { arrayToTyped } from "../../../../contract-as/assembly/utils";
 
 const CONTRACT_INITIAL_VERSION: u8 = 1;
 const PACKAGE_HASH_KEY = "package_hash_key";
@@ -20,7 +23,6 @@ const UNCALLABLE_CONTRACT = "uncallable_contract";
 const CALL_RESTRICTED_ENTRY_POINTS = "call_restricted_entry_points";
 const ARG_PACKAGE_HASH = "package_hash";
 
-
 export function restricted_session(): void { }
 
 export function restricted_contract(): void { }
@@ -28,9 +30,10 @@ export function restricted_contract(): void { }
 export function restricted_session_caller(): void {
   let packageHashBytes = CL.getNamedArg(ARG_PACKAGE_HASH);
   let packageKey = Key.fromBytes(packageHashBytes).unwrap();
+  let contractVersion = new Option(arrayToTyped(toBytesU32(CONTRACT_INITIAL_VERSION)));
   CL.callVersionedContract(
     <Uint8Array>packageKey.hash,
-    CONTRACT_INITIAL_VERSION,
+    contractVersion,
     RESTRICTED_SESSION,
     new RuntimeArgs(),
   );
@@ -39,9 +42,10 @@ export function restricted_session_caller(): void {
 function contract_caller(): void {
   let packageHashBytes = CL.getNamedArg(ARG_PACKAGE_HASH);
   let packageKey = Key.fromBytes(packageHashBytes).unwrap();
+  let contractVersion = new Option(arrayToTyped(toBytesU32(CONTRACT_INITIAL_VERSION)));
   CL.callVersionedContract(
     <Uint8Array>packageKey.hash,
-    CONTRACT_INITIAL_VERSION,
+    contractVersion,
     RESTRICTED_CONTRACT,
     new RuntimeArgs(),
   );
@@ -60,7 +64,7 @@ export function uncallable_session(): void { }
 export function uncallable_contract(): void { }
 
 export function call_restricted_entry_points(): void {
-  // We're aggresively removing exports that aren't exposed through contract header so test
+  // We're aggressively removing exports that aren't exposed through contract header so test
   // ensures that those exports are still inside WASM.
   uncallable_session();
   uncallable_contract();
@@ -224,8 +228,6 @@ function installVersion1(
     entryPoints,
     namedKeys,
   );
-
-
 }
 
 

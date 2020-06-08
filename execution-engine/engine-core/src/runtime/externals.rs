@@ -10,7 +10,7 @@ use types::{
     api_error,
     bytesrepr::{self, ToBytes},
     contracts::EntryPoints,
-    ContractHash, ContractPackageHash, Group, Key, TransferredTo, URef, U512,
+    ContractHash, ContractPackageHash, ContractVersion, Group, Key, TransferredTo, URef, U512,
 };
 
 use engine_shared::{gas::Gas, stored_value::StoredValue};
@@ -514,15 +514,17 @@ where
                 // args(0) = pointer to contract_package_hash where contract is at in global state
                 // args(1) = size of contract_package_hash
                 // args(2) = pointer to contract version in wasm memory
-                // args(3) = pointer to method name in wasm memory
-                // args(4) = size of method name in wasm memory
-                // args(5) = pointer to function arguments in Wasm memory
-                // args(6) = size of arguments
-                // args(7) = pointer to result size (output)
+                // args(3) = size of contract version in wasm memory
+                // args(4) = pointer to method name in wasm memory
+                // args(5) = size of method name in wasm memory
+                // args(6) = pointer to function arguments in Wasm memory
+                // args(7) = size of arguments
+                // args(8) = pointer to result size (output)
                 let (
                     contract_package_hash_ptr,
                     contract_package_hash_size,
-                    version,
+                    contract_version_ptr,
+                    contract_package_size,
                     entry_point_name_ptr,
                     entry_point_name_size,
                     args_ptr,
@@ -532,7 +534,8 @@ where
 
                 let contract_package_hash: ContractPackageHash =
                     self.t_from_mem(contract_package_hash_ptr, contract_package_hash_size)?;
-
+                let contract_version: Option<ContractVersion> =
+                    self.t_from_mem(contract_version_ptr, contract_package_size)?;
                 let entry_point_name: String =
                     self.t_from_mem(entry_point_name_ptr, entry_point_name_size)?;
                 let args_bytes: Vec<u8> = {
@@ -542,7 +545,7 @@ where
 
                 let ret = self.call_versioned_contract_host_buffer(
                     contract_package_hash,
-                    version,
+                    contract_version,
                     entry_point_name,
                     args_bytes,
                     result_size_ptr,

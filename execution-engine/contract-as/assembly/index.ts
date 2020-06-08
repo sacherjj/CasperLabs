@@ -17,6 +17,7 @@ import {toBytesString,
 import {KEY_UREF_SERIALIZED_LENGTH, UREF_ADDR_LENGTH, KEY_HASH_LENGTH} from "./constants";
 import {RuntimeArgs} from "./runtime_args";
 import {encodeUTF8} from "./utils";
+import {Option} from "./option";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -466,14 +467,17 @@ export function newContract(entryPoints: EntryPoints, namedKeys: Array<Pair<Stri
   );
 }
 
-export function callVersionedContract(packageHash: Uint8Array, version: u8, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
+export function callVersionedContract(packageHash: Uint8Array, contract_version: Option, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
   let entryPointBytes = toBytesString(entryPointName);
   let argBytes = runtimeArgs.toBytes();
   let bytesWritten = new Uint32Array(1);
+  let bytesContractVersion = contract_version.toBytes();
+
   let ret = externals.call_versioned_contract(
     packageHash.dataStart,
     packageHash.length,
-    version,
+    bytesContractVersion.dataStart,
+    bytesContractVersion.length,
     entryPointBytes.dataStart,
     entryPointBytes.length,
     argBytes.dataStart,

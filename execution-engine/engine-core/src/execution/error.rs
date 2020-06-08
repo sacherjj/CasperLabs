@@ -5,7 +5,7 @@ use engine_shared::TypeMismatch;
 use types::{
     account::{AddKeyFailure, RemoveKeyFailure, SetThresholdFailure, UpdateKeyFailure},
     bytesrepr, system_contract_errors, AccessRights, ApiError, CLType, CLValueError,
-    ContractVersionKey, Key, URef,
+    ContractPackageHash, ContractVersionKey, Key, URef,
 };
 
 use crate::resolvers::error::ResolverError;
@@ -76,6 +76,8 @@ pub enum Error {
     HostBufferEmpty,
     #[fail(display = "Unsupported WASM start")]
     UnsupportedWasmStart,
+    #[fail(display = "No active contract versions for contract package")]
+    NoActiveContractVersions(ContractPackageHash),
     #[fail(display = "Invalid contract version: {}", _0)]
     InvalidContractVersion(ContractVersionKey),
     #[fail(display = "No such method: {}", _0)]

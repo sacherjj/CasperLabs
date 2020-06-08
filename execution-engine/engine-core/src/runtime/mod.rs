@@ -1911,7 +1911,7 @@ where
     pub fn call_versioned_contract(
         &mut self,
         contract_package_hash: ContractPackageHash,
-        version: ContractVersion,
+        contract_version: Option<ContractVersion>,
         entry_point_name: String,
         args: RuntimeArgs,
     ) -> Result<CLValue, Error> {
@@ -1928,19 +1928,23 @@ where
             None => return Err(Error::KeyNotFound(key)),
         };
 
-        let contract_version_key =
-            ContractVersionKey::new(self.context.protocol_version().value().major, version);
+        let contract_version_key = match contract_version {
+            Some(version) => {
+                ContractVersionKey::new(self.context.protocol_version().value().major, version)
+            }
+            None => match contract_package.get_current_contract_version() {
+                Some(v) => *v,
+                None => return Err(Error::NoActiveContractVersions(contract_package_hash)),
+            },
+        };
 
-        //
         // Get contract entry point hash
         let contract_hash = contract_package
             .get_contract(contract_version_key)
             .cloned()
             .ok_or_else(|| Error::InvalidContractVersion(contract_version_key))?;
 
-        //
         // Get contract data
-        //
         let contract = match self.context.read_gs(&contract_hash.into())? {
             Some(StoredValue::Contract(contract)) => contract,
             Some(_) => {
@@ -2206,7 +2210,7 @@ where
     fn call_versioned_contract_host_buffer(
         &mut self,
         contract_package_hash: ContractPackageHash,
-        version: ContractVersion,
+        contract_version: Option<ContractVersion>,
         entry_point_name: String,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
@@ -2216,8 +2220,12 @@ where
             return Ok(Err(err));
         }
         let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
-        let result =
-            self.call_versioned_contract(contract_package_hash, version, entry_point_name, args)?;
+        let result = self.call_versioned_contract(
+            contract_package_hash,
+            contract_version,
+            entry_point_name,
+            args,
+        )?;
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
 
@@ -2422,7 +2430,7 @@ where
         let major = protocol_version.value().major;
 
         // TODO: Implement different ways of carrying on existing named keys
-        if let Some(&previous_contract_hash) = contract_package.get_current_contract() {
+        if let Some(&previous_contract_hash) = contract_package.get_current_contract_hash() {
             let previous_contract: Contract =
                 self.context.read_gs_typed(&previous_contract_hash.into())?;
 

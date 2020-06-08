@@ -181,7 +181,7 @@ impl ModuleImportResolver for RuntimeModuleImportResolver {
                 FunctionIndex::CallContractFuncIndex.into(),
             ),
             "call_versioned_contract" => FuncInstance::alloc_host(
-                Signature::new(&[ValueType::I32; 8][..], Some(ValueType::I32)),
+                Signature::new(&[ValueType::I32; 9][..], Some(ValueType::I32)),
                 FunctionIndex::CallVersionedContract.into(),
             ),
             "get_named_arg_size" => FuncInstance::alloc_host(

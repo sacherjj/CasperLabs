@@ -453,7 +453,12 @@ where
                     )?;
 
                     runtime
-                        .call_versioned_contract(mint_package_hash, 1, "mint".to_string(), args)?
+                        .call_versioned_contract(
+                            mint_package_hash,
+                            Some(1),
+                            "mint".to_string(),
+                            args,
+                        )?
                         .into_t::<Result<URef, mint::Error>>()
                         .expect("should convert")
                 };

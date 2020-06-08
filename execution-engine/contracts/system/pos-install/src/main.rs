@@ -182,7 +182,7 @@ fn mint_purse(contract_package_hash: ContractPackageHash, amount: U512) -> URef 
 
     let result: Result<URef, mint::Error> = runtime::call_versioned_contract(
         contract_package_hash,
-        CONTRACT_INITIAL_VERSION,
+        Some(CONTRACT_INITIAL_VERSION),
         ENTRY_POINT_MINT,
         args,
     );

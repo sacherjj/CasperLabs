@@ -19,15 +19,16 @@ pub extern "C" fn call() {
     let contract_package_hash: ContractPackageHash = runtime::get_named_arg(ARG_CONTRACT_PACKAGE);
     let new_purse_name: String = runtime::get_named_arg(ARG_NEW_PURSE_NAME);
     let version_number: ContractVersion = runtime::get_named_arg(ARG_VERSION);
+    let contract_version = Some(version_number);
 
-    let args = runtime_args! {
+    let runtime_args = runtime_args! {
         PURSE_NAME_ARG_NAME => new_purse_name,
     };
 
     runtime::call_versioned_contract(
         contract_package_hash,
-        version_number,
+        contract_version,
         ENTRY_FUNCTION_NAME,
-        args,
+        runtime_args,
     )
 }

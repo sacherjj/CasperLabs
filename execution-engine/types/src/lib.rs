@@ -50,8 +50,8 @@ pub use block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH};
 pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
 pub use contracts::{
-    Contract, ContractPackage, ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType,
-    EntryPoints, Group, Parameter,
+    Contract, ContractPackage, ContractVersion, ContractVersionKey, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Group, Parameter,
 };
 //pub use contract_ref::ContractRef;
 pub use contract_wasm::ContractWasm;

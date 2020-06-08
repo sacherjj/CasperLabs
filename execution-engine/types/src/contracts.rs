@@ -167,7 +167,7 @@ pub type DisabledVersions = BTreeSet<ContractVersionKey>;
 /// Collection of different versions of the same contract.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ContractPackage {
-    /// Key used to add or remove versions
+    /// Key used to add or disable versions
     access_key: URef,
     versions: ContractVersions,
     /// Versions that can be called
@@ -241,7 +241,7 @@ impl ContractPackage {
             && !self.disabled_versions.contains(&contract_version_key)
     }
 
-    /// Remove the given version from active versions, putting it into removed versions.
+    /// Remove the given version from active versions, putting it into disabled versions.
     pub fn disable_contract_version(&mut self, contract_hash: ContractHash) -> Result<(), Error> {
         let key = self
             .versions
@@ -312,8 +312,13 @@ impl ContractPackage {
     }
 
     /// Gets most recent contract version hash.
-    pub fn get_current_contract(&self) -> Option<&ContractHash> {
+    pub fn get_current_contract_hash(&self) -> Option<&ContractHash> {
         self.versions.values().next_back()
+    }
+
+    /// Gets most recent contract version key.
+    pub fn get_current_contract_version(&self) -> Option<&ContractVersionKey> {
+        self.versions.keys().next_back()
     }
 }
 

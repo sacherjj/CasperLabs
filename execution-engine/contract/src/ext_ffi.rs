@@ -116,7 +116,8 @@ extern "C" {
     pub fn call_versioned_contract(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        version: u32,
+        contract_version_ptr: *const u8,
+        contract_version_size: usize,
         entry_point_name_ptr: *const u8,
         entry_point_name_size: usize,
         runtime_args_ptr: *const u8,
