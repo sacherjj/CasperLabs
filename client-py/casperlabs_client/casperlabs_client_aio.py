@@ -1,5 +1,5 @@
 import asyncio
-
+import warnings
 from grpclib.client import Channel
 from grpclib.protocol import H2Protocol
 from ssl import create_default_context, Purpose, CERT_REQUIRED
@@ -8,19 +8,18 @@ from typing import cast
 from . import casper_pb2 as casper
 from . import casper_grpc
 from . import info_pb2 as info
-
-from casperlabs_client.utils import (
-    key_variant,
-    make_deploy,
-    sign_deploy,
-    get_public_key,
-    bundled_contract,
-    extract_common_name,
+from .common import block_info_view, deploy_info_view
+from .consts import (
+    DEFAULT_HOST,
+    DEFAULT_PORT,
+    BUNDLED_TRANSFER_WASM,
+    STATUS_CHECK_DELAY,
 )
+from casperlabs_client.query_state import key_variant
+from casperlabs_client.deploy import DeployData, sign_deploy
+from .contract import bundled_contract_path
 from . import abi
-
-DEFAULT_HOST = "localhost"
-DEFAULT_PORT = 40401
+from .crypto import extract_common_name
 
 
 class ScopedChannel(object):
@@ -40,9 +39,10 @@ class CasperService(object):
         self.port = port
         self.certificate_file = certificate_file
         self.private_key_file = private_key_file
-        self.node_id = (
-            certificate_file and extract_common_name(certificate_file) or None
-        )
+        if certificate_file:
+            self.node_id = extract_common_name(certificate_file)
+        else:
+            self.node_id = None
 
     def __getattr__(self, name):
         async def method(*args):
@@ -91,9 +91,9 @@ class SecureChannel(Channel):
 class CasperLabsClientAIO(object):
     """
     gRPC asyncio CasperLabs client.
-    """
 
-    DEPLOY_STATUS_CHECK_DELAY = 0.5
+    Not fully stable and should not yet be used.
+    """
 
     def __init__(
         self,
@@ -102,15 +102,19 @@ class CasperLabsClientAIO(object):
         certificate_file: str = None,
         private_key_file: str = None,
     ):
+        """
+        CasperLabsClientAIO constructor.
+
+        :param host:               Hostname or IP of node on which gRPC service is running
+        :param port:               Port used for external gRPC API
+        :param certificate_file:   Certificate file for TLS
+        :param node_id:            node_id of the node, for gRPC encryption
+        """
         self.casper_service = CasperService(
             host, port, certificate_file, private_key_file
         )
-
-    async def show_blocks(self, depth=1, max_rank=0, full_view=True):
-        return await self.casper_service.StreamBlockInfos(
-            casper.StreamBlockInfosRequest(
-                depth=depth, max_rank=max_rank, view=self._block_info_view(full_view)
-            )
+        warnings.warn(
+            "Object not fully stable yet and should not be used in current state."
         )
 
     async def deploy(
@@ -134,29 +138,29 @@ class CasperLabsClientAIO(object):
         dependencies=None,
         chain_name: str = None,
     ):
-        deploy = make_deploy(
-            from_addr=from_addr,
-            gas_price=gas_price,
-            payment=payment,
-            session=session,
-            public_key=public_key,
-            session_args=session_args,
-            payment_args=payment_args,
-            payment_amount=payment_amount,
-            payment_hash=payment_hash,
-            payment_name=payment_name,
-            payment_uref=payment_uref,
-            session_hash=session_hash,
-            session_name=session_name,
-            session_uref=session_uref,
-            ttl_millis=ttl_millis,
-            dependencies=dependencies,
-            chain_name=chain_name,
+        deploy_data = DeployData.from_args(
+            dict(
+                from_addr=from_addr,
+                gas_price=gas_price,
+                payment=payment,
+                session=session,
+                public_key=public_key,
+                session_args=session_args,
+                payment_args=payment_args,
+                payment_amount=payment_amount,
+                payment_hash=payment_hash,
+                payment_name=payment_name,
+                payment_uref=payment_uref,
+                session_hash=session_hash,
+                session_name=session_name,
+                session_uref=session_uref,
+                ttl_millis=ttl_millis,
+                dependencies=dependencies,
+                chain_name=chain_name,
+            )
         )
-
-        deploy = sign_deploy(
-            deploy, get_public_key(public_key, from_addr, private_key), private_key
-        )
+        deploy = deploy_data.make_protobuf()
+        deploy = sign_deploy(deploy, deploy_data.public_key_to_use, private_key)
         await self.send_deploy(deploy)
         return deploy.deploy_hash.hex()
 
@@ -164,9 +168,8 @@ class CasperLabsClientAIO(object):
         return await self.casper_service.Deploy(casper.DeployRequest(deploy=deploy))
 
     async def wait_for_deploy_processed(
-        self, deploy_hash, on_error_raise=True, delay=DEPLOY_STATUS_CHECK_DELAY
+        self, deploy_hash, on_error_raise=True, delay=STATUS_CHECK_DELAY
     ):
-        result = None
         while True:
             result = await self.show_deploy(deploy_hash)
             if result.status.state != info.DeployInfo.State.PENDING:
@@ -184,15 +187,19 @@ class CasperLabsClientAIO(object):
                 )
         return result
 
-    async def show_deploy(self, deploy_hash_base16: str, full_view=False):
-        return await self.casper_service.GetDeployInfo(
-            casper.GetDeployInfoRequest(
-                deploy_hash_base16=deploy_hash_base16,
-                view=self._deploy_info_view(full_view),
-            )
-        )
-
     async def query_state(self, block_hash: str, key: str, path: str, key_type: str):
+        """
+        Query a value in the global state.
+
+        :param block_hash:        Hash of the block to query the state of
+        :param key:               Base16 encoding of the base key
+        :param path:              Path to the value to query. Must be of the form
+                                  'key1/key2/.../keyn'
+        :param key_type:          Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'.
+                                  For 'local' key type, 'key' value format is {seed}:{rest},
+                                  where both parts are hex encoded."
+        :return:                  QueryStateResponse object
+        """
         q = casper.StateQuery(key_variant=key_variant(key_type), key_base16=key)
         q.path_segments.extend([name for name in path.split("/") if name])
         return await self.casper_service.GetBlockState(
@@ -200,7 +207,7 @@ class CasperLabsClientAIO(object):
         )
 
     async def transfer(self, target_account_hex, amount, **deploy_args):
-        deploy_args["session"] = bundled_contract("transfer_to_account_u512.wasm")
+        deploy_args["session"] = bundled_contract_path(BUNDLED_TRANSFER_WASM)
         deploy_args["session_args"] = abi.ABI.args(
             [
                 abi.ABI.account("account", bytes.fromhex(target_account_hex)),
@@ -210,8 +217,12 @@ class CasperLabsClientAIO(object):
         return await self.deploy(**deploy_args)
 
     async def balance(self, address: str, block_hash: str):
+        """ Return balance of the main purse of an account
+
+        :param address:    Public key address of account.
+        :param block_hash: Hash of block from which to return balance.
+        """
         value = await self.query_state(block_hash, address, "", "address")
-        account = None
         try:
             account = value.account
         except AttributeError:
@@ -238,21 +249,32 @@ class CasperLabsClientAIO(object):
     async def show_block(self, block_hash_base16: str, full_view=True):
         return await self.casper_service.GetBlockInfo(
             casper.GetBlockInfoRequest(
-                block_hash_base16=block_hash_base16,
-                view=self._block_info_view(full_view),
+                block_hash_base16=block_hash_base16, view=block_info_view(full_view)
             )
         )
 
-    async def show_deploys(self, block_hash_base16: str, full_view=False):
+    async def show_blocks(self, depth=1, max_rank=0, full_view=True):
+        return await self.casper_service.StreamBlockInfos(
+            casper.StreamBlockInfosRequest(
+                depth=depth, max_rank=max_rank, view=block_info_view(full_view)
+            )
+        )
+
+    async def show_deploy(self, deploy_hash_base16: str, full_view=False):
+        return await self.casper_service.GetDeployInfo(
+            casper.GetDeployInfoRequest(
+                deploy_hash_base16=deploy_hash_base16, view=deploy_info_view(full_view)
+            )
+        )
+
+    async def show_deploys(self, block_hash: str, full_view=False):
+        """ Show deploys within a block
+
+        :param block_hash:  Block Hash in base16 (hex)
+        :param full_view:   Full block display, default false
+        """
         return await self.casper_service.StreamBlockDeploys(
             casper.StreamBlockDeploysRequest(
-                block_hash_base16=block_hash_base16,
-                view=self._deploy_info_view(full_view),
+                block_hash_base16=block_hash, view=deploy_info_view(full_view)
             )
         )
-
-    def _deploy_info_view(self, full_view):
-        return full_view and info.DeployInfo.View.FULL or info.DeployInfo.View.BASIC
-
-    def _block_info_view(self, full_view):
-        return full_view and info.BlockInfo.View.FULL or info.BlockInfo.View.BASIC

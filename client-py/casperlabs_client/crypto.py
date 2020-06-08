@@ -3,7 +3,8 @@ Cryptography related code used in the CasperLabs client.
 """
 
 import datetime
-import base64
+import ssl
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -15,33 +16,32 @@ from Crypto.Hash import keccak
 from pyblake2 import blake2b
 import ed25519
 from . import consensus_pb2 as consensus
+from .io import read_pem_key
 
 
-def generate_validators_keys():
-    validator_private = cryptography_ed25519.Ed25519PrivateKey.generate()
-    validator_public = validator_private.public_key()
+def extract_common_name(certificate_file: str) -> str:
+    cert_dict = ssl._ssl._test_decode_cert(certificate_file)
+    return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
 
-    validator_private_pem = validator_private.private_bytes(
+
+def generate_keys():
+    private_key = cryptography_ed25519.Ed25519PrivateKey.generate()
+    public_key = private_key.public_key()
+
+    private_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
 
-    validator_public_pem = validator_public.public_bytes(
+    public_pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
-    validator_public_bytes = validator_public.public_bytes(
+    public_bytes = public_key.public_bytes(
         encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
     )
-    return validator_private_pem, validator_public_pem, validator_public_bytes
-
-
-def read_pem_key(file_name: str):
-    with open(file_name) as f:
-        s = [l for l in f.readlines() if l and not l.startswith("-----")][0].strip()
-        r = base64.b64decode(s)
-        return len(r) % 32 == 0 and r[:32] or r[-32:]
+    return private_pem, public_pem, public_bytes
 
 
 def generate_key_pair():
@@ -69,7 +69,7 @@ def public_address(public_key):
 def generate_certificates(private_key, public_key):
     today = datetime.datetime.today()
     one_day = datetime.timedelta(1, 0, 0)
-    address = public_address(public_key)  # .map(Base16.encode).getOrElse("local")
+    address = public_address(public_key)  # .map(Base16.to_protobuf).getOrElse("local")
     owner = f"CN={address}"
 
     builder = x509.CertificateBuilder()
@@ -111,5 +111,9 @@ def signature(private_key, data: bytes):
     )
 
 
-def private_to_public_key(private_key) -> bytes:
-    return ed25519.SigningKey(read_pem_key(private_key)).get_verifying_key().to_bytes()
+def private_to_public_key(private_key_path) -> bytes:
+    return (
+        ed25519.SigningKey(read_pem_key(private_key_path))
+        .get_verifying_key()
+        .to_bytes()
+    )

@@ -30,7 +30,7 @@ NAME = "casperlabs_client"
 
 
 def read_version() -> str:
-    with open(VERSION_FILE, 'r') as f:
+    with open(VERSION_FILE, "r") as f:
         return f.read().strip()
 
 
@@ -74,8 +74,9 @@ def replace_in_place(pairs, file_name):
 
 
 def modify_files(description, pairs, files):
-    print(description, ":", files)
+    print(description)
     for file_name in files:
+        print(f"   {file_name}")
         replace_in_place(pairs, file_name)
 
 
@@ -83,9 +84,10 @@ def run_protoc(file_names, PROTO_DIR=PROTO_DIR):
     import grpc_tools
     from grpc_tools import protoc
 
-    print(f"Run protoc...: {file_names}")
+    print(f"Run protoc...")
     google_proto = join(dirname(grpc_tools.__file__), "_proto")
     for file_name in file_names:
+        print(f"   {file_name}")
         protoc.main(
             (
                 "",
@@ -165,11 +167,7 @@ def run_codegen():
         [(r"(import .*_pb2)", r"from . \1")],
         [fn for fn in glob(f"{PACKAGE_DIR}/*_grpc[.]py") if "_pb2_" not in fn],
     )
-    pattern = (
-        os.environ.get("TAG_NAME")
-        and "/root/bundled_contracts/*.wasm"
-        or os.path.join(CONTRACTS_DIR, "*.wasm")
-    )
+    pattern = os.path.join(CONTRACTS_DIR, "*.wasm")
     bundled_contracts = list(glob(pattern))
     if len(bundled_contracts) == 0:
         raise Exception(
@@ -180,11 +178,8 @@ def run_codegen():
 
 
 def prepare_sdist():
-    contracts_dir = (
-        os.environ.get("TAG_NAME") and "/root/bundled_contracts" or CONTRACTS_DIR
-    )
     bundled_contracts = [
-        f"{contracts_dir}/{f}"
+        f"{CONTRACTS_DIR}/{f}"
         for f in ["bonding.wasm", "transfer_to_account_u512.wasm", "unbonding.wasm"]
     ]
     for file_name in bundled_contracts:
@@ -238,8 +233,7 @@ setup(
     description="Python Client for interacting with a CasperLabs Node",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    include_package_data=True,
-    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm"]},
+    package_data={NAME: [f"{THIS_DIRECTORY}/casperlabs_client/*.wasm", VERSION_FILE]},
     keywords="casperlabs blockchain ethereum smart-contracts",
     author="CasperLabs LLC",
     author_email="testing@casperlabs.io",
@@ -247,13 +241,12 @@ setup(
     zip_safe=False,
     classifiers=[
         "Development Status :: 3 - Alpha",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3 :: Only",
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
     ],
-    python_requires=">=3.6.0",
+    python_requires=">=3.7.0",
     url="https://casperlabs.io/",
     project_urls={
         "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",
