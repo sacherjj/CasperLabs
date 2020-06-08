@@ -31,10 +31,10 @@ class DeployData:
     from_addr: bytes
     payment_code: PaymentCode
     session_code: SessionCode
-    account_hash: str = None
     ttl_millis: int = 0
     dependencies: list = None
     chain_name: str = None
+    public_key: str = None
     private_key: str = None
 
     @staticmethod
@@ -52,22 +52,24 @@ class DeployData:
         payment_code = PaymentCode.from_args(args)
         session_code = SessionCode.from_args(args)
 
-        account_hash = args.get("account_hash")
         ttl_millis = args.get("ttl_millis")
         dependencies_hex = args.get("dependencies") or []
         dependencies = [bytes.fromhex(d) for d in dependencies_hex]
         chain_name = args.get("chain_name", "")
         private_key = args.get("private_key")
+        public_key = args.get("public_key")
+        if not public_key and private_key:
+            public_key = crypto.private_to_public_key(private_key)
 
         deploy = DeployData(
-            from_addr,
-            payment_code,
-            session_code,
-            account_hash,
-            ttl_millis,
-            dependencies,
-            chain_name,
-            private_key,
+            from_addr=from_addr,
+            payment_code=payment_code,
+            session_code=session_code,
+            ttl_millis=ttl_millis,
+            dependencies=dependencies,
+            chain_name=chain_name,
+            public_key=public_key,
+            private_key=private_key,
         )
         if len(deploy.from_addr) != consts.ACCOUNT_HASH_LENGTH:
             raise Exception(
@@ -93,7 +95,7 @@ class DeployData:
         body_hash = crypto.blake2b_hash((body.SerializeToString()))
 
         header = consensus.Deploy.Header(
-            account_public_key_hash=self.account_hash,
+            account_public_key_hash=self.from_addr,
             timestamp=int(1000 * time.time()),
             body_hash=body_hash,
             ttl_millis=self.ttl_millis,

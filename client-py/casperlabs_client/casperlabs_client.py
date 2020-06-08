@@ -246,6 +246,7 @@ class CasperLabsClient:
         :param deploy_file:         File containing deploy
         :return: signed deploy object
         """
+        # TODO: Why do we require public key, instead of just deriving from private?
         if deploy is None:
             if deploy_file is None:
                 raise ValueError("Must have either deploy or deploy_file")
@@ -333,7 +334,9 @@ class CasperLabsClient:
         deploy_proto = deploy_data.make_protobuf()
 
         signed_deploy = self.sign_deploy(
-            deploy_proto, deploy_data.public_key_to_use, deploy_data.private_key
+            deploy=deploy_proto,
+            public_key=deploy_data.public_key,
+            private_key_file=deploy_data.private_key,
         )
         self.send_deploy(signed_deploy)
         return signed_deploy.deploy_hash.hex()
@@ -343,7 +346,7 @@ class CasperLabsClient:
         self,
         target_account: Union[str, bytes],
         amount: int,
-        from_addr: bytes = None,
+        from_addr: Union[str, bytes] = None,
         payment: str = None,
         public_key: str = None,
         private_key: str = None,

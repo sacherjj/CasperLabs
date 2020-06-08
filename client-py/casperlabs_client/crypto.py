@@ -111,5 +111,9 @@ def signature(private_key, data: bytes):
     )
 
 
-def private_to_public_key(private_key) -> bytes:
-    return ed25519.SigningKey(read_pem_key(private_key)).get_verifying_key().to_bytes()
+def private_to_public_key(private_key_path) -> bytes:
+    return (
+        ed25519.SigningKey(read_pem_key(private_key_path))
+        .get_verifying_key()
+        .to_bytes()
+    )
