@@ -542,7 +542,7 @@ class GrpcGossipServiceSpec
                     res.size shouldBe fetchers.size
                     // We may see some overlap between completion and the start of the next
                     // due to the fact that gRPC will do client side buffering too.
-                    parallelMax.get should be <= (maxParallelBlockDownloads * 2)
+                    parallelMax.get should be <= (maxParallelBlockDownloads * 3)
                     parallelMax.get should be >= maxParallelBlockDownloads
                   }
                 }
