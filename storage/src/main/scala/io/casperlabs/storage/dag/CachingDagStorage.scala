@@ -218,8 +218,8 @@ class CachingDagStorage[F[_]: Concurrent](
       orphaned: Set[BlockHash]
   ): F[Unit] =
     for {
-      _ <- lfbCache.set(Some(mainParent))
       _ <- underlying.markAsFinalized(mainParent, secondary, orphaned)
+      _ <- lfbCache.set(Some(mainParent))
       _ <- Sync[F].delay {
             finalityCache.put(mainParent, Finality.FINALIZED)
             secondary.foreach(finalityCache.put(_, Finality.FINALIZED))
