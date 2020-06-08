@@ -134,7 +134,7 @@ class NodeRuntime private[node] (
                                                                           conf.server.maxMessageSize.value,
                                                                           conf.server.engineParallelism.value
                                                                         )
-      databaseMetrics = diagnostics.HikariMetricsTrackerFactory()
+      databaseMetrics <- Resource.liftF(diagnostics.HikariMetricsTrackerFactory[Task]())
 
       //TODO: We may want to adjust threading model for better performance
       (writeTransactor, readTransactor) <- effects.doobieTransactors(

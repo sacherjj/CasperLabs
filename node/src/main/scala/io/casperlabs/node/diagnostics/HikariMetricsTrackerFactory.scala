@@ -3,7 +3,7 @@ package io.casperlabs.node.diagnostics
 import cats._
 import cats.implicits._
 import cats.effect.implicits._
-import cats.effect.{Concurrent, Resource, Timer}
+import cats.effect.{Concurrent, Resource, Sync, Timer}
 import com.zaxxer.hikari.metrics.{IMetricsTracker, MetricsTrackerFactory, PoolStats}
 import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.metrics.Metrics
@@ -70,6 +70,6 @@ object HikariMetricsTrackerFactory {
     def getStats: PoolStats
   }
 
-  def apply()(implicit metricsId: Metrics[Id]): HikariMetricsTrackerFactory =
-    new HikariMetricsTrackerFactory(TrieMap.empty)
+  def apply[F[_]: Sync]()(implicit metricsId: Metrics[Id]): F[HikariMetricsTrackerFactory] =
+    Sync[F].delay(new HikariMetricsTrackerFactory(TrieMap.empty))
 }
