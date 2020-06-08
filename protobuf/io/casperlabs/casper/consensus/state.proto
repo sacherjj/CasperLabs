@@ -259,6 +259,8 @@ message StoredValueInstance {
         CLValueInstance cl_value = 1;
         Account account = 2;
         Contract contract = 3;
+        ContractPackage contract_package = 4;
+        ContractWasm contract_wasm = 5;
     }
 }
 

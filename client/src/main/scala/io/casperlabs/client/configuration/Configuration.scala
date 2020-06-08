@@ -5,8 +5,7 @@ import java.nio.file.Files
 
 import io.casperlabs.client.configuration.Options.DeployOptions
 import io.casperlabs.casper.consensus.Deploy.{Arg, Code}
-import Code.{Contract, StoredContract}
-import io.casperlabs.casper.consensus.Deploy.Code.StoredContract.Address.{Hash, Name}
+import Code.{Contract, StoredContract, StoredVersionedContract}
 import io.casperlabs.casper.consensus.state.SemVer
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
@@ -34,8 +33,8 @@ final case class CodeConfig(
     // Entry point to the contract.
     // Name of the method that will be called during execution of the contract.
     entryPoint: Option[String],
-    // Semantic version of the contract that is being called.
-    version: Option[SemVer],
+    // Version of the contract that is being called.
+    version: Option[Int],
     // Name of a pre-packaged contract in the client JAR.
     resource: Option[String] = None
 )
@@ -73,7 +72,7 @@ object DeployConfig {
         name = args.sessionName.toOption,
         args = args.sessionArgs.toOption.map(_.args),
         entryPoint = args.sessionEntryPoint.toOption,
-        version = args.sessionSemVer.toOption
+        version = args.sessionVer.toOption
       ),
       paymentOptions = CodeConfig(
         file = args.payment.toOption,
@@ -81,7 +80,7 @@ object DeployConfig {
         name = args.paymentName.toOption,
         args = args.paymentArgs.toOption.map(_.args),
         entryPoint = args.paymentEntryPoint.toOption,
-        version = args.paymentSemVer.toOption
+        version = args.paymentVer.toOption
       ),
       gasPrice = args.gasPrice(),
       paymentAmount = args.paymentAmount.toOption,
@@ -105,19 +104,39 @@ object DeployConfig {
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
     } orElse {
-      opts.hash.map { x =>
-        Contract.StoredContract(
-          StoredContract(contractVersion = opts.version)
-            .withAddress(Hash(ByteString.copyFrom(Base16.decode(x))))
-        )
+      opts.version match {
+        case Some(ver) =>
+          opts.hash.map { x =>
+            Contract.StoredVersionedContract(
+              StoredVersionedContract()
+                .withPackageHash(ByteString.copyFrom(Base16.decode(x)))
+                .withVersion(ver)
+            )
+          }
+        case None =>
+          opts.hash.map { x =>
+            Contract.StoredContract(
+              StoredContract().withContractHash(ByteString.copyFrom(Base16.decode(x)))
+            )
+          }
       }
     } orElse {
-      opts.name.map { x =>
-        Contract.StoredContract(
-          StoredContract(contractVersion = opts.version)
-            .withAddress(Name(x))
-        )
+
+      opts.version match {
+        case None =>
+          opts.name.map { x =>
+            Contract.StoredContract(
+              StoredContract().withName(x)
+            )
+          }
+        case Some(ver) =>
+          opts.name.map { x =>
+            Contract.StoredVersionedContract(
+              StoredVersionedContract().withName(x).withVersion(ver)
+            )
+          }
       }
+
     } orElse {
       opts.resource.map { x =>
         val wasm =

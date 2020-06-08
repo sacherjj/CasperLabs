@@ -141,11 +141,61 @@ package object types {
     )
   )
 
+  lazy val Parameter = ObjectType(
+    "Parameter",
+    fields[Unit, (String, cltype.CLType)](
+      Field("name", StringType, resolve = _.value._1),
+      Field("cl_type", StringType, resolve = _.value._2.toString())
+    )
+  )
+
+  lazy val AccessPublic = ObjectType(
+    "AccessPublic",
+    fields[Unit, cltype.EntryPointAccess.Public]()
+  )
+
+  lazy val AccessGroups = ObjectType(
+    "AccessGroups",
+    fields[Unit, cltype.EntryPointAccess.Groups](
+      Field("labels", ListType(StringType), resolve = _.value.labels.toList)
+    )
+  )
+
+  lazy val AccessUnion: UnionType[Unit] = UnionType(
+    "EntryPointAccessUnion",
+    types = List(
+      AccessPublic,
+      AccessGroups
+    )
+  )
+  lazy val EntryPoint = ObjectType(
+    "EntryPoint",
+    fields[Unit, cltype.EntryPoint](
+      Field("name", StringType, resolve = _.value.name),
+      Field("parameters", ListType(Parameter), resolve = _.value.parameters.toList),
+      Field("ret", StringType, resolve = _.value.ret.toString()),
+      Field("access", AccessUnion, resolve = _.value.access),
+      Field("entryPointType", StringType, resolve = _.value.entryPointType.toString())
+    )
+  )
+
   lazy val Contract = ObjectType(
     "Contract",
     fields[Unit, cltype.Contract](
-      Field("body", StringType, resolve = c => Base16.encode(c.value.bytes.toArray)),
+      Field(
+        "contractPackageHash",
+        StringType,
+        resolve = c => Base16.encode(c.value.contractPackageHash.bytes.toArray)
+      ),
+      Field(
+        "contractWasmHash",
+        StringType,
+        resolve = c => Base16.encode(c.value.contractWasmHash.bytes.toArray)
+      ),
       Field("namedKeys", ListType(NamedKey), resolve = _.value.namedKeys.toList),
+      Field("entryPoints", ListType(EntryPoint), resolve = _.value.entryPoints.map {
+        case (k @ _, v) => v
+      }.toList),
       Field(
         "protocolVersion",
         ProtocolVersionType,
@@ -422,8 +472,10 @@ package object types {
         "value",
         StoredValueUnion,
         resolve = _.value match {
-          case cltype.StoredValueInstance.Contract(value) => value
-          case cltype.StoredValueInstance.Account(value)  => value
+          case cltype.StoredValueInstance.Contract(value)        => value
+          case cltype.StoredValueInstance.ContractWasm(value)    => value
+          case cltype.StoredValueInstance.ContractPackage(value) => value
+          case cltype.StoredValueInstance.Account(value)         => value
           case cltype.StoredValueInstance.CLValue(value) =>
             value match {
               case v: CLValueInstance.Bool      => v

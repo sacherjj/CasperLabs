@@ -60,11 +60,11 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
-    case StoredValue.Variants.Contract(Contract(body, urefs, protocolVersion)) =>
-      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
-    case StoredValue.Variants.ClValue(_)          => "ClValue"
-    case StoredValue.Variants.ContractMetadata(_) => "ContractMetadata"
-    case StoredValue.Variants.Empty               => "Empty"
+    case StoredValue.Variants.Contract(_)        => "Contract"
+    case StoredValue.Variants.ClValue(_)         => "ClValue"
+    case StoredValue.Variants.ContractPackage(_) => "ContractPackage"
+    case StoredValue.Variants.ContractWasm(_)    => "ContractWasm"
+    case StoredValue.Variants.Empty              => "Empty"
   }
 
   def buildString(v: Value): String = v.value match {
@@ -83,8 +83,8 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
     case Value.Value.BytesValue(bytes) => s"ByteArray(${buildString(bytes)})"
-    case Value.Value.Contract(Contract(body, urefs, protocolVersion)) =>
-      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
+    case Value.Value.Contract(_)       => "Contract";
+
     case Value.Value.IntList(IntList(list))       => s"List(${list.mkString(",")})"
     case Value.Value.IntValue(i)                  => s"Int32($i)"
     case Value.Value.NamedKey(nk)                 => buildString(nk)

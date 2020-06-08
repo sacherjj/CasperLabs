@@ -82,10 +82,10 @@ object Options {
         descr = "Name of the method that will be used when calling the contract."
       )
 
-    val sessionSemVer =
-      opt[SemVer](
+    val sessionVer =
+      opt[Int](
         required = false,
-        descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`."
+        descr = "Version of the called contract."
       )
 
     val payment =
@@ -130,10 +130,10 @@ object Options {
         descr = "Name of the method that will be used when calling the contract."
       )
 
-    val paymentSemVer =
-      opt[SemVer](
+    val paymentVer =
+      opt[Int](
         required = false,
-        descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`."
+        descr = "Version of the payment contract."
       )
 
     val gasPrice = opt[Long](
@@ -182,14 +182,14 @@ object Options {
       opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
 
     addValidation {
-      val missingSemVer: String => Either[String, Unit] =
-        what => Left(s"Missing semver for $what.")
+      val missingVersion: String => Either[String, Unit] =
+        what => Left(s"Missing version for $what.")
 
       val missingEntrypoint: String => Either[String, Unit] =
         what => Left(s"Missing entrpoint for $what")
 
       val storedPaymentCode = paymentHash.isDefined || paymentName.isDefined
-      val storedSessionCode = sessionSemVer.isDefined || sessionSemVer.isDefined
+      val storedSessionCode = sessionVer.isDefined
       val sessionsProvided =
         List(session.isDefined, sessionHash.isDefined, sessionName.isDefined)
           .count(identity)
@@ -206,10 +206,10 @@ object Options {
         Left(
           "No payment contract options provided; please specify --payment-amount for the standard payment."
         )
-      else if (storedPaymentCode && paymentSemVer.isEmpty)
-        missingSemVer("payment contract")
-      else if (storedSessionCode && sessionSemVer.isEmpty)
-        missingSemVer("session contract")
+      else if (storedPaymentCode && paymentVer.isEmpty)
+        missingVersion("payment contract")
+      else if (storedSessionCode && sessionVer.isEmpty)
+        missingVersion("session contract")
       else if (storedPaymentCode && paymentEntryPoint.isEmpty)
         missingEntrypoint("payment contract")
       else if (storedSessionCode && sessionEntryPoint.isEmpty)

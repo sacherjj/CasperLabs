@@ -9,8 +9,8 @@ import io.casperlabs.ipc.{
   DeployPayload,
   StoredContractHash,
   StoredContractName,
-  StoredVersionedContractByHash,
-  StoredVersionedContractByName
+  StoredContractPackage,
+  StoredContractPackageHash
 }
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.{Arbitrary, Gen}
@@ -34,31 +34,26 @@ trait ArbitraryIpc {
       } yield Payload.DeployCode(DeployCode(code, args))
     }
 
-    val arbSemVer = Arbitrary {
-      for {
-        major <- Gen.chooseNum(1, 10)
-        minor <- Gen.chooseNum(1, 10)
-        patch <- Gen.chooseNum(1, 10)
-      } yield SemVer(major, minor, patch)
-    }
+    // val arbSemVer = Arbitrary {
+    //   for {
+    //     major <- Gen.chooseNum(1, 10)
+    //     minor <- Gen.chooseNum(1, 10)
+    //     patch <- Gen.chooseNum(1, 10)
+    //   } yield SemVer(major, minor, patch)
+    // }
 
     val arbStoredContractHash = Arbitrary {
       for {
-        hash   <- genBytes(32)
-        args   <- Gen.chooseNum(100, 10000).flatMap(genBytes(_))
-        semVer <- arbSemVer.arbitrary
-      } yield Payload.StoredVersionedContractByHash(
-        StoredVersionedContractByHash(hash = hash, version = Some(semVer), args = args)
-      )
+        hash <- genBytes(32)
+        args <- Gen.chooseNum(100, 10000).flatMap(genBytes(_))
+      } yield Payload.StoredContractHash(StoredContractHash(hash = hash, args = args))
     }
+
     val arbStoredContractName = Arbitrary {
       for {
-        name   <- Gen.alphaStr.map(_.take(20))
-        args   <- Gen.chooseNum(100, 10000).flatMap(genBytes(_))
-        semVer <- arbSemVer.arbitrary
-      } yield Payload.StoredVersionedContractByName(
-        StoredVersionedContractByName(name = name, version = Some(semVer), args = args)
-      )
+        name <- Gen.alphaStr.map(_.take(20))
+        args <- Gen.chooseNum(100, 10000).flatMap(genBytes(_))
+      } yield Payload.StoredContractName(StoredContractName(name, args))
     }
     val genList = List(arbDeployCode, arbStoredContractHash, arbStoredContractName)
       .map(_.arbitrary.map(DeployPayload(_)))
