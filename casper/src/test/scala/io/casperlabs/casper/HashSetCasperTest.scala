@@ -35,6 +35,8 @@ import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 
 import scala.concurrent.duration._
 import scala.collection.immutable
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.Secp256k1
 
 /** Run tests using the GossipService and co. */
 class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasperTestNodeFactory
@@ -83,11 +85,20 @@ abstract class HashSetCasperTest
 
   implicit val timeEff = new LogicalTime[Task]
 
-  private val (otherSk, _) = Ed25519.newKeyPair
+  private def makeValidatorIdentity(alg: SignatureAlgorithm) = {
+    val (sk, pk) = alg.newKeyPair
+    ValidatorIdentity(pk, sk, alg)
+  }
+  private val otherValidatorKey =
+    makeValidatorIdentity(Ed25519)
+
   private val (validatorKeys, validators) = {
-    val (sks, pks) = (1 to 4).map(_ => Ed25519.newKeyPair).unzip
-    val hs         = pks.map(pk => Keys.PublicKeyHash(ByteString.copyFrom(Ed25519.publicKeyHash(pk))))
-    (sks, hs)
+    val validatorIds = (1 to 4) map (_ % 2) map {
+      case 0 => Ed25519
+      case 1 => Secp256k1
+    } map (makeValidatorIdentity)
+
+    validatorIds -> validatorIds.map(_.publicKeyHashBS)
   }
   private val wallets = validators.map(key => (key, 10001L)).toMap
   private val bonds   = createBonds(validators)
@@ -337,7 +348,7 @@ abstract class HashSetCasperTest
   }
 
   it should "reject blocks not from bonded validators" in effectTest {
-    val node = standaloneEff(genesis, otherSk)
+    val node = standaloneEff(genesis, otherValidatorKey)
 
     for {
       basicDeployData      <- ProtoUtil.basicDeploy[Task]()
@@ -520,12 +531,7 @@ abstract class HashSetCasperTest
 
     val localBonds =
       localValidators
-        .map(
-          sk =>
-            Keys.PublicKeyHash(
-              ByteString.copyFrom(Ed25519.publicKeyHash(Ed25519.tryToPublic(sk).get))
-            )
-        )
+        .map(_.publicKeyHashBS)
         .zip(List(10L, 30L, 5000L))
         .toMap
 
@@ -1361,10 +1367,11 @@ abstract class HashSetCasperTest
         .withBlockHash(blockHash)
         .withHeader(header)
         .withBody(body)
+    val validatorId = validatorKeys(1)
     ProtoUtil.signBlock(
       blockThatPointsToInvalidBlock,
-      validatorKeys(1),
-      Ed25519
+      validatorId.privateKey,
+      validatorId.signatureAlgorithm
     )
   }
 }

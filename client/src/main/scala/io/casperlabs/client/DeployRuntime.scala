@@ -387,7 +387,7 @@ object DeployRuntime {
       publicKey    <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
       privateKey   <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
       deploy       <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
-      signedDeploy = deploy.sign(privateKey, publicKey)
+      signedDeploy = deploy.approve(Ed25519, privateKey, publicKey)
       _            <- writeDeploy(signedDeploy, output)
     } yield ()
 
@@ -527,7 +527,7 @@ object DeployRuntime {
     } yield {
       val deploy =
         makeDeploy(accountPublicKey, deployConfig, sessionArgs)
-      (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
+      (maybePrivateKey, maybePublicKey).mapN(deploy.approve(Ed25519, _, _)) getOrElse deploy
     }
 
     gracefulExit(
