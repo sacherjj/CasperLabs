@@ -1,4 +1,4 @@
-import { action, IObservableArray, observable, runInAction } from 'mobx';
+import { action, autorun, IObservableArray, observable, reaction, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';
@@ -6,13 +6,14 @@ import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus
 import { ToggleStore } from '../components/ToggleButton';
 import { ToggleableSubscriber } from './ToggleableSubscriber';
 
+const DEFAULT_DEPTH = 100;
+
 export class DagStep {
   constructor(private container: DagContainer) {
   }
 
   private step = (f: () => number) => () => {
     this.maxRank = f();
-    this.container.refreshBlockDagAndSetupSubscriber();
     this.container.selectedBlock = undefined;
   };
 
@@ -78,6 +79,22 @@ export class DagContainer {
       () => this.isLatestDag,
       () => this.refreshBlockDag()
     );
+
+    reaction(() => {
+      return [this.maxRank, this.depth]
+    }, () => {
+      console.log("run");
+      this.refreshBlockDagAndSetupSubscriber();
+    })
+  }
+
+  refreshWithDepthAndMaxRank(
+    maxRankStr: string | null,
+    depthStr: string | null
+  ) {
+    let maxRank = parseInt(maxRankStr || '') || 0;
+    let depth = parseInt(depthStr || '') || DEFAULT_DEPTH;
+    this.updateMaxRankAndDepth(maxRank, depth);
   }
 
   @action
