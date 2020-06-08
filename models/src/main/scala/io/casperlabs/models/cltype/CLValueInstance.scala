@@ -299,8 +299,91 @@ object CLValueInstance {
     case (Key(cltype.Key.Local(seed1, hash1)), Key(cltype.Key.Local(seed2, hash2))) =>
       ByteArray32.lt(seed1, seed2) || (seed1 == seed2 && ByteArray32.lt(hash1, hash2))
 
-    // TODO: complete ordering implementation
-    case _ => throw new Exception("Ordering not implemented for recursive CLValueInstances")
+    case (Option(_, tx), Option(_, ty)) if tx != ty =>
+      throw new IllegalArgumentException(s"Incompatible element types: Option($tx) != Option($ty)")
+
+    case (Option(x, _), Option(b, _)) =>
+      (x, b) match {
+        case (None, None)       => false
+        case (None, Some(_))    => true
+        case (Some(_), None)    => false
+        case (Some(x), Some(y)) => order.lt(x, y)
+      }
+
+    case (List(_, tx), List(_, ty)) if tx != ty =>
+      throw new IllegalArgumentException(s"Incompatible element types: List($tx) != List($ty)")
+
+    case (List(xs, _), List(ys, _)) =>
+      (xs zip ys).find {
+        case (x, y) => !order.equiv(x, y)
+      } match {
+        case Some((x, y)) => order.lt(x, y)
+        case None         => xs.size < ys.size
+      }
+
+    case (FixedList(_, tx, lx), FixedList(_, ty, ly)) if tx != ty || lx != ly =>
+      throw new IllegalArgumentException(
+        s"Incompatible element types: FixedList($tx, $lx) != FixedList($ty, $ly)"
+      )
+
+    case (FixedList(xs, _, _), FixedList(ys, _, _)) =>
+      (xs zip ys).find {
+        case (x, y) => !order.equiv(x, y)
+      } match {
+        case Some((x, y)) => order.lt(x, y)
+        case None         => false
+      }
+
+    case (Result(_, txO, txE), Result(_, tyO, tyE)) if txO != tyO || txE != tyE =>
+      throw new IllegalArgumentException(
+        s"Incompatible element types: Result($txO, $txE) != Result($tyO, $tyE)"
+      )
+
+    case (Result(x, _, _), Result(y, _, _)) =>
+      (x, y) match {
+        case (Left(_), Right(_))  => true
+        case (Right(_), Left(_))  => false
+        case (Left(x), Left(y))   => order.lt(x, y)
+        case (Right(x), Right(y)) => order.lt(x, y)
+      }
+
+    case (Map(_, txK, txV), Map(_, tyK, tyV)) if txK != tyK || txV != tyV =>
+      throw new IllegalArgumentException(
+        s"Incompatible element types: Map($txK, $txV) != Map($tyK, $tyV)"
+      )
+
+    case (Map(mx, tK, tV), Map(my, _, _)) =>
+      val ((xks, xvs), (yks, yvs)) = (mx.toList.unzip, my.toList.unzip)
+      order.compare(List(xks, tK).right.get, List(yks, tV).right.get) match {
+        case -1 => true
+        case 1  => false
+        case 0  => order.lt(List(xvs, tV).right.get, List(yvs, tV).right.get)
+      }
+
+    case (Tuple1(x1), Tuple1(y1)) =>
+      order.lt(x1, y1)
+
+    case (Tuple2(x1, x2), Tuple2(y1, y2)) =>
+      order.compare(x1, y1) match {
+        case -1 => true
+        case 1  => false
+        case 0  => order.lt(x2, y2)
+      }
+
+    case (Tuple3(x1, x2, x3), Tuple3(y1, y2, y3)) =>
+      order.compare(x1, y1) match {
+        case -1 => true
+        case 1  => false
+        case 0 =>
+          order.compare(x2, y2) match {
+            case -1 => true
+            case 1  => false
+            case 0  => order.lt(x3, y3)
+          }
+      }
+
+    case _ =>
+      throw new IllegalArgumentException("Incompatible element types.")
   }
 
   private def lift[T <: CLValueInstance, E <: Error](
