@@ -37,6 +37,7 @@ class _BlockList extends React.Component<Props, {}> {
     this.props.dag.toggleableSubscriber.unsubscribeAndFree();
   }
 
+  // when receive new props of depth and maxRank, we need parse them and set related state variables.
   componentWillReceiveProps(nextProps: Props) {
     if (this.props.depth === nextProps.depth && this.props.maxRank === nextProps.maxRank) {
       return;

@@ -80,10 +80,11 @@ export class DagContainer {
       () => this.refreshBlockDag()
     );
 
+    // react to the change of maxRank and depth, so that outer components only need to set DAG's props
+    // DAG manage the refresh by itself.
     reaction(() => {
       return [this.maxRank, this.depth]
     }, () => {
-      console.log("run");
       this.refreshBlockDagAndSetupSubscriber();
     })
   }
