@@ -467,6 +467,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverDownloadCacheExpiry =
+      gen[FiniteDuration](
+        "How long to remember having recently downloaded an item."
+      )
+
+    @scallop
     val serverRelayMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads allowed to peers.")
 

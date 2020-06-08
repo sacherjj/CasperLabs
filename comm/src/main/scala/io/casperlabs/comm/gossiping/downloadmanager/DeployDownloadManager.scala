@@ -17,6 +17,7 @@ import io.casperlabs.shared.Log
 import monix.execution.Scheduler
 import monix.tail.Iterant
 import scala.util.Try
+import scala.concurrent.duration.FiniteDuration
 
 trait DeployDownloadManager[F[_]] extends DownloadManager[F] {
   override type Handle       = DeploySummary
@@ -35,6 +36,7 @@ object DeployDownloadManagerImpl extends DownloadManagerCompanion {
   /** Start the download manager. */
   def apply[F[_]: ContextShift: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
+      cacheExpiry: FiniteDuration,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
       relaying: DeployRelaying[F],
@@ -48,7 +50,7 @@ object DeployDownloadManagerImpl extends DownloadManagerCompanion {
         workersRef  <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
         semaphore   <- Semaphore[F](maxParallelDownloads.toLong)
         signal      <- MVar[F].empty[Signal[F]]
-        recentCache <- DownloadedCache[F, ByteString]()
+        recentCache <- DownloadedCache[F, ByteString](cacheExpiry)
         manager = new DeployDownloadManagerImpl[F](
           this,
           isShutdown,

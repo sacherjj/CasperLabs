@@ -98,6 +98,7 @@ object Configuration extends ParserImplicits {
       downloadRetryInitialBackoffPeriod: FiniteDuration,
       downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],
       downloadPartialBlocks: Boolean,
+      downloadCacheExpiry: FiniteDuration,
       relayMaxParallelBlocks: Int,
       relayBlockChunkConsumerTimeout: FiniteDuration,
       validateMaxParallelBlocks: Int Refined Positive,

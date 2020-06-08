@@ -49,6 +49,7 @@ download-max-retries = 1
 download-retry-initial-backoff-period = "1second"
 download-retry-backoff-factor = 1.0
 download-partial-blocks = false
+download-cache-expiry = "1second"
 relay-max-parallel-blocks = 1
 relay-block-chunk-consumer-timeout = "1second"
 validate-max-parallel-blocks = 1

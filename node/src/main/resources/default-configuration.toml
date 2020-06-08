@@ -133,6 +133,9 @@ download-retry-backoff-factor = 2.0
 # Try downloading blocks without deploys in them first, fetching the missing deploys as a separate step.
 download-partial-blocks = true
 
+# How long to remember having recently downloaded an item.
+download-cache-expiry = "1hour"
+
 # Maximum number of parallel block downloads allowed to peers.
 relay-max-parallel-blocks = 5
 

@@ -102,6 +102,7 @@ class ConfigurationSpec
       downloadRetryInitialBackoffPeriod = FiniteDuration(1, TimeUnit.SECONDS),
       downloadRetryBackoffFactor = 1.0,
       downloadPartialBlocks = false,
+      downloadCacheExpiry = FiniteDuration(1, TimeUnit.SECONDS),
       relayMaxParallelBlocks = 1,
       relayBlockChunkConsumerTimeout = FiniteDuration(1, TimeUnit.SECONDS),
       validateMaxParallelBlocks = 1,

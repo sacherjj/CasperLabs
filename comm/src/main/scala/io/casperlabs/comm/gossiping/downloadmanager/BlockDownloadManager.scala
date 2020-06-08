@@ -19,6 +19,7 @@ import io.casperlabs.shared.Log
 import monix.execution.Scheduler
 import monix.tail.Iterant
 import scala.util.Try
+import scala.concurrent.duration.FiniteDuration
 
 /** Manages the download, validation, storing and gossiping of blocks. */
 trait BlockDownloadManager[F[_]] extends DownloadManager[F] {
@@ -43,6 +44,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
   def apply[F[_]: ContextShift: Concurrent: Log: Timer: Metrics](
       maxParallelDownloads: Int,
       partialBlocksEnabled: Boolean,
+      cacheExpiry: FiniteDuration,
       connectToGossip: GossipService.Connector[F],
       backend: Backend[F],
       relaying: BlockRelaying[F],
@@ -56,7 +58,7 @@ object BlockDownloadManagerImpl extends DownloadManagerCompanion {
         workersRef  <- Ref.of(Map.empty[ByteString, Fiber[F, Unit]])
         semaphore   <- Semaphore[F](maxParallelDownloads.toLong)
         signal      <- MVar[F].empty[Signal[F]]
-        recentCache <- DownloadedCache[F, ByteString]()
+        recentCache <- DownloadedCache[F, ByteString](cacheExpiry)
         manager = new BlockDownloadManagerImpl[F](
           this,
           isShutdown,

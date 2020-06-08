@@ -314,6 +314,7 @@ package object gossiping {
       _ <- Resource.liftF(DeployDownloadManagerImpl.establishMetrics[F])
       downloadManager <- DeployDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelDeploys,
+                          cacheExpiry = conf.server.downloadCacheExpiry,
                           connectToGossip = connectToGossip,
                           backend = new DeployDownloadManagerImpl.Backend[F] {
                             override def contains(deployHash: ByteString): F[Boolean] =
@@ -365,6 +366,7 @@ package object gossiping {
       downloadManager <- BlockDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           partialBlocksEnabled = conf.server.downloadPartialBlocks,
+                          cacheExpiry = conf.server.downloadCacheExpiry,
                           connectToGossip = connectToGossip,
                           backend = new BlockDownloadManagerImpl.Backend[F] {
                             override def contains(blockHash: ByteString): F[Boolean] =
