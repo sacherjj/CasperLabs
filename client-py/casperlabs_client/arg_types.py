@@ -13,7 +13,7 @@ def positive_integer(number):
 
 
 def sem_ver(sem_ver_str):
-    """ Check string is a valid Sym Ver """
+    """Check string is a valid Sem Ver"""
     error_str = f"{sem_ver_str} is not a valid format. Should be `major.minor.patch`"
     try:
         version = semver.VersionInfo.parse(sem_ver_str)
