@@ -3191,8 +3191,27 @@ where
             return Ok(Err(contracts::Error::GroupDoesNotExist.into()));
         }
 
-        // Remove group ensuring that it is not referenced by at least one entrypoint in active
-        // versions.
+        // Remove group if it is not referenced by at least one entry_point in active versions.
+        let versions = package.versions();
+        for contract_hash in versions.values() {
+            let entry_points = {
+                let contract: Contract = self.context.read_gs_typed(&Key::from(*contract_hash))?;
+                contract.entry_points().clone().take_entry_points()
+            };
+            for entry_point in entry_points {
+                match entry_point.access() {
+                    EntryPointAccess::Public => {
+                        continue;
+                    }
+                    EntryPointAccess::Groups(groups) => {
+                        if groups.contains(&group_to_remove) {
+                            return Ok(Err(contracts::Error::GroupInUse.into()));
+                        }
+                    }
+                }
+            }
+        }
+
         if !package.remove_group(&group_to_remove) {
             return Ok(Err(contracts::Error::GroupInUse.into()));
         }
