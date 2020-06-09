@@ -64,7 +64,6 @@ object SignatureAlgorithm {
   def unapply(alg: String): Option[SignatureAlgorithm] = alg match {
     case "ed25519"   => Some(Ed25519)
     case "secp256k1" => Some(Secp256k1)
-    case _           => None
   }
 
   /**
@@ -201,8 +200,7 @@ object SignatureAlgorithm {
       Signature(new SigningKey(sec).sign(data))
   }
 
-  object Secp256k1 extends SignatureAlgorithm {
-
+  trait Secp256 extends SignatureAlgorithm {
     import java.security.KeyPairGenerator
     import java.security.interfaces.ECPrivateKey
     import java.security.spec.ECGenParameterSpec
@@ -210,14 +208,13 @@ object SignatureAlgorithm {
     import com.google.common.base.Strings
     import io.casperlabs.crypto.codec.Base16
     import io.casperlabs.crypto.util.SecureRandomUtil
-    import org.bitcoin._
     import org.bouncycastle.jce.provider.BouncyCastleProvider
 
-    private val PrivateKeyLength = 32
-    private val PublicKeyLength  = 65
-    private val provider         = new BouncyCastleProvider()
-
-    override def name: String = "secp256k1"
+    // Supported algorithms:
+    // http://www.bouncycastle.org/wiki/pages/viewpage.action?pageId=362269
+    protected val PrivateKeyLength = 32
+    protected val PublicKeyLength  = 65
+    protected val provider         = new BouncyCastleProvider()
 
     /**
       * Expects the key to be in PEM format without parameters section or raw key encoded in base64.
@@ -300,32 +297,28 @@ object SignatureAlgorithm {
 
       val padded =
         Strings.padStart(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toString(16), 64, '0')
+
       val sec = PrivateKey(Base16.decode(padded))
-      val pub = Secp256k1.tryToPublic(sec)
+      val pub = PublicKey(tryToPublic(sec).get)
 
-      (PrivateKey(sec), PublicKey(pub.get))
+      (sec, pub)
     }
+  }
 
-    /**
-      * Verifies the given signature.
-      *
-      * @param data      The data which was signed, must be exactly 32 bytes
-      * @param signature The signature
-      * @param pub       The public key which did the signing
-      * @return Boolean value of verification
-      */
-    def verify(data: Array[Byte], signature: Signature, pub: PublicKey): Boolean =
+  // Key type used by Bitcoin and Ethereum.
+  object Secp256k1 extends Secp256 {
+    import org.bitcoin.NativeSecp256k1
+
+    override def name: String = "secp256k1"
+
+    override def verify(data: Array[Byte], signature: Signature, pub: PublicKey): Boolean =
       NativeSecp256k1.verify(data, signature, pub)
 
-    /**
-      * libsecp256k1 Create an ECDSA signature.
-      *
-      * @param data Message hash, 32 bytes
-      * @param sec  Secret key, 32 bytes
-      * @return Byte array of signature
-      */
     override def sign(data: Array[Byte], sec: PrivateKey): Signature =
       Signature(NativeSecp256k1.sign(data, sec))
+
+    override def tryToPublic(seckey: PrivateKey): Option[PublicKey] =
+      Try(PublicKey(NativeSecp256k1.computePubkey(seckey))).toOption
 
     /**
       * libsecp256k1 Seckey Verify - returns true if valid, false if invalid
@@ -340,13 +333,6 @@ object SignatureAlgorithm {
     def secKeyVerify(seckey: Array[Byte]): Boolean =
       NativeSecp256k1.secKeyVerify(seckey)
 
-    /**
-      * libsecp256k1 Compute Pubkey - computes public key from secret key
-      *
-      * @param seckey ECDSA Secret key, 32 bytes
-      */
-    def tryToPublic(seckey: PrivateKey): Option[PublicKey] =
-      Try(PublicKey(NativeSecp256k1.computePubkey(seckey))).toOption
   }
 
 }
