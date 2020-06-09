@@ -64,6 +64,9 @@ object SignatureAlgorithm {
   def unapply(alg: String): Option[SignatureAlgorithm] = alg match {
     case "ed25519"   => Some(Ed25519)
     case "secp256k1" => Some(Secp256k1)
+    case "secp256r1" => Some(Secp256r1)
+    // Not matching prime256v1 (equivalent to secp256r1) so that we only have 1 version for an account hash.
+    case _ => None
   }
 
   /**
@@ -333,6 +336,74 @@ object SignatureAlgorithm {
     def secKeyVerify(seckey: Array[Byte]): Boolean =
       NativeSecp256k1.secKeyVerify(seckey)
 
+  }
+
+  // Key type supported by Secure Enclave.
+  object Secp256r1 extends Secp256 {
+    // https://metamug.com/article/security/sign-verify-digital-signature-ecdsa-java.html
+
+    import java.security.{AlgorithmParameters, KeyFactory}
+    import java.security.spec.{
+      ECGenParameterSpec,
+      ECParameterSpec,
+      ECPoint,
+      ECPrivateKeySpec,
+      ECPublicKeySpec
+    }
+    import java.math.BigInteger
+
+    override def name: String = "secp256r1" // same as prime256v1
+
+    private val PrimeLength = PublicKeyLength / 2
+
+    private def getSigner = java.security.Signature.getInstance("SHA256withECDSA", provider)
+
+    // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPrivateKeySpec
+    def toPrivateKey(sec: PrivateKey): java.security.PrivateKey = {
+      val keySpec = new ECPrivateKeySpec(new BigInteger(sec), parameterSpec)
+      KeyFactory.getInstance("EC", provider).generatePrivate(keySpec)
+    }
+
+    // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPublicKeySpec
+    def toPublicKey(pub: PublicKey): java.security.PublicKey = {
+      require(
+        pub.size == PublicKeyLength,
+        s"Expected the public key to be ${PublicKeyLength} long; got ${pub.size}"
+      )
+      require(
+        pub(0) == 0x04,
+        "EC uncompressed point indicator with byte value 04 missing"
+      )
+      val x       = new BigInteger(1, pub.slice(1, 1 + PrimeLength))
+      val y       = new BigInteger(1, pub.slice(1 + PrimeLength, PublicKeyLength))
+      val keySpec = new ECPublicKeySpec(new ECPoint(x, y), parameterSpec)
+      KeyFactory.getInstance("EC", provider).generatePublic(keySpec)
+    }
+
+    private val parameterSpec: ECParameterSpec = {
+      val algorithm = AlgorithmParameters.getInstance("EC", provider)
+      algorithm.init(new ECGenParameterSpec(name))
+      algorithm.getParameterSpec(classOf[ECParameterSpec])
+    }
+
+    override def verify(data: Array[Byte], signature: Signature, pub: PublicKey): Boolean = {
+      val publicKey = toPublicKey(pub)
+      val signer    = getSigner
+      signer.initVerify(publicKey)
+      signer.update(data)
+      signer.verify(signature)
+    }
+
+    override def sign(data: Array[Byte], sec: PrivateKey): Signature = {
+      val privateKey = toPrivateKey(sec)
+      val signer     = getSigner
+      signer.initSign(privateKey)
+      signer.update(data)
+      Signature(signer.sign())
+    }
+
+    override def tryToPublic(seckey: PrivateKey): Option[PublicKey] =
+      ???
   }
 
 }
