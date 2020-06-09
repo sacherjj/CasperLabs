@@ -25,21 +25,24 @@ final case class CodeConfig(
     // Point at a file on disk.
     file: Option[File],
     // Hash of a stored contract.
-    hash: Option[String],
+    contractHash: Option[String],
+    // Hash of a stored contract package.
+    packageHash: Option[String],
     // Name of a stored contract.
-    name: Option[String],
+    contractName: Option[String],
+    // Name of a stored contract package.
+    packageName: Option[String],
     // Arguments parsed from JSON
     args: Option[Seq[Arg]],
-    // Entry point to the contract.
     // Name of the method that will be called during execution of the contract.
     entryPoint: Option[String],
-    // Version of the contract that is being called.
+    // Version of the contract that is being called. No version specified means most recent version.
     version: Option[Int],
     // Name of a pre-packaged contract in the client JAR.
     resource: Option[String] = None
 )
 object CodeConfig {
-  val empty = CodeConfig(None, None, None, None, None, None, None)
+  val empty = CodeConfig(None, None, None, None, None, None, None, None, None)
 }
 
 /** Encapsulate reading session and payment contracts from disk or resources
@@ -68,16 +71,20 @@ object DeployConfig {
     DeployConfig(
       sessionOptions = CodeConfig(
         file = args.session.toOption,
-        hash = args.sessionHash.toOption,
-        name = args.sessionName.toOption,
+        contractHash = args.sessionContractHash.toOption,
+        packageHash = args.sessionPackageHash.toOption,
+        contractName = args.sessionContractName.toOption,
+        packageName = args.sessionPackageName.toOption,
         args = args.sessionArgs.toOption.map(_.args),
         entryPoint = args.sessionEntryPoint.toOption,
         version = args.sessionVer.toOption
       ),
       paymentOptions = CodeConfig(
         file = args.payment.toOption,
-        hash = args.paymentHash.toOption,
-        name = args.paymentName.toOption,
+        contractHash = args.paymentContractHash.toOption,
+        packageHash = args.paymentPackageHash.toOption,
+        contractName = args.paymentContractName.toOption,
+        packageName = args.paymentPackageName.toOption,
         args = args.paymentArgs.toOption.map(_.args),
         entryPoint = args.paymentEntryPoint.toOption,
         version = args.paymentVer.toOption
@@ -104,37 +111,39 @@ object DeployConfig {
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
       Contract.Wasm(wasm)
     } orElse {
-      opts.version match {
-        case Some(ver) =>
-          opts.hash.map { x =>
-            Contract.StoredVersionedContract(
-              StoredVersionedContract()
-                .withPackageHash(ByteString.copyFrom(Base16.decode(x)))
-                .withVersion(ver)
-            )
-          }
-        case None =>
-          opts.hash.map { x =>
-            Contract.StoredContract(
-              StoredContract().withContractHash(ByteString.copyFrom(Base16.decode(x)))
-            )
-          }
+
+      opts.contractHash.map { x =>
+        Contract.StoredContract(
+          StoredContract().withContractHash(ByteString.copyFrom(Base16.decode(x)))
+        )
       }
+
     } orElse {
 
-      opts.version match {
-        case None =>
-          opts.name.map { x =>
-            Contract.StoredContract(
-              StoredContract().withName(x)
-            )
-          }
-        case Some(ver) =>
-          opts.name.map { x =>
-            Contract.StoredVersionedContract(
-              StoredVersionedContract().withName(x).withVersion(ver)
-            )
-          }
+      opts.packageHash.map { x =>
+        Contract.StoredVersionedContract(
+          StoredVersionedContract()
+            .withPackageHash(ByteString.copyFrom(Base16.decode(x)))
+            .withVersion(opts.version.getOrElse(0))
+        )
+      }
+
+    } orElse {
+
+      opts.contractName.map { x =>
+        Contract.StoredContract(
+          StoredContract().withName(x)
+        )
+      }
+
+    } orElse {
+
+      opts.contractName.map { x =>
+        Contract.StoredVersionedContract(
+          StoredVersionedContract()
+            .withName(x)
+            .withVersion(opts.version.getOrElse(0))
+        )
       }
 
     } orElse {

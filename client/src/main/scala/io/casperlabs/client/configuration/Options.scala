@@ -55,18 +55,32 @@ object Options {
         validate = fileCheck
       )
 
-    val sessionHash =
+    val sessionContractHash =
       opt[String](
         required = false,
-        descr = "Hash of the stored contract to be called in the session; base16 encoded.",
+        descr = "Hash of the stored contract hash to be called in the session; base16 encoded.",
         validate = hashCheck
       )
 
-    val sessionName =
+    val sessionPackageHash = opt[String](
+      required = false,
+      descr =
+        "Hash of the stored contract package hash to be called in the session; base16 encoded.",
+      validate = hashCheck
+    )
+
+    val sessionContractName =
       opt[String](
         required = false,
         descr =
           "Name of the stored contract (associated with the executing account) to be called in the session."
+      )
+
+    val sessionPackageName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract package (associated with the executing account) to be called in the session."
       )
 
     val sessionArgs =
@@ -96,18 +110,31 @@ object Options {
         validate = fileCheck
       )
 
-    val paymentHash =
+    val paymentContractHash =
       opt[String](
         required = false,
         descr = "Hash of the stored contract to be called in the payment; base16 encoded.",
         validate = hashCheck
       )
 
-    val paymentName =
+    val paymentPackageHash =
+      opt[String](
+        required = false,
+        descr = "Hash of the stored contract package to be called in the payment; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val paymentContractName =
       opt[String](
         required = false,
         descr =
           "Name of the stored contract (associated with the executing account) to be called in the payment."
+      )
+    val paymentPackageName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract package (associated with the executing account) to be called in the payment."
       )
 
     val paymentUref =
@@ -182,38 +209,15 @@ object Options {
       opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
 
     addValidation {
-      val missingVersion: String => Either[String, Unit] =
-        what => Left(s"Missing version for $what.")
+      val storedPaymentCode = paymentContractHash.isDefined || paymentContractName.isDefined || paymentPackageHash.isDefined || paymentPackageName.isDefined
+      val sessionProvided   = sessionPackageHash.isDefined || sessionContractHash.isDefined || sessionContractName.isDefined || sessionPackageName.isDefined
 
-      val missingEntrypoint: String => Either[String, Unit] =
-        what => Left(s"Missing entrpoint for $what")
-
-      val storedPaymentCode = paymentHash.isDefined || paymentName.isDefined
-      val storedSessionCode = sessionVer.isDefined
-      val sessionsProvided =
-        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined)
-          .count(identity)
-      val paymentsProvided =
-        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined)
-          .count(identity)
-      if (sessionRequired && sessionsProvided == 0)
+      if (sessionRequired && !session.isDefined && !sessionProvided)
         Left("No session contract options provided; please specify exactly one.")
-      else if (sessionsProvided > 1)
-        Left("Multiple session contract options provided; please specify exactly one.")
-      else if (paymentsProvided > 1)
-        Left("Multiple payment contract options provided; please specify exactly one.")
-      else if (paymentsProvided == 0 && paymentAmount.isEmpty)
+      else if (storedPaymentCode && paymentAmount.isEmpty)
         Left(
           "No payment contract options provided; please specify --payment-amount for the standard payment."
         )
-      else if (storedPaymentCode && paymentVer.isEmpty)
-        missingVersion("payment contract")
-      else if (storedSessionCode && sessionVer.isEmpty)
-        missingVersion("session contract")
-      else if (storedPaymentCode && paymentEntryPoint.isEmpty)
-        missingEntrypoint("payment contract")
-      else if (storedSessionCode && sessionEntryPoint.isEmpty)
-        missingEntrypoint("stored contract")
       else Right(())
     }
   }

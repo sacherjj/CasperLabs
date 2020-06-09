@@ -46,7 +46,6 @@ message Contract {
     bytes contract_wasm_hash = 2;
     repeated NamedKey named_keys = 3;
     repeated EntryPoint entry_points = 4;
-    Key contract_key = 5;
     ProtocolVersion protocol_version = 6;
 
 }

@@ -151,7 +151,9 @@ package object types {
 
   lazy val AccessPublic = ObjectType(
     "AccessPublic",
-    fields[Unit, cltype.EntryPointAccess.Public]()
+    fields[Unit, cltype.EntryPointAccess.Public](
+      Field("value", StringType, resolve = _ => "Public")
+    )
   )
 
   lazy val AccessGroups = ObjectType(
@@ -201,6 +203,62 @@ package object types {
         ProtocolVersionType,
         resolve = c => cltype.protobuf.Mappings.toProto(c.value.protocolVersion)
       )
+    )
+  )
+
+  lazy val ContractVersionKey = ObjectType(
+    "ContractVersionKey",
+    fields[Unit, Tuple2[Int, Int]](
+      Field("protocolMajorVersion", IntType, resolve = _.value._1),
+      Field("contractVersion", IntType, resolve = _.value._2)
+    )
+  )
+
+  lazy val ActiveVersion = ObjectType(
+    "ActiveVersion",
+    fields[Unit, (Tuple2[Int, Int], cltype.ByteArray32)](
+      Field("key", ContractVersionKey, resolve = _.value._1),
+      Field("value", StringType, resolve = c => Base16.encode(c.value._2.bytes.toArray))
+    )
+  )
+
+  lazy val Group = ObjectType(
+    "Group",
+    fields[Unit, (String, Set[cltype.URef])](
+      Field("key", StringType, resolve = _.value._1),
+      Field(
+        "value",
+        ListType(KeyURef),
+        resolve = c =>
+          c.value._2.map { x =>
+            cltype.Key.URef(x)
+          }.toList
+      )
+    )
+  )
+
+  lazy val ContractPackage = ObjectType(
+    "ContractPackage",
+    fields[Unit, cltype.ContractPackage](
+      Field("mainPurse", KeyURef, resolve = c => cltype.Key.URef(c.value.accessURef)),
+      Field(
+        "versions",
+        ListType(ActiveVersion),
+        resolve = _.value.versions.toList
+      ),
+      Field(
+        "disabledVersions",
+        ListType(ContractVersionKey),
+        resolve = _.value.disabledVersions.toList
+      ),
+      Field("groups", ListType(Group), resolve = _.value.groups.toList)
+    )
+  )
+
+  lazy val ContractWasm = ObjectType(
+    "ContractWasm",
+    fields[Unit, cltype.ContractWasm](
+      Field("body", StringType, resolve = c => Base16.encode(c.value.bytes.toArray))
     )
   )
 
@@ -441,6 +499,8 @@ package object types {
     types = List(
       Account,
       Contract,
+      ContractPackage,
+      ContractWasm,
       Bool,
       I32,
       I64,
