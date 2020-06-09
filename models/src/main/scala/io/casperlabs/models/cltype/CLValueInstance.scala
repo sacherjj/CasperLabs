@@ -278,10 +278,10 @@ object CLValueInstance {
     case class UnorderedElements(message: java.lang.String) extends Error
   }
 
-  implicit class OrderingOps[T](x: T)(implicit ev: Ordering[T]) {
+  private implicit class OrderingOps[T](x: T)(implicit ev: Ordering[T]) {
     def <(y: T): Boolean = ev.lt(x, y)
   }
-  implicit class SeqOrderingOps[T](x: Seq[T])(implicit ev: Ordering[T]) {
+  private implicit class SeqOrderingOps[T](x: Seq[T])(implicit ev: Ordering[T]) {
     def <(y: Seq[T]): Boolean = implicitly[Ordering[Iterable[T]]].lt(x.toIterable, y.toIterable)
   }
 
