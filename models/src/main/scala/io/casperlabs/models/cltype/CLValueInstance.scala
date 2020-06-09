@@ -275,7 +275,7 @@ object CLValueInstance {
     // This error is raised when serializing (as in the `toValue` method) a
     // `Map` with keys that cannot be sorted because no ordering is defined. Keys
     // must be sorted to ensure deterministic serialization.
-    case object UnorderedElements extends Error
+    case class UnorderedElements(message: java.lang.String) extends Error
   }
 
   implicit class OrderingOps[T](x: T)(implicit ev: Ordering[T]) {
@@ -419,7 +419,7 @@ object CLValueInstance {
 
       case CLValueInstance.Map(values, _, _) :: tail =>
         Try(values.toList.sortBy(_._1)) match {
-          case Failure(_) => Left(Error.UnorderedElements)
+          case Failure(ex) => Left(Error.UnorderedElements(ex.getMessage))
 
           case Success(sortedPairs) =>
             val sortedElems = sortedPairs.flatMap { case (k, v) => immutable.List(k, v) }
