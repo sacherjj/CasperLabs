@@ -356,12 +356,12 @@ object SignatureAlgorithm {
 
     private val PrimeLength = PublicKeyLength / 2
 
-    private def getSigner = java.security.Signature.getInstance("SHA256withECDSA", provider)
+    private def getSigner = java.security.Signature.getInstance("SHA256withECDSA")
 
     // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPrivateKeySpec
     def toPrivateKey(sec: PrivateKey): java.security.PrivateKey = {
       val keySpec = new ECPrivateKeySpec(new BigInteger(sec), parameterSpec)
-      KeyFactory.getInstance("EC", provider).generatePrivate(keySpec)
+      KeyFactory.getInstance("EC").generatePrivate(keySpec)
     }
 
     // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPublicKeySpec
@@ -377,11 +377,11 @@ object SignatureAlgorithm {
       val x       = new BigInteger(1, pub.slice(1, 1 + PrimeLength))
       val y       = new BigInteger(1, pub.slice(1 + PrimeLength, PublicKeyLength))
       val keySpec = new ECPublicKeySpec(new ECPoint(x, y), parameterSpec)
-      KeyFactory.getInstance("EC", provider).generatePublic(keySpec)
+      KeyFactory.getInstance("EC").generatePublic(keySpec)
     }
 
     private val parameterSpec: ECParameterSpec = {
-      val algorithm = AlgorithmParameters.getInstance("EC", provider)
+      val algorithm = AlgorithmParameters.getInstance("EC")
       algorithm.init(new ECGenParameterSpec(name))
       algorithm.getParameterSpec(classOf[ECParameterSpec])
     }
