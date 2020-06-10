@@ -354,8 +354,6 @@ object SignatureAlgorithm {
 
     override def name: String = "secp256r1" // same as prime256v1
 
-    private val PrimeLength = PublicKeyLength / 2
-
     private def getSigner = java.security.Signature.getInstance("SHA256withECDSA")
 
     // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPrivateKeySpec
@@ -374,8 +372,8 @@ object SignatureAlgorithm {
         pub(0) == 0x04,
         "EC uncompressed point indicator with byte value 04 missing"
       )
-      val x       = new BigInteger(1, pub.slice(1, 1 + PrimeLength))
-      val y       = new BigInteger(1, pub.slice(1 + PrimeLength, PublicKeyLength))
+      val x       = new BigInteger(1, pub.slice(1, 1 + PublicKeyLength / 2))
+      val y       = new BigInteger(1, pub.slice(1 + PublicKeyLength / 2, PublicKeyLength))
       val keySpec = new ECPublicKeySpec(new ECPoint(x, y), parameterSpec)
       KeyFactory.getInstance("EC").generatePublic(keySpec)
     }

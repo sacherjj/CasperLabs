@@ -2,7 +2,6 @@ package io.casperlabs.crypto.signatures
 
 import io.casperlabs.crypto.Keys.{PrivateKey, PublicKey, Signature}
 import io.casperlabs.crypto.codec.{Base16, Base64}
-import io.casperlabs.crypto.hash.Sha256
 import io.casperlabs.crypto.signatures.SignatureAlgorithm.Secp256r1
 import org.scalatest.{AppendedClues, BeforeAndAfterEach, FunSpec, Matchers}
 
@@ -18,13 +17,13 @@ class Secp256r1Test extends FunSpec with Matchers with BeforeAndAfterEach with A
 
     ignore("generates a new with keypair, signs and verifies some data") {
       val (sec, pub) = Secp256r1.newKeyPair
-      val data       = Sha256.hash("testing".getBytes)
+      val data       = "testing".getBytes
       val sig        = Secp256r1.sign(data, sec)
       Secp256r1.verify(data, sig, pub) shouldBe true
     }
 
-    ignore("verifies a correct secp256r1 signature") {
-      val data = Sha256.hash("testing".getBytes)
+    it("verifies a correct secp256r1 signature") {
+      val data = "testing".getBytes
       val sig = Signature(
         Base16.decode(
           "3046022100fe294b24b2a262992f6e67b5e149c46ec57a09cb5fdc9b8b2abcb43e29f4e8a0022100b455caf4e357cd3bf62aa7a012ef750dca6831120d050331244a8a66580ca3ef"
@@ -34,8 +33,8 @@ class Secp256r1Test extends FunSpec with Matchers with BeforeAndAfterEach with A
       Secp256r1.verify(data, sig, pub) shouldBe true
     }
 
-    ignore("rejects an incorrect secp256r1 signature") {
-      val data = Sha256.hash("testing".getBytes)
+    it("rejects an incorrect secp256r1 signature") {
+      val data = "testing".getBytes
       val sig = Signature(
         Base16.decode(
           "304502202e2ce8c9c2e0fbec77b66f0b74872a4527c3cde19adc56982194104187896ef7022100ec93d18249aa93a7493cfa2ea012ee0da2b176609496fe1a9cf46c24aecbcfc9"
@@ -89,7 +88,7 @@ class Secp256r1Test extends FunSpec with Matchers with BeforeAndAfterEach with A
     }
 
     it("works with example values") {
-      val data = Sha256.hash("testing".getBytes)
+      val data = "testing".getBytes
       val pub = PublicKey(
         Base16.decode(
           "04ea3833e4fc36ed780c6aaa4584dd28bffe6738dcc4cd0025c2705f0140bb25b52e2491cc636aad262e5817bccf5cf3f39ac496aa465da172c53a9f031c7024ff"
