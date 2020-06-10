@@ -36,7 +36,9 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
             DeployPayload_oneof_payload::stored_package_by_name(mut pb_stored_package_by_name) => {
                 ExecutableDeployItem::StoredVersionedContractByName {
                     name: pb_stored_package_by_name.take_name(),
-                    version: if pb_stored_package_by_name.has_version() {
+                    version: if pb_stored_package_by_name.has_version()
+                        && pb_stored_package_by_name.get_version() > 0
+                    {
                         Some(pb_stored_package_by_name.get_version())
                     } else {
                         None
@@ -53,7 +55,9 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
                     .map_err(|_| MappingError::invalid_hash_length(hash_bytes.len()))?;
                 ExecutableDeployItem::StoredVersionedContractByHash {
                     hash,
-                    version: if pb_stored_package_by_hash.has_version() {
+                    version: if pb_stored_package_by_hash.has_version()
+                        && pb_stored_package_by_hash.get_version() > 0
+                    {
                         Some(pb_stored_package_by_hash.get_version())
                     } else {
                         None
