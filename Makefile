@@ -290,6 +290,10 @@ client/src/main/resources/%.wasm: .make/contracts/%
 	mkdir -p $(dir $@)
 	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
 
+# Compile a contract and put it in the CLI client so they get packaged with the PyPi package.
+client-py/casperlabs_client/%.wasm: .make/contracts/%
+	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
+
 # Compile a contract and put it in the node resources so they get packaged with the JAR.
 node/src/main/resources/chainspec/genesis/%.wasm: .make/contracts/%
 	cp execution-engine/target/wasm32-unknown-unknown/release/$*.wasm $@
@@ -303,15 +307,20 @@ build-client: \
 	.make/sbt-stage/client
 
 build-python-client: \
-	build-client-contracts \
+	build-client-py-contracts \
 	$(PROTO_SRC) \
 	$(shell find ./client-py/ -name "*.py"|grep -v _grpc.py)
-	cd client-py && pipenv run ./build.sh
+	client-py/build.sh
 
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \
 	client/src/main/resources/unbonding.wasm \
 	client/src/main/resources/transfer_to_account_u512.wasm
+
+build-client-py-contracts: \
+    client-py/casperlabs_client/bonding.wasm \
+    client-py/casperlabs_client/unbonding.wasm \
+    client-py/casperlabs_client/transfer_to_account_u512.wasm
 
 build-node: \
 	.make/sbt-stage/node
@@ -326,7 +335,7 @@ build-explorer: \
 
 build-explorer-contracts: \
 	explorer/contracts/transfer_to_account_u512.wasm \
-	explorer/contracts/faucet.wasm
+	explorer/contracts/faucet_stored.wasm
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.

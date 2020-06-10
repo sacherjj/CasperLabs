@@ -62,6 +62,21 @@ TOOL_WASM_DIR             = cargo-casperlabs/wasm
 ENGINE_CORE_TARGET_DIR    = engine-core/target
 ENGINE_CORE_WASM_DIR      = engine-core/wasm
 
+CRATES_WITH_DOCS_RS_MANIFEST_TABLE = \
+	contract \
+	engine-core \
+	engine-grpc-server \
+	engine-shared \
+	engine-storage \
+	engine-test-support \
+	engine-wasm-prep \
+	mint \
+	proof-of-stake \
+	standard-payment \
+	types
+
+CRATES_WITH_DOCS_RS_MANIFEST_TABLE := $(patsubst %, doc-stable/%, $(CRATES_WITH_DOCS_RS_MANIFEST_TABLE))
+
 .PHONY: all
 all: build build-contracts
 
@@ -182,8 +197,15 @@ audit:
 	$(CARGO) generate-lockfile
 	$(CARGO) audit
 
+.PHONY: build-docs-stable-rs
+build-docs-stable-rs: $(CRATES_WITH_DOCS_RS_MANIFEST_TABLE)
+
+doc-stable/%:
+	$(CARGO) +stable doc $(CARGO_FLAGS) --manifest-path "$*/Cargo.toml" --features "no-unstable-features" --no-deps
+
 .PHONY: check-rs
 check-rs: \
+	build-docs-stable-rs \
 	build \
 	check-format \
 	lint \
@@ -256,13 +278,17 @@ setup-rs: rust-toolchain
 	$(RUSTUP) toolchain install $(RUST_TOOLCHAIN)
 	$(RUSTUP) target add --toolchain $(RUST_TOOLCHAIN) wasm32-unknown-unknown
 
+.PHONY: setup-stable-rs
+setup-stable-rs: RUST_TOOLCHAIN := stable
+setup-stable-rs: setup-rs
+
 .PHONY: setup-nightly-rs
 setup-nightly-rs: RUST_TOOLCHAIN := nightly
 setup-nightly-rs: setup-rs
 
 .PHONY: setup-as
 setup-as: contract-as/package.json
-	cd contract-as && $(NPM) install
+	cd contract-as && $(NPM) ci
 
 .PHONY: setup
 setup: setup-rs setup-as

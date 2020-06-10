@@ -108,12 +108,6 @@ impl Error {
 
 impl wasmi::HostError for Error {}
 
-impl From<!> for Error {
-    fn from(error: !) -> Self {
-        match error {}
-    }
-}
-
 impl From<wasmi::Error> for Error {
     fn from(error: wasmi::Error) -> Self {
         match error

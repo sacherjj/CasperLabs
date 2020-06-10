@@ -3,13 +3,11 @@ import { observer } from 'mobx-react';
 import {
   LinkButton,
   ListInline,
-  RefreshableComponent,
   shortHash
 } from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
-import $ from 'jquery';
 import { DagStepButtons, Props } from './BlockList';
 import { Link, withRouter } from 'react-router-dom';
 import Pages from './Pages';
@@ -18,31 +16,21 @@ import { BondedValidatorsTable } from './BondedValidatorsTable';
 import { ToggleButton } from './ToggleButton';
 import { BlockType, BlockRole, FinalityIcon } from './BlockDetails';
 
-const DEFAULT_DEPTH = 100;
 
 /** Show the tips of the DAG. */
 @observer
 class _Explorer extends React.Component<Props, {}> {
   constructor(props: Props) {
     super(props);
-    this.refreshWithDepthAndMaxRank(props.maxRank, props.depth);
+    this.props.dag.refreshWithDepthAndMaxRank(props.maxRank, props.depth);
   }
 
-  refreshWithDepthAndMaxRank(
-    maxRankStr: string | null,
-    depthStr: string | null
-  ) {
-    let maxRank = parseInt(maxRankStr || '') || 0;
-    let depth = parseInt(depthStr || '') || DEFAULT_DEPTH;
-    this.props.dag.updateMaxRankAndDepth(maxRank, depth);
-    this.props.dag.refreshBlockDagAndSetupSubscriber();
-  }
 
   componentWillReceiveProps(nextProps: Props) {
     if (this.props.depth === nextProps.depth && this.props.maxRank === nextProps.maxRank) {
       return;
     }
-    this.refreshWithDepthAndMaxRank(nextProps.maxRank, nextProps.depth);
+    this.props.dag.refreshWithDepthAndMaxRank(nextProps.maxRank, nextProps.depth);
   }
 
   async refresh() {
@@ -81,7 +69,7 @@ class _Explorer extends React.Component<Props, {}> {
                     urlWithRankAndDepth={Pages.explorerWithMaxRankAndDepth}
                   />
                   {dag.hasBlocks && (
-                    <span>Select a block to see its details.</span>
+                    <span>Select a block to see its details. Press Ctrl before zooming to enable horizontal only zoom mode.</span>
                   )}
                   {dag.selectedBlock && (
                     <ToggleButton
@@ -116,11 +104,11 @@ class _Explorer extends React.Component<Props, {}> {
               height="600"
             />
           </div>
-          {dag.selectedBlock && (
+          {dag.selectedBlock && dag.blocks != null && (
             <div className="col-sm-12 col-lg-4">
               <BlockDetails
                 block={dag.selectedBlock}
-                blocks={dag.blocks!}
+                blocks={dag.blocks}
                 onSelect={blockHashBase16 => {
                   dag.selectByBlockHashBase16(blockHashBase16);
                 }}
@@ -255,25 +243,6 @@ class BlockDetails extends React.Component<
         />
       </div>
     );
-  }
-
-  componentDidMount() {
-    // Scroll into view so people realize it's there.
-    this.scrollToBlockDetails();
-  }
-
-  scrollToBlockDetails() {
-    let container = $(this.ref!);
-    let offset = container.offset()!;
-    let height = container.height()!;
-    $('html, body')
-      .stop()
-      .animate(
-        {
-          scrollTop: offset.top + height
-        },
-        1000
-      );
   }
 }
 

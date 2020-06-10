@@ -1,4 +1,4 @@
-import { action, IObservableArray, observable, reaction, runInAction } from 'mobx';
+import { action, autorun, IObservableArray, observable, reaction, runInAction } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
 import { CasperService, encodeBase16 } from 'casperlabs-sdk';
@@ -6,13 +6,14 @@ import { BlockInfo, Event } from 'casperlabs-grpc/io/casperlabs/casper/consensus
 import { ToggleStore } from '../components/ToggleButton';
 import { ToggleableSubscriber } from './ToggleableSubscriber';
 
+const DEFAULT_DEPTH = 100;
+
 export class DagStep {
   constructor(private container: DagContainer) {
   }
 
   private step = (f: () => number) => () => {
     this.maxRank = f();
-    this.container.refreshBlockDagAndSetupSubscriber();
     this.container.selectedBlock = undefined;
   };
 
@@ -78,6 +79,23 @@ export class DagContainer {
       () => this.isLatestDag,
       () => this.refreshBlockDag()
     );
+
+    // react to the change of maxRank and depth, so that outer components only need to set DAG's props
+    // DAG manage the refresh by itself.
+    reaction(() => {
+      return [this.maxRank, this.depth]
+    }, () => {
+      this.refreshBlockDagAndSetupSubscriber();
+    })
+  }
+
+  refreshWithDepthAndMaxRank(
+    maxRankStr: string | null,
+    depthStr: string | null
+  ) {
+    let maxRank = parseInt(maxRankStr || '') || 0;
+    let depth = parseInt(depthStr || '') || DEFAULT_DEPTH;
+    this.updateMaxRankAndDepth(maxRank, depth);
   }
 
   @action
@@ -100,9 +118,7 @@ export class DagContainer {
 
   async selectByBlockHashBase16(blockHashBase16: string) {
     let selectedBlock = this.blocks!.find(
-      x =>
-        encodeBase16(x.getSummary()!.getBlockHash_asU8()) ===
-        blockHashBase16
+      x => encodeBase16(x.getSummary()!.getBlockHash_asU8()) === blockHashBase16
     );
     if (selectedBlock) {
       this.selectedBlock = selectedBlock;
@@ -171,7 +187,16 @@ export class DagContainer {
     } else if (event.hasNewFinalizedBlock()) {
       const directFinalizedBlockHash = event.getNewFinalizedBlock()!.getBlockHash_asB64();
 
-      let finalizedBlocks = new Set(event.getNewFinalizedBlock()!.getIndirectlyFinalizedBlockHashesList_asB64());
+      const orphanedBlocks = new Set(
+        event
+          .getNewFinalizedBlock()!
+          .getIndirectlyOrphanedBlockHashesList_asB64()
+      );
+      const finalizedBlocks = new Set(
+        event
+          .getNewFinalizedBlock()!
+          .getIndirectlyFinalizedBlockHashesList_asB64()
+      );
       finalizedBlocks.add(directFinalizedBlockHash);
 
       let updatedLastFinalizedBlock = false;
@@ -179,6 +204,8 @@ export class DagContainer {
         let bh = block.getSummary()!.getBlockHash_asB64();
         if (finalizedBlocks.has(bh)) {
           block.getStatus()?.setFinality(BlockInfo.Status.Finality.FINALIZED);
+        } else if (orphanedBlocks.has(bh)) {
+          block.getStatus()?.setFinality(BlockInfo.Status.Finality.ORPHANED);
         }
         if (!updatedLastFinalizedBlock && bh === directFinalizedBlockHash) {
           this.lastFinalizedBlock = block;
@@ -201,8 +228,8 @@ export class DagContainer {
   }
 
   private async refreshBlockDag() {
-    // show loading spinner
-    this.blocks = null;
+    // todo: (ECO-399) Use a more elegant loading style to indicate it is loading
+    // or maybe spin the loading button so that the user can know it is refreshing.
     await this.errors.capture(
       this.casperService
         .getBlockInfos(this.depth, this.maxRank)

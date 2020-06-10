@@ -16,7 +16,7 @@ use types::{
 use engine_shared::{gas::Gas, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 
-use super::{args::Args, scoped_timer::ScopedTimer, Error, Runtime};
+use super::{args::Args, scoped_instrumenter::ScopedInstrumenter, Error, Runtime};
 use crate::resolvers::v1_function_index::FunctionIndex;
 
 impl<'a, R> Externals for Runtime<'a, R>
@@ -30,7 +30,7 @@ where
         args: RuntimeArgs,
     ) -> Result<Option<RuntimeValue>, Trap> {
         let func = FunctionIndex::try_from(index).expect("unknown function index");
-        let mut scoped_timer = ScopedTimer::new(func);
+        let mut scoped_instrumenter = ScopedInstrumenter::new(func);
         match func {
             FunctionIndex::ReadFuncIndex => {
                 // args(0) = pointer to key in Wasm memory
@@ -46,7 +46,7 @@ where
                 // args(1) = size of key in Wasm memory
                 // args(2) = pointer to output size (output param)
                 let (key_ptr, key_size, output_size_ptr): (_, u32, _) = Args::parse(args)?;
-                scoped_timer.add_property("key_size", key_size.to_string());
+                scoped_instrumenter.add_property("key_size", key_size);
                 let ret = self.read_local(key_ptr, key_size, output_size_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -55,8 +55,11 @@ where
                 // args(0) = pointer to amount of keys (output)
                 // args(1) = pointer to amount of serialized bytes (output)
                 let (total_keys_ptr, result_size_ptr) = Args::parse(args)?;
-                let ret =
-                    self.load_named_keys(total_keys_ptr, result_size_ptr, &mut scoped_timer)?;
+                let ret = self.load_named_keys(
+                    total_keys_ptr,
+                    result_size_ptr,
+                    &mut scoped_instrumenter,
+                )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
@@ -66,7 +69,7 @@ where
                 // args(2) = pointer to value
                 // args(3) = size of value
                 let (key_ptr, key_size, value_ptr, value_size): (_, _, _, u32) = Args::parse(args)?;
-                scoped_timer.add_property("value_size", value_size.to_string());
+                scoped_instrumenter.add_property("value_size", value_size);
                 self.write(key_ptr, key_size, value_ptr, value_size)?;
                 Ok(None)
             }
@@ -78,8 +81,8 @@ where
                 // args(3) = size of value
                 let (key_bytes_ptr, key_bytes_size, value_ptr, value_size): (_, u32, _, u32) =
                     Args::parse(args)?;
-                scoped_timer.add_property("key_bytes_size", key_bytes_size.to_string());
-                scoped_timer.add_property("value_size", value_size.to_string());
+                scoped_instrumenter.add_property("key_bytes_size", key_bytes_size);
+                scoped_instrumenter.add_property("value_size", value_size);
                 self.write_local(key_bytes_ptr, key_bytes_size, value_ptr, value_size)?;
                 Ok(None)
             }
@@ -99,7 +102,7 @@ where
                 // args(1) = pointer to initial value
                 // args(2) = size of initial value
                 let (uref_ptr, value_ptr, value_size): (_, _, u32) = Args::parse(args)?;
-                scoped_timer.add_property("value_size", value_size.to_string());
+                scoped_instrumenter.add_property("value_size", value_size);
                 self.new_uref(uref_ptr, value_ptr, value_size)?;
                 Ok(None)
             }
@@ -108,8 +111,8 @@ where
                 // args(0) = pointer to value
                 // args(1) = size of value
                 let (value_ptr, value_size): (_, u32) = Args::parse(args)?;
-                scoped_timer.add_property("value_size", value_size.to_string());
-                Err(self.ret(value_ptr, value_size as usize))
+                scoped_instrumenter.add_property("value_size", value_size);
+                Err(self.ret(value_ptr, value_size as usize, &mut scoped_instrumenter))
             }
 
             FunctionIndex::GetKeyFuncIndex => {
@@ -125,7 +128,7 @@ where
                     u32,
                     u32,
                 ) = Args::parse(args)?;
-                scoped_timer.add_property("name_size", name_size.to_string());
+                scoped_instrumenter.add_property("name_size", name_size);
                 let ret = self.load_key(
                     name_ptr,
                     name_size,
@@ -140,7 +143,7 @@ where
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
                 let (name_ptr, name_size): (_, u32) = Args::parse(args)?;
-                scoped_timer.add_property("name_size", name_size.to_string());
+                scoped_instrumenter.add_property("name_size", name_size);
                 let result = self.has_key(name_ptr, name_size)?;
                 Ok(Some(RuntimeValue::I32(result)))
             }
@@ -151,7 +154,7 @@ where
                 // args(2) = pointer to key in Wasm memory
                 // args(3) = size of key
                 let (name_ptr, name_size, key_ptr, key_size): (_, u32, _, _) = Args::parse(args)?;
-                scoped_timer.add_property("name_size", name_size.to_string());
+                scoped_instrumenter.add_property("name_size", name_size);
                 self.put_key(name_ptr, name_size, key_ptr, key_size)?;
                 Ok(None)
             }
@@ -160,7 +163,7 @@ where
                 // args(0) = pointer to key name in Wasm memory
                 // args(1) = size of key name
                 let (name_ptr, name_size): (_, u32) = Args::parse(args)?;
-                scoped_timer.add_property("name_size", name_size.to_string());
+                scoped_instrumenter.add_property("name_size", name_size);
                 self.remove_key(name_ptr, name_size)?;
                 Ok(None)
             }
@@ -365,7 +368,7 @@ where
             FunctionIndex::ReadHostBufferIndex => {
                 // args(0) = pointer to Wasm memory where to write size.
                 let (dest_ptr, dest_size, bytes_written_ptr): (_, u32, _) = Args::parse(args)?;
-                scoped_timer.add_property("dest_size", dest_size.to_string());
+                scoped_instrumenter.add_property("dest_size", dest_size);
                 let ret = self.read_host_buffer(dest_ptr, dest_size as usize, bytes_written_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -489,7 +492,7 @@ where
                     args_size,
                     result_size_ptr,
                 ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
-                scoped_timer.add_property("args_size", args_size.to_string());
+                scoped_instrumenter.add_property("args_size", args_size.to_string());
 
                 let contract_hash: ContractHash =
                     self.t_from_mem(contract_hash_ptr, contract_hash_size)?;
@@ -505,7 +508,7 @@ where
                     &entry_point_name,
                     args_bytes,
                     result_size_ptr,
-                    &mut scoped_timer,
+                    &mut scoped_instrumenter,
                 )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -556,7 +559,7 @@ where
             #[cfg(feature = "test-support")]
             FunctionIndex::PrintIndex => {
                 let (text_ptr, text_size): (_, u32) = Args::parse(args)?;
-                scoped_timer.add_property("text_size", text_size.to_string());
+                scoped_instrumenter.add_property("text_size", text_size);
                 self.print(text_ptr, text_size)?;
                 Ok(None)
             }
@@ -576,7 +579,7 @@ where
                 // args(2) = size of destination pointer memory
                 let (name_ptr, name_size, dest_ptr, dest_size): (u32, u32, u32, u32) =
                     Args::parse(args)?;
-                scoped_timer.add_property("dest_size", dest_size.to_string());
+                scoped_instrumenter.add_property("dest_size", dest_size.to_string());
                 let ret =
                     self.get_named_arg(name_ptr, name_size as usize, dest_ptr, dest_size as usize)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))

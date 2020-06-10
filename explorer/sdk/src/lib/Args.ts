@@ -59,6 +59,19 @@ export const BigIntValue = toValue<bigint | JSBI>((value, x) => {
   return value;
 });
 
+export const StringValue = toValue<string>((value, x) => {
+  const t = new CLType();
+  t.setSimpleType(CLType.Simple.STRING);
+
+  const v = new CLValueInstance.Value();
+  v.setStrValue(x)
+
+  value.setClType(t);
+  value.setValue(v);
+
+  return value;
+});
+
 export function Args(...args: [string, CLValueInstance][]): Deploy.Arg[] {
   return args.map(x => {
     const [name, value] = x;

@@ -2,7 +2,7 @@ mod args;
 mod externals;
 mod mint_internal;
 mod proof_of_stake_internal;
-mod scoped_timer;
+mod scoped_instrumenter;
 mod standard_payment_internal;
 
 use std::{
@@ -42,7 +42,7 @@ use crate::{
     Address,
 };
 use contracts::{ContractVersion, NamedKeys};
-use scoped_timer::ScopedTimer;
+use scoped_instrumenter::ScopedInstrumenter;
 
 pub struct Runtime<'a, R> {
     system_contract_cache: SystemContractCache,
@@ -1599,7 +1599,13 @@ where
 
     /// Return some bytes from the memory and terminate the current `sub_call`. Note that the return
     /// type is `Trap`, indicating that this function will always kill the current Wasm instance.
-    fn ret(&mut self, value_ptr: u32, value_size: usize) -> Trap {
+    fn ret(
+        &mut self,
+        value_ptr: u32,
+        value_size: usize,
+        scoped_instrumenter: &mut ScopedInstrumenter,
+    ) -> Trap {
+        const UREF_COUNT: &str = "uref_count";
         self.host_buffer = None;
         let mem_get = self
             .memory
@@ -1616,11 +1622,20 @@ where
                     None => Ok(vec![]),
                 };
                 match urefs {
-                    Ok(urefs) => Error::Ret(urefs).into(),
-                    Err(e) => e.into(),
+                    Ok(urefs) => {
+                        scoped_instrumenter.add_property(UREF_COUNT, urefs.len());
+                        Error::Ret(urefs).into()
+                    }
+                    Err(e) => {
+                        scoped_instrumenter.add_property(UREF_COUNT, 0);
+                        e.into()
+                    }
                 }
             }
-            Err(e) => e.into(),
+            Err(e) => {
+                scoped_instrumenter.add_property(UREF_COUNT, 0);
+                e.into()
+            }
         }
     }
 
@@ -2194,16 +2209,16 @@ where
         entry_point_name: &str,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
-        scoped_timer: &mut ScopedTimer,
+        scoped_instrumenter: &mut ScopedInstrumenter,
     ) -> Result<Result<(), ApiError>, Error> {
         // Exit early if the host buffer is already occupied
         if let Err(err) = self.check_host_buffer() {
             return Ok(Err(err));
         }
         let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
-        scoped_timer.pause();
+        scoped_instrumenter.pause();
         let result = self.call_contract(contract_hash, entry_point_name, args)?;
-        scoped_timer.unpause();
+        scoped_instrumenter.unpause();
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
 
@@ -2263,16 +2278,15 @@ where
         &mut self,
         total_keys_ptr: u32,
         result_size_ptr: u32,
-        scoped_timer: &mut ScopedTimer,
+        scoped_instrumenter: &mut ScopedInstrumenter,
     ) -> Result<Result<(), ApiError>, Trap> {
-        scoped_timer.add_property(
+        scoped_instrumenter.add_property(
             "names_total_length",
             self.context
                 .named_keys()
                 .keys()
                 .map(|name| name.len())
-                .sum::<usize>()
-                .to_string(),
+                .sum::<usize>(),
         );
 
         if !self.can_write_to_host_buffer() {

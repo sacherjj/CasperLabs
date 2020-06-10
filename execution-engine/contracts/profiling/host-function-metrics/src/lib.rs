@@ -20,7 +20,7 @@ use types::{
 const MIN_FUNCTION_NAME_LENGTH: usize = 1;
 const MAX_FUNCTION_NAME_LENGTH: usize = 100;
 
-const NAMED_KEY_COUNT: usize = 10;
+const NAMED_KEY_COUNT: usize = 100;
 const MIN_NAMED_KEY_NAME_LENGTH: usize = 10;
 // TODO - consider increasing to e.g. 1_000 once https://casperlabs.atlassian.net/browse/EE-966 is
 //        resolved.
@@ -54,16 +54,24 @@ impl From<Error> for ApiError {
     }
 }
 
-fn create_random_names(seed: u64) -> impl Iterator<Item = String> {
-    let mut rng = SmallRng::seed_from_u64(seed);
+fn create_random_names<'a>(rng: &'a mut SmallRng) -> impl Iterator<Item = String> + 'a {
     iter::repeat_with(move || {
         let key_length: usize = rng.gen_range(MIN_NAMED_KEY_NAME_LENGTH, MAX_NAMED_KEY_NAME_LENGTH);
-        (&mut rng)
-            .sample_iter(&Alphanumeric)
+        rng.sample_iter(&Alphanumeric)
             .take(key_length)
             .collect::<String>()
     })
     .take(NAMED_KEY_COUNT)
+}
+
+fn truncate_named_keys(
+    named_keys: BTreeMap<String, Key>,
+    rng: &mut SmallRng,
+) -> BTreeMap<String, Key> {
+    let truncated_len = rng.gen_range(1, named_keys.len() + 1);
+    let mut vec = named_keys.into_iter().collect::<Vec<_>>();
+    vec.truncate(truncated_len);
+    vec.into_iter().collect()
 }
 
 // Executes the named key functions from the `runtime` module and most of the functions from the
@@ -74,8 +82,9 @@ fn large_function() {
 
     let uref = storage::new_uref(random_bytes.clone());
 
+    let mut rng = SmallRng::seed_from_u64(seed);
     let mut key_name = String::new();
-    for random_name in create_random_names(seed) {
+    for random_name in create_random_names(&mut rng) {
         key_name = random_name;
         runtime::put_key(&key_name, Key::from(uref));
     }
@@ -113,7 +122,8 @@ fn large_function() {
     storage::write_local(key_name.clone(), VALUE_FOR_ADDITION_1);
     storage::add_local(key_name, VALUE_FOR_ADDITION_2);
 
-    runtime::ret(CLValue::from_t(named_keys).unwrap_or_revert());
+    let keys_to_return = truncate_named_keys(named_keys, &mut rng);
+    runtime::ret(CLValue::from_t(keys_to_return).unwrap_or_revert());
 }
 
 fn small_function() {

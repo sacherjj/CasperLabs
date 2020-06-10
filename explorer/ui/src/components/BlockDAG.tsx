@@ -5,7 +5,8 @@ import { ListInline, Loading, RefreshButton, shortHash } from './Utils';
 import * as d3 from 'd3';
 import { encodeBase16 } from 'casperlabs-sdk';
 import { ToggleButton, ToggleStore } from './ToggleButton';
-import { reaction } from 'mobx';
+import { autorun } from 'mobx';
+import * as d3xyzoom from 'd3-xyzoom';
 import { observer } from 'mobx-react';
 
 // https://bl.ocks.org/mapio/53fed7d84cd1812d6a6639ed7aa83868
@@ -13,6 +14,7 @@ import { observer } from 'mobx-react';
 const CircleRadius = 12;
 const LineColor = '#AAA';
 const FinalizedLineColor = '#83f2a1';
+const OrphanedLineColor = '#FF0000';
 
 export interface Props {
   title: string;
@@ -38,29 +40,14 @@ export class BlockDAG extends React.Component<Props, {}> {
   xTrans: d3.ScaleLinear<number, number> | null = null;
   yTrans: d3.ScaleLinear<number, number> | null = null;
   initialized = false;
-  renderedBlocks: BlockInfo[] | null;
-  hideBlockHash: boolean | undefined;
-  hideBallot: boolean | undefined;
 
   constructor(props: Props) {
     super(props);
-    reaction(
-      () => {
-        // Needed for "Hide Ballots" to work.
-        return {
-          hideBallots: this.props.hideBallotsToggleStore?.isPressed,
-          hideBlockHash: this.props.hideBlockHashToggleStore?.isPressed
-        };
-      },
-      ({ hideBallots, hideBlockHash }) => {
-        this.renderGraph(hideBallots, hideBlockHash);
-      },
-      {
-        fireImmediately: false,
-        // the animation of toggleButton takes 250ms, set delay larger than 250ms so that render of DAG don't affect the animation of toggleButton
-        delay: 400
-      }
-    );
+    autorun(() => {
+      this.renderGraph();
+    }, {
+      delay: 400
+    })
   }
 
   render() {
@@ -148,30 +135,19 @@ export class BlockDAG extends React.Component<Props, {}> {
   /** Called so that the SVG is added when the component has been rendered,
    * however data will most likely still be uninitialized. */
   componentDidMount() {
-    this.renderGraph(this.props.hideBallotsToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
+    this.renderGraph();
   }
 
-  /** Called when the data is refreshed, when we get the blocks if they were null to begin with.
-   * Also required for navigating between nodes on block details view, otherwise the component
-   * would re-render with no SVG at all.
-   */
-  componentDidUpdate() {
-    this.renderGraph(this.props.hideBallotsToggleStore?.isPressed, this.props.hideBlockHashToggleStore?.isPressed);
-  }
+  renderGraph() {
+    const hideBallot = this.props.hideBallotsToggleStore?.isPressed;
+    const hideBlockHash = this.props.hideBlockHashToggleStore?.isPressed;
 
-  renderGraph(hideBallot?: boolean, hideBlockHash?: boolean) {
     let blocks = this.props.blocks;
     if (blocks == null || blocks.length === 0) {
       // The renderer will have removed the svg.
       this.initialized = false;
       return;
     }
-
-    // Avoid double rendering by componentDidUpdate and reaction.
-    if (arraysEqual(blocks, this.renderedBlocks) && this.hideBlockHash === hideBlockHash && this.hideBallot === hideBallot) return;
-    this.renderedBlocks = blocks;
-    this.hideBlockHash = hideBlockHash;
-    this.hideBallot = hideBallot;
 
     const svg = d3.select(this.svg);
     const hint = d3.select(this.hint);
@@ -183,11 +159,11 @@ export class BlockDAG extends React.Component<Props, {}> {
 
     // see https://www.d3-graph-gallery.com/graph/interactivity_zoom.html#axisZoom
     // using axis transform function to simplify transform
-    const initXTrans: d3.ScaleLinear<number, number> = d3
+    let initXTrans: d3.ScaleLinear<number, number> = d3
       .scaleLinear()
       .domain([0, width])
       .range([0, width]);
-    const initYTrans: d3.ScaleLinear<number, number> = d3
+    let initYTrans: d3.ScaleLinear<number, number> = d3
       .scaleLinear()
       .domain([0, height])
       .range([0, height]);
@@ -199,13 +175,53 @@ export class BlockDAG extends React.Component<Props, {}> {
       // Add the zoomable container.
       svg.append('g').attr('class', 'container');
 
-      const zoom: any = d3
-        .zoom()
-        .scaleExtent([0.1, 4])
+      // whether it is under horizontal only zoom mode
+      let isHorizontal = false;
+      const zoom = d3xyzoom
+        .xyzoom()
+        .extent([
+          [0, 0],
+          [width, height]
+        ])
+        .scaleExtent([
+          [0.4, 4],
+          [0.4, 4]
+        ])
+        .on('start', () => {
+          // The first wheel event emits a start event; an end event is emitted when no wheel events are received for 150ms.
+          // So if user press ctrlKey when fire first wheel event,
+          // it enters the horizontal only zoom mode.
+          if(d3.event.sourceEvent && d3.event.sourceEvent.type === 'wheel'){
+            isHorizontal = d3.event.sourceEvent.ctrlKey;
+            if(isHorizontal){
+              svg.attr('cursor', 'ew-resize');
+            }else{
+              svg.attr('cursor', 'nesw-resize');
+            }
+          }else if(d3.event.sourceEvent && d3.event.sourceEvent.type === "mousedown"){
+            svg.attr('cursor', 'grab');
+          }
+        })
         .on('zoom', () => {
-          this.xTrans = d3.event.transform.rescaleX(initXTrans);
-          this.yTrans = d3.event.transform.rescaleY(initYTrans);
+          let t = d3.event.transform;
+          this.xTrans = t.rescaleX(initXTrans);
+          if (!isHorizontal) {
+            this.yTrans = t.rescaleY(initYTrans);
+          }
           updatePositions();
+        })
+        .on('end', () => {
+          // reset
+          isHorizontal = false;
+          // set null to remove the attribute
+          svg.attr('cursor', null);
+          // see https://github.com/d3/d3-zoom/issues/48
+          // Stored the current axis of x and y, and set the transform to be the identity transform,
+          // where kx = 1, ky = 1, tx = ty = 0, so when switching between zoom mode,
+          // both of them won't interleave.
+          initXTrans = this.xTrans ?? initXTrans;
+          initYTrans = this.yTrans ?? initYTrans;
+          svg.property('__zoom', d3xyzoom.xyzoomIdentity);
         });
 
       svg.call(zoom);
@@ -251,7 +267,7 @@ export class BlockDAG extends React.Component<Props, {}> {
       .enter()
       .append('line')
       .attr('stroke', (d: d3Link) =>
-        d.isFinalized ? FinalizedLineColor : LineColor
+        d.isOrphaned ? OrphanedLineColor : (d.isFinalized ? FinalizedLineColor : LineColor)
       )
       .attr('stroke-width', (d: d3Link) => (d.isMainParent ? 3 : 1))
       .attr('marker-end', 'url(#arrow)') // use the Arrow created above
@@ -394,6 +410,7 @@ interface d3Link {
   isMainParent: boolean;
   isJustification: boolean;
   isFinalized: boolean;
+  isOrphaned: boolean;
 }
 
 class Graph {
@@ -437,6 +454,7 @@ const toGraph = (blocks: BlockInfo[]) => {
     let child = blockHash(block);
 
     let isChildFinalized = isFinalized(block);
+    let isChildOrphaned = isOrphaned(block);
     let isChildBallot = isBallot(block);
 
     let parents = block
@@ -464,7 +482,9 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: p === parents[0],
           isJustification: false,
-          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
+          // if child is an orphaned block, the link should be highlighted with OrphanedLineColor
+          isOrphaned: isChildOrphaned
         };
       });
 
@@ -478,7 +498,8 @@ const toGraph = (blocks: BlockInfo[]) => {
           target: target,
           isMainParent: false,
           isJustification: true,
-          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block)
+          isFinalized: (isChildFinalized || isChildBallot) && isFinalized(target.block),
+          isOrphaned: false
         };
       });
 
@@ -550,6 +571,9 @@ const isBallot = (block: BlockInfo) => !isBlock(block);
 const isFinalized = (block: BlockInfo) =>
   block.getStatus()!.getFinality() === BlockInfo.Status.Finality.FINALIZED;
 
+const isOrphaned = (block: BlockInfo) =>
+  isBlock(block) && block.getStatus()!.getFinality() === BlockInfo.Status.Finality.ORPHANED;
+
 const validatorHash = (block: BlockInfo) =>
   encodeBase16(
     block
@@ -598,7 +622,7 @@ const consistentColor = (colors: readonly string[]) => {
 function arraysEqual<T>(a: T[] | null, b: T[] | null) {
   if (a === b) return true;
   if (a == null || b == null) return false;
-  if (a.length != b.length) return false;
+  if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; ++i) {
     if (a[i] !== b[i]) return false;
   }
