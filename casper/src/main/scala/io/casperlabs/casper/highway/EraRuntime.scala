@@ -78,7 +78,8 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   implicit val metricsSource = HighwayMetricsSource / "EraRuntime"
 
   type HWL[A] = HighwayLog[F, A]
-  private val noop = HighwayLog.unit[F]
+  private val noop     = HighwayLog.unit[F]
+  private val noagenda = HighwayLog.liftF(Agenda.empty.pure[F])
 
   val startTick = Ticks(era.startTick)
   val endTick   = Ticks(era.endTick)
@@ -497,11 +498,18 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   }
 
   /** Pick a time during the round to send the omega message. */
-  private def chooseOmegaTick(roundStart: Ticks, roundEnd: Ticks): Ticks = {
-    val r = ???
-    val o = conf.omegaMessageTimeStart + r * (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart)
-    val t = roundStart + o * (roundEnd - roundStart)
-    Ticks(t.toLong)
+  private def chooseOmegaTick(
+      validatorId: PublicKeyBS,
+      roundStart: Ticks,
+      roundEnd: Ticks
+  ): Ticks = {
+    val order = omegaFunction(roundStart)
+    // With 3 validators we want to offset to go [0.0, 0.5, 1.0]; not [0.0, 0.33, 0.66]
+    val offset =
+      if (order.size == 1) 0.5 else (order.indexOf(validatorId).toDouble / (order.size - 1))
+    val delay = conf.omegaMessageTimeStart + (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart) * offset
+    val tick  = roundStart + (roundEnd - roundStart) * delay
+    Ticks(tick.toLong)
   }
 
   /** Preliminary check before the block is executed. Invalid blocks can be dropped. */
@@ -654,7 +662,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
         // Alternatively `StartRound` could just return a `CreateLambdaMessage`,
         // a `CreateOmegaMessage` and another `StartRound` to make them all
         // independently scheduleable.
-        def agenda =
+        def agenda(validatorId: PublicKeyBS) =
           for {
             now                           <- currentTick
             (currentRoundId, nextRoundId) <- roundBoundariesAt(now)
@@ -670,7 +678,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               // Schedule the omega for whatever the current round is, don't bother
               // with the old one if the block production was so slow that it pushed
               // us into the next round already. We can still participate in this one.
-              val omegaTick = chooseOmegaTick(currentRoundId, nextRoundId)
+              val omegaTick = chooseOmegaTick(validatorId, currentRoundId, nextRoundId)
               Agenda(omegaTick -> Agenda.CreateOmegaMessage(currentRoundId))
             } else Agenda.empty
 
@@ -681,16 +689,15 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
             omega ++ next
           }
 
-        maybeMessageProducer
-          .filter(_.validatorId == leaderFunction(roundId))
-          .fold(noop) {
-            createLambdaMessage(_, roundId)
-          } >> HighwayLog.liftF(agenda)
+        maybeMessageProducer.fold(noagenda) { mp =>
+          createLambdaMessage(mp, roundId).whenA(mp.validatorId == leaderFunction(roundId)) >>
+            HighwayLog.liftF(agenda(mp.validatorId))
+        }
 
       case Agenda.CreateOmegaMessage(roundId) =>
         maybeMessageProducer.fold(noop) {
           createOmegaMessage(_, roundId)
-        } >> HighwayLog.liftF(Agenda.empty.pure[F])
+        } >> noagenda
     }
 
   /** Do any kind of special logic when we encounter a "critical" block in the protocol:

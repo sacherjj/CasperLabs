@@ -18,10 +18,10 @@ trait LeaderSequencer {
 object LeaderSequencer extends LeaderSequencer {
 
   override def leaderFunction[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
-    withBonds(leaderFunction(_, _))
+    withBonds[F, LeaderFunction](era)(leaderFunction(_, _))
 
   override def omegaFunction[F[_]: MonadThrowable](era: Era): F[OmegaFunction] =
-    ???
+    withBonds[F, OmegaFunction](era)(omegaFunction(_, _))
 
   private def withBonds[F[_]: MonadThrowable, T](
       era: Era
@@ -97,14 +97,7 @@ object LeaderSequencer extends LeaderSequencer {
     }
 
     (tick: Ticks) => {
-      // On Linux SecureRandom uses NativePRNG, and ignores the seed.
-      // Re-seeding also doesn't reset the seed, just augments it, so a new instance is required.
-      // https://stackoverflow.com/questions/50107982/rhe-7-not-respecting-java-secure-random-seed
-      // NODE-1095: Find a more secure, cross platform algorithm.
-      val random = SecureRandom.getInstance("SHA1PRNG", "SUN")
-      // Ticks need to be deterministic, so each time we have to reset the seed.
-      val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
-      random.setSeed(tickSeed)
+      val random = getRandom(leaderSeed, tick)
       // Pick a number between [0, 1) and use it to find a validator.
       // NODE-1096: If possible generate a random BigInt directly, without involving a Double.
       val r = BigDecimal.valueOf(random.nextDouble())
@@ -115,10 +108,48 @@ object LeaderSequencer extends LeaderSequencer {
     }
   }
 
+  /** Make a function that assigns an order to all the validators within a round, deterministically. */
+  def omegaFunction(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): OmegaFunction = {
+    val validators = bonds.map(b => PublicKey(b.validatorPublicKey))
+    (tick: Ticks) => {
+      val random = getRandom(leaderSeed, tick)
+      val varray = validators.toIterable.toArray
+      shuffle(varray, random)
+    }
+  }
+
+  private def getRandom(leaderSeed: Array[Byte], tick: Ticks): SecureRandom = {
+    // On Linux SecureRandom uses NativePRNG, and ignores the seed.
+    // Re-seeding also doesn't reset the seed, just augments it, so a new instance is required.
+    // https://stackoverflow.com/questions/50107982/rhe-7-not-respecting-java-secure-random-seed
+    // NODE-1095: Find a more secure, cross platform algorithm.
+    val random = SecureRandom.getInstance("SHA1PRNG", "SUN")
+    // Ticks need to be deterministic, so each time we have to reset the seed.
+    val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
+    random.setSeed(tickSeed)
+    random
+  }
+
   private def longToBytesLittleEndian(i: Long): Array[Byte] =
     ByteBuffer
       .allocate(8)
       .order(ByteOrder.LITTLE_ENDIAN)
       .putLong(i)
       .array
+
+  /** Shuffles an array in place using the Knuth algorithm.
+    * https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+    * */
+  private def shuffle[T](arr: Array[T], rand: SecureRandom): Array[T] = {
+    val n = arr.size
+    if (n > 1) {
+      for (i <- n - 1 to 1 by -1) {
+        val r = rand.nextInt(n)
+        val t = arr(i)
+        arr(i) = arr(r)
+        arr(r) = t
+      }
+    }
+    arr
+  }
 }

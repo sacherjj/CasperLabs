@@ -39,14 +39,14 @@ class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
     }
   }
 
-  "apply" should {
+  "leaderFunction" should {
     val bonds = NonEmptyList.of(
       Bond(ByteString.copyFromUtf8("Alice")).withStake(state.BigInt("1000")),
       Bond(ByteString.copyFromUtf8("Bob")).withStake(state.BigInt("2000")),
       Bond(ByteString.copyFromUtf8("Charlie")).withStake(state.BigInt("3000"))
     )
 
-    val leaderOf = LeaderSequencer("leader-seed".getBytes, bonds)
+    val leaderOf = LeaderSequencer.leaderFunction("leader-seed".getBytes, bonds)
 
     "create a deterministic function" in {
       val tick = Ticks(System.currentTimeMillis)
@@ -73,8 +73,33 @@ class LeaderSequencerSpec extends WordSpec with Matchers with Inspectors {
     }
 
     "work with an empty seed" in {
-      val genesisLeader = LeaderSequencer(Array.empty[Byte], bonds)
+      val genesisLeader = LeaderSequencer.leaderFunction(Array.empty[Byte], bonds)
       genesisLeader(Ticks(System.currentTimeMillis))
+    }
+  }
+
+  "omegaFunction" should {
+    val bonds = NonEmptyList.of(
+      Bond(ByteString.copyFromUtf8("Alice")).withStake(state.BigInt("1000")),
+      Bond(ByteString.copyFromUtf8("Bob")).withStake(state.BigInt("2000")),
+      Bond(ByteString.copyFromUtf8("Charlie")).withStake(state.BigInt("3000"))
+    )
+
+    val omegaOrder = LeaderSequencer.omegaFunction("leader-seed".getBytes, bonds)
+
+    "create a deterministic function" in {
+      val tick = Ticks(System.currentTimeMillis)
+      omegaOrder(tick) shouldBe omegaOrder(tick)
+    }
+
+    "generate a random order for each round" in {
+      val t0 = Ticks(32)
+      val t1 = Ticks(64)
+      omegaOrder(t0) should not be omegaOrder(t1)
+    }
+
+    "include every validator" in {
+      omegaOrder(Ticks(0)) should contain theSameElementsAs bonds.map(_.validatorPublicKey).toList
     }
   }
 }
