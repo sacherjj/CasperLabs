@@ -77,7 +77,7 @@ fn should_create_and_remove_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -115,7 +115,7 @@ fn should_create_and_remove_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 REMOVE_GROUP,
                 args,
             )
@@ -183,7 +183,7 @@ fn should_create_and_extend_user_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -222,7 +222,7 @@ fn should_create_and_extend_user_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 EXTEND_GROUP_UREFS,
                 args,
             )
@@ -294,7 +294,7 @@ fn should_create_and_remove_urefs_from_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -335,7 +335,7 @@ fn should_create_and_remove_urefs_from_group() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 REMOVE_GROUP_UREFS,
                 args,
             )
@@ -404,7 +404,7 @@ fn should_limit_max_urefs_while_extending() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 CREATE_GROUP,
                 DEFAULT_CREATE_GROUP_ARGS.clone(),
             )
@@ -443,7 +443,7 @@ fn should_limit_max_urefs_while_extending() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 EXTEND_GROUP_UREFS,
                 args,
             )
@@ -468,7 +468,7 @@ fn should_limit_max_urefs_while_extending() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 EXTEND_GROUP_UREFS,
                 args,
             )

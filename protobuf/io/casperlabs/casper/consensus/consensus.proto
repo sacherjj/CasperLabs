@@ -93,7 +93,10 @@ message Deploy {
                 // Name of a key that contains a package hash
                 string name = 2;
             }
-            uint32 version = 3;
+
+            oneof optional_version {
+                uint32 version = 3;
+            }
         }
 
         message StoredContract {

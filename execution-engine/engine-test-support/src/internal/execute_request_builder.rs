@@ -90,7 +90,7 @@ impl ExecuteRequestBuilder {
     pub fn versioned_contract_call_by_hash_key_name(
         sender: PublicKey,
         hash_key_name: &str,
-        version: ContractVersion,
+        version: Option<ContractVersion>,
         entry_point_name: &str,
         args: RuntimeArgs,
     ) -> Self {

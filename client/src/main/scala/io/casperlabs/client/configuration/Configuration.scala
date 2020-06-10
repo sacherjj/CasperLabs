@@ -138,12 +138,20 @@ object DeployConfig {
 
     } orElse {
 
-      opts.contractName.map { x =>
-        Contract.StoredVersionedContract(
-          StoredVersionedContract()
-            .withName(x)
-            .withVersion(opts.version.getOrElse(0))
-        )
+      opts.packageName.map { x =>
+        opts.version match {
+          case Some(ver) =>
+            Contract.StoredVersionedContract(
+              StoredVersionedContract()
+                .withName(x)
+                .withVersion(ver)
+            )
+          case None =>
+            Contract.StoredVersionedContract(
+              StoredVersionedContract()
+                .withName(x)
+            )
+        }
       }
 
     } orElse {

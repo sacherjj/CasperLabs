@@ -836,8 +836,19 @@ where
                     .borrow_mut()
                     .get_contract_package(correlation_id, contract_package_hash)?;
 
-                let contract_version_key =
-                    ContractVersionKey::new(protocol_version.value().major, *version);
+                let contract_version_key = match version {
+                    Some(version) => {
+                        ContractVersionKey::new(protocol_version.value().major, *version)
+                    }
+                    None => match contract_package.get_current_contract_version() {
+                        Some(v) => *v,
+                        None => {
+                            return Err(error::Error::Exec(
+                                execution::Error::NoActiveContractVersions(contract_package_hash),
+                            ))
+                        }
+                    },
+                };
 
                 if !contract_package.is_contract_version_in_use(contract_version_key) {
                     return Err(error::Error::Exec(
@@ -895,8 +906,19 @@ where
                     .borrow_mut()
                     .get_contract_package(correlation_id, contract_package_hash)?;
 
-                let contract_version_key =
-                    ContractVersionKey::new(protocol_version.value().major, *version);
+                let contract_version_key = match version {
+                    Some(version) => {
+                        ContractVersionKey::new(protocol_version.value().major, *version)
+                    }
+                    None => match contract_package.get_current_contract_version() {
+                        Some(v) => *v,
+                        None => {
+                            return Err(error::Error::Exec(
+                                execution::Error::NoActiveContractVersions(contract_package_hash),
+                            ))
+                        }
+                    },
+                };
 
                 if !contract_package.is_contract_version_in_use(contract_version_key) {
                     return Err(error::Error::Exec(

@@ -674,16 +674,21 @@ object ProtoUtil {
             )
 
         case Deploy.Code.Contract
-              .StoredVersionedContract(StoredVersionedContract(version, address)) =>
+              .StoredVersionedContract(StoredVersionedContract(address, optionalVersion)) =>
           if (address.isName) {
             Success(
               ipc.DeployPayload.Payload.StoredPackageByName(
                 io.casperlabs.ipc
                   .StoredContractPackage(
                     address.name.get,
-                    version,
                     code.entryPoint,
-                    args
+                    args,
+                    optionalVersion match {
+                      case StoredVersionedContract.OptionalVersion.Empty =>
+                        ipc.StoredContractPackage.OptionalVersion.Empty
+                      case StoredVersionedContract.OptionalVersion.Version(ver) =>
+                        ipc.StoredContractPackage.OptionalVersion.Version(ver)
+                    }
                   )
               )
             )
@@ -693,9 +698,14 @@ object ProtoUtil {
                 io.casperlabs.ipc
                   .StoredContractPackageHash(
                     address.packageHash.get,
-                    version,
                     code.entryPoint,
-                    args
+                    args,
+                    optionalVersion match {
+                      case StoredVersionedContract.OptionalVersion.Empty =>
+                        ipc.StoredContractPackageHash.OptionalVersion.Empty
+                      case StoredVersionedContract.OptionalVersion.Version(ver) =>
+                        ipc.StoredContractPackageHash.OptionalVersion.Version(ver)
+                    }
                   )
               )
             )

@@ -227,7 +227,7 @@ fn expensive_subcall_should_cost_more() {
     let call_do_nothing_request = ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
         DEFAULT_ACCOUNT_ADDR,
         DO_NOTHING_PACKAGE_HASH_KEY_NAME,
-        CONTRACT_INITIAL_VERSION,
+        Some(CONTRACT_INITIAL_VERSION),
         ENTRY_FUNCTION_NAME,
         RuntimeArgs::new(),
     )

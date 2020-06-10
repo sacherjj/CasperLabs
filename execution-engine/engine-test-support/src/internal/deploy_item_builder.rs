@@ -126,7 +126,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_contract_by_name(
         mut self,
         name: &str,
-        version: ContractVersion,
+        version: Option<ContractVersion>,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {
@@ -142,7 +142,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_contract_by_hash(
         mut self,
         hash: HashAddr,
-        version: ContractVersion,
+        version: Option<ContractVersion>,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {
@@ -158,7 +158,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_payment_contract_by_name(
         mut self,
         key_name: &str,
-        version: ContractVersion,
+        version: Option<ContractVersion>,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {
@@ -174,7 +174,7 @@ impl DeployItemBuilder {
     pub fn with_stored_versioned_payment_contract_by_hash(
         mut self,
         hash: HashAddr,
-        version: ContractVersion,
+        version: Option<ContractVersion>,
         entry_point: &str,
         args: RuntimeArgs,
     ) -> Self {

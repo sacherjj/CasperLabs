@@ -24,7 +24,7 @@ pub enum ExecutableDeployItem {
     StoredVersionedContractByName {
         name: String,
         // named key storing contract package hash
-        version: ContractVersion,
+        version: Option<ContractVersion>,
         // finds active version
         entry_point: String,
         // finds header by entry point name
@@ -33,7 +33,7 @@ pub enum ExecutableDeployItem {
     StoredVersionedContractByHash {
         hash: ContractPackageHash,
         // named key storing contract package hash
-        version: ContractVersion,
+        version: Option<ContractVersion>,
         // finds active version
         entry_point: String,
         // finds header by entry point name

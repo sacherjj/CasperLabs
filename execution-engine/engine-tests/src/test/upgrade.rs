@@ -71,7 +71,7 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
             ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
                 DEFAULT_ACCOUNT_ADDR,
                 DO_NOTHING_PACKAGE_HASH_KEY_NAME,
-                INITIAL_VERSION,
+                Some(INITIAL_VERSION),
                 ENTRY_FUNCTION_NAME,
                 RuntimeArgs::new(),
             )
@@ -114,7 +114,7 @@ fn should_upgrade_do_nothing_to_do_something_version_hash_call() {
             ExecuteRequestBuilder::versioned_contract_call_by_hash_key_name(
                 DEFAULT_ACCOUNT_ADDR,
                 DO_NOTHING_PACKAGE_HASH_KEY_NAME,
-                UPGRADED_VERSION,
+                Some(UPGRADED_VERSION),
                 ENTRY_FUNCTION_NAME,
                 args,
             )

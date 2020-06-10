@@ -37,7 +37,7 @@ fn should_enforce_intended_execution_contexts() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 SESSION_CODE_TEST,
                 args,
             )
@@ -55,7 +55,7 @@ fn should_enforce_intended_execution_contexts() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 CONTRACT_CODE_TEST,
                 args,
             )
@@ -73,7 +73,7 @@ fn should_enforce_intended_execution_contexts() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 ADD_NEW_KEY_AS_SESSION,
                 args,
             )
@@ -164,7 +164,7 @@ fn should_not_call_session_from_contract() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 SESSION_CODE_CALLER_AS_CONTRACT,
                 args,
             )
