@@ -7,7 +7,7 @@ import "io/casperlabs/casper/consensus/state.proto";
 // on the subject; for example if it's a block then the key is actually part of the data
 // that needs to be signed over.
 message Signature {
-    // One of the supported algorithms: ed25519, secp256k1
+    // One of the supported algorithms: ed25519, secp256k1, secp256r1
     string sig_algorithm = 1;
     bytes sig = 2;
 }
