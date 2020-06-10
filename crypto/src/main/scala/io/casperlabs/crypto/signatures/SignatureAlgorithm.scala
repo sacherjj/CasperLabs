@@ -8,6 +8,7 @@ import org.bouncycastle.openssl.PEMKeyPair
 import scala.util.control.NonFatal
 import scala.util.{Random, Try}
 import io.casperlabs.crypto.Keys
+import java.math.BigInteger
 
 /**
   * Useful links:
@@ -297,14 +298,16 @@ object SignatureAlgorithm {
       kpg.initialize(new ECGenParameterSpec(name), SecureRandomUtil.secureRandomNonBlocking)
       val kp = kpg.generateKeyPair
 
-      val padded =
-        Strings.padStart(kp.getPrivate.asInstanceOf[ECPrivateKey].getS.toString(16), 64, '0')
+      val padded = toPaddedHex(kp.getPrivate.asInstanceOf[ECPrivateKey].getS)
 
       val sec = PrivateKey(Base16.decode(padded))
       val pub = PublicKey(tryToPublic(sec).get)
 
       (sec, pub)
     }
+
+    protected def toPaddedHex(i: BigInteger): String =
+      Strings.padStart(i.toString(16), 64, '0')
   }
 
   // Key type used by Bitcoin and Ethereum.
@@ -349,17 +352,19 @@ object SignatureAlgorithm {
       ECPrivateKeySpec,
       ECPublicKeySpec
     }
-    import java.math.BigInteger
+    import org.bouncycastle.asn1.sec.SECNamedCurves
+    import org.bouncycastle.crypto.params.ECDomainParameters
 
     override def name: String = "secp256r1" // same as prime256v1
 
     // https://docs.oracle.com/javase/7/docs/technotes/guides/security/StandardNames.html#Signature
-    private def getSigner = java.security.Signature.getInstance("NONEwithECDSA")
+    private def getSigner     = java.security.Signature.getInstance("NONEwithECDSA")
+    private def getKeyFactory = KeyFactory.getInstance("EC")
 
     // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPrivateKeySpec
     def toPrivateKey(sec: PrivateKey): java.security.PrivateKey = {
-      val keySpec = new ECPrivateKeySpec(new BigInteger(sec), parameterSpec)
-      KeyFactory.getInstance("EC").generatePrivate(keySpec)
+      val keySpec = new ECPrivateKeySpec(new BigInteger(1, sec), parameterSpec)
+      getKeyFactory.generatePrivate(keySpec)
     }
 
     // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPublicKeySpec
@@ -374,14 +379,29 @@ object SignatureAlgorithm {
       )
       val x       = new BigInteger(1, pub.slice(1, 1 + PublicKeyLength / 2))
       val y       = new BigInteger(1, pub.slice(1 + PublicKeyLength / 2, PublicKeyLength))
-      val keySpec = new ECPublicKeySpec(new ECPoint(x, y), parameterSpec)
-      KeyFactory.getInstance("EC").generatePublic(keySpec)
+      val q       = new ECPoint(x, y)
+      val keySpec = new ECPublicKeySpec(q, parameterSpec)
+      getKeyFactory.generatePublic(keySpec)
     }
+
+    // https://stackoverflow.com/questions/22003407/bouncy-castle-ecdsa-create-public-key-from-private-key
+    // https://github.com/kjur/jsrsasign/blob/master/src/ecdsa-modified-1.0.js#L176
+    override def tryToPublic(seckey: PrivateKey): Option[PublicKey] =
+      Try {
+        val d = new BigInteger(1, seckey)
+        val q = domainParameters.getG.multiply(d)
+        PublicKey(q.getEncoded(false))
+      }.toOption
 
     private val parameterSpec: ECParameterSpec = {
       val algorithm = AlgorithmParameters.getInstance("EC")
       algorithm.init(new ECGenParameterSpec(name))
       algorithm.getParameterSpec(classOf[ECParameterSpec])
+    }
+
+    private val domainParameters = {
+      val curve = SECNamedCurves.getByName(name)
+      new ECDomainParameters(curve.getCurve, curve.getG, curve.getN, curve.getH)
     }
 
     override def verify(data: Array[Byte], signature: Signature, pub: PublicKey): Boolean = {
@@ -399,9 +419,6 @@ object SignatureAlgorithm {
       signer.update(data)
       Signature(signer.sign())
     }
-
-    override def tryToPublic(seckey: PrivateKey): Option[PublicKey] =
-      ???
   }
 
 }

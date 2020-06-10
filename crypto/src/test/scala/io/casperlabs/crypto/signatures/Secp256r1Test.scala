@@ -16,7 +16,7 @@ class Secp256r1Test extends FunSpec with Matchers with BeforeAndAfterEach with A
 
   describe("Secp256r1") {
 
-    ignore("generates a new with keypair, signs and verifies some data") {
+    it("generates a new with keypair, signs and verifies some data") {
       val (sec, pub) = Secp256r1.newKeyPair
       val data       = Sha256.hash("testing".getBytes)
       val sig        = Secp256r1.sign(data, sec)
@@ -45,7 +45,7 @@ class Secp256r1Test extends FunSpec with Matchers with BeforeAndAfterEach with A
       Secp256r1.verify(data, sig, pub) shouldBe false
     }
 
-    ignore("computes public key from secret key") {
+    it("computes public key from secret key") {
       val sec = PrivateKey(Base16.decode(privateKeyBase16))
       val pub = Secp256r1.tryToPublic(sec).get
       Base16.encode(pub) shouldBe publicKeyBase16
