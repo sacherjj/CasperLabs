@@ -1,4 +1,4 @@
-from casperlabs_client.key_pair import ED25519Key
+from casperlabs_client.key_pairs import ED25519Key
 
 
 def test_generate_ed25519():
@@ -25,7 +25,7 @@ def test_parse_pem_data_line_ed25519_private_key():
     pem_data = (
         b"-----BEGIN PRIVATE KEY-----\n"
         b"MC4CAQAwBQYDK2VwBCIEIGXB6fvNKdlQh53I7bSlGg9bFmqST/0tpwJqbjtW6Drg\n"
-        b"-----END PRIVATE KEY-----"
+        b"-----END PRIVATE KEY-----\n"
     )
     expected = b"e\xc1\xe9\xfb\xcd)\xd9P\x87\x9d\xc8\xed\xb4\xa5\x1a\x0f[\x16j\x92O\xfd-\xa7\x02jn;V\xe8:\xe0"
     result = ED25519Key._parse_pem_data(pem_data)
@@ -36,7 +36,7 @@ def test_parse_pem_data_line_ed25519_public_key():
     pem_data = (
         b"-----BEGIN PUBLIC KEY-----\n"
         b"MCowBQYDK2VwAyEAwaURJT / kvOOr42Y3 / ScQQt3+DpgVPW0nbsv8GC70G9g=\n"
-        b"-----END PUBLIC KEY-----"
+        b"-----END PUBLIC KEY-----\n"
     )
     expected = (
         b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'"
@@ -48,9 +48,9 @@ def test_parse_pem_data_line_ed25519_public_key():
 
 def test_ed25519_round_trip_private_key():
     private_key = b"e\xc1\xe9\xfb\xcd)\xd9P\x87\x9d\xc8\xed\xb4\xa5\x1a\x0f[\x16j\x92O\xfd-\xa7\x02jn;V\xe8:\xe0"
-    first_key = ED25519Key(_private_key=private_key)
+    first_key = ED25519Key(private_key=private_key)
     private_pem = first_key.private_key_pem  # generated from private_key given
-    other_key = ED25519Key(_private_key_pem=private_pem)
+    other_key = ED25519Key(private_key_pem=private_pem)
     result_private_key = other_key.private_key  # generated from private_key_pem given
     assert (
         result_private_key == private_key
@@ -63,9 +63,9 @@ def test_ed25519_round_trip_private_key_pem():
         b"MC4CAQAwBQYDK2VwBCIEIGXB6fvNKdlQh53I7bSlGg9bFmqST/0tpwJqbjtW6Drg\n"
         b"-----END PRIVATE KEY-----\n"
     )
-    first_key = ED25519Key(_private_key_pem=private_key_pem)
+    first_key = ED25519Key(private_key_pem=private_key_pem)
     private_key = first_key.private_key  # generated from private_key_pem given
-    other_key = ED25519Key(_private_key=private_key)
+    other_key = ED25519Key(private_key=private_key)
     result_private_key_pem = (
         other_key.private_key_pem
     )  # generated from private_key given
@@ -76,7 +76,7 @@ def test_ed25519_round_trip_private_key_pem():
 
 def test_ed25519_account_hash():
     public_key = b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'n\xcb\xfc\x18.\xf4\x1b\xd8"
-    key_pair = ED25519Key(_public_key=public_key)
+    key_pair = ED25519Key(public_key=public_key)
     expected_account_hash = b"P6\xb4\x94\x8f\x82`\x947\xbe\xbc>4\xac\x81\x83y\xfc\x1fYZ\xd7\xf3A7\xee>jUOw\xb7"
     account_hash = key_pair.account_hash()
     assert account_hash == expected_account_hash, "account_hash does not equal expected"
