@@ -353,7 +353,8 @@ object SignatureAlgorithm {
 
     override def name: String = "secp256r1" // same as prime256v1
 
-    private def getSigner = java.security.Signature.getInstance("SHA256withECDSA")
+    // https://docs.oracle.com/javase/7/docs/technotes/guides/security/StandardNames.html#Signature
+    private def getSigner = java.security.Signature.getInstance("NONEwithECDSA")
 
     // See Example 5 at https://www.programcreek.com/java-api-examples/index.php?api=java.security.spec.ECPrivateKeySpec
     def toPrivateKey(sec: PrivateKey): java.security.PrivateKey = {
