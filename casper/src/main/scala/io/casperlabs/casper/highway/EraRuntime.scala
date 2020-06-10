@@ -503,12 +503,10 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
       roundStart: Ticks,
       roundEnd: Ticks
   ): Ticks = {
-    val order = omegaFunction(roundStart)
-    // With 3 validators we want to offset to go [0.0, 0.5, 1.0]; not [0.0, 0.33, 0.66]
-    val offset =
-      if (order.size == 1) 0.5 else (order.indexOf(validatorId).toDouble / (order.size - 1))
-    val delay = conf.omegaMessageTimeStart + (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart) * offset
-    val tick  = roundStart + (roundEnd - roundStart) * delay
+    val order  = omegaFunction(roundStart)
+    val offset = omegaOffset(order, validatorId)
+    val delay  = conf.omegaMessageTimeStart + (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart) * offset
+    val tick   = roundStart + (roundEnd - roundStart) * delay
     Ticks(tick.toLong)
   }
 
@@ -959,4 +957,13 @@ object EraRuntime {
       relation <- DagOperations.relation[F](keyBlock, lfb)
     } yield relation.isEmpty
 
+  /** Calculate a [0.0,1.0] offset of a given validator among the others for picking the
+    * time to create an omega message. The offsets are balanced, e.g. with 3 validators
+    * they are [0.0, 0.5, 1.0], not [0.0, 0.33, 0.66].
+    */
+  def omegaOffset[T](xs: Seq[T], x: T): Double =
+    xs.size match {
+      case 1 => 0.5
+      case n => xs.indexOf(x).toDouble / (n - 1)
+    }
 }

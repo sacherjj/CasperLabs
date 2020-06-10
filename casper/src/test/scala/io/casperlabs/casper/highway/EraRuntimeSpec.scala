@@ -1451,6 +1451,27 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       EraRuntime.isSameRoundAs(a)(d) shouldBe false
     }
   }
+
+  "omegaOffset" should {
+    "go from 0.0 to 1.0" in {
+      val expected = List(
+        "Alice"   -> 0.0,
+        "Bob"     -> 0.33,
+        "Charlie" -> 0.66,
+        "Dave"    -> 1.0
+      )
+      val names = expected.unzip._1
+
+      Inspectors.forAll(expected) {
+        case (name, offset) =>
+          EraRuntime.omegaOffset(names, name) shouldBe offset +- 0.01
+      }
+    }
+
+    "return 0.5 for single item" in {
+      EraRuntime.omegaOffset(List("Alice"), "Alice") shouldBe 0.5
+    }
+  }
 }
 
 object EraRuntimeSpec {
