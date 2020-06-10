@@ -33,7 +33,6 @@ fn get_builder() -> InMemoryWasmTestBuilder {
 fn should_get_funds_from_faucet_stored() {
     let mut builder = get_builder();
 
-    println!("1");
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
@@ -47,7 +46,6 @@ fn should_get_funds_from_faucet_stored() {
 
     let amount = U512::from(1000);
 
-    println!("2");
     // call stored faucet
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -66,7 +64,6 @@ fn should_get_funds_from_faucet_stored() {
     };
     builder.exec(exec_request).expect_success().commit();
 
-    println!("3");
     let account = builder
         .get_account(NEW_ACCOUNT_ADDR)
         .expect("should get account");
@@ -84,7 +81,6 @@ fn should_get_funds_from_faucet_stored() {
 fn should_fail_if_already_funded() {
     let mut builder = get_builder();
 
-    println!("1");
     let default_account = builder
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should have account");
@@ -98,7 +94,6 @@ fn should_fail_if_already_funded() {
 
     let amount = U512::from(1000);
 
-    println!("2");
     // call stored faucet
     let exec_request = {
         let deploy = DeployItemBuilder::new()
@@ -116,8 +111,6 @@ fn should_fail_if_already_funded() {
         ExecuteRequestBuilder::new().push_deploy(deploy).build()
     };
     builder.exec(exec_request).expect_success().commit();
-
-    println!("3");
 
     // call stored faucet again; should error
     let exec_request = {

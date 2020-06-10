@@ -27,8 +27,8 @@ mod block_time;
 pub mod bytesrepr;
 mod cl_type;
 mod cl_value;
+mod contract_wasm;
 pub mod contracts;
-//mod contract_ref;
 #[cfg(any(feature = "gens", test))]
 pub mod gens;
 mod key;
@@ -50,10 +50,11 @@ pub use block_time::{BlockTime, BLOCKTIME_SERIALIZED_LENGTH};
 pub use cl_type::{named_key_type, CLType, CLTyped};
 pub use cl_value::{CLTypeMismatch, CLValue, CLValueError};
 pub use contracts::{
-    Contract, ContractPackage, ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType,
-    EntryPoints, Group, Parameter,
+    Contract, ContractPackage, ContractVersion, ContractVersionKey, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Group, Parameter,
 };
 //pub use contract_ref::ContractRef;
+pub use contract_wasm::ContractWasm;
 #[doc(inline)]
 pub use key::{
     ContractHash, ContractPackageHash, ContractWasmHash, HashAddr, Key, BLAKE2B_DIGEST_LENGTH,

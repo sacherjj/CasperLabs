@@ -9,19 +9,15 @@ import {toBytesString,
         fromBytesMap,
         fromBytesString,
         toBytesStringList,
-        toBytesU32,
         Result,
         Ref,
-        toBytesArrayU8,
         toBytesMap,
         toBytesVecT,
-        fromBytesStringList,
         fromBytesArray} from "./bytesrepr";
-import {U512} from "./bignum";
-import {UREF_SERIALIZED_LENGTH, KEY_UREF_SERIALIZED_LENGTH, UREF_ADDR_LENGTH, KEY_HASH_LENGTH} from "./constants";
-import {Pair} from "./pair";
+import {KEY_UREF_SERIALIZED_LENGTH, UREF_ADDR_LENGTH, KEY_HASH_LENGTH} from "./constants";
 import {RuntimeArgs} from "./runtime_args";
-import {encodeUTF8, typedToArray, arrayToTyped} from "./utils";
+import {encodeUTF8} from "./utils";
+import {Option} from "./option";
 
 // NOTE: interfaces aren't supported in AS yet: https://github.com/AssemblyScript/assemblyscript/issues/146#issuecomment-399130960
 // interface ToBytes {
@@ -150,11 +146,11 @@ export function getSystemContract(systemContract: SystemContract): Uint8Array {
  * stored contract calls [[Error.revert]], then execution stops and [[callContract]] doesn't return.
  * Otherwise [[callContract]] returns null.
  *
- * @param key A key under which a contract is stored
+ * @param contractHash A key under which a contract is stored
  * @param args A list of values
  * @returns Bytes of the contract's return value.
  */
-export function callContract(key: Uint8Array, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
+export function callContract(contractHash: Uint8Array, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
   let argBytes = runtimeArgs.toBytes();
   let entryPointNameBytes = toBytesString(entryPointName);
 
@@ -162,8 +158,8 @@ export function callContract(key: Uint8Array, entryPointName: String, runtimeArg
   resultSize.fill(0);
 
   let ret = externals.call_contract(
-      <usize>key.dataStart,
-      key.length,
+      <usize>contractHash.dataStart,
+      contractHash.length,
       entryPointNameBytes.dataStart,
       entryPointNameBytes.length,
       argBytes.dataStart,
@@ -466,20 +462,22 @@ export function newContract(entryPoints: EntryPoints, namedKeys: Array<Pair<Stri
 
   return addContractVersion(
     result.packageHash,
-    result.accessURef,
     entryPoints,
     namedKeys,
   );
 }
 
-export function callVersionedContract(packageHash: Uint8Array, version: u8, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
+export function callVersionedContract(packageHash: Uint8Array, contract_version: Option, entryPointName: String, runtimeArgs: RuntimeArgs): Uint8Array {
   let entryPointBytes = toBytesString(entryPointName);
   let argBytes = runtimeArgs.toBytes();
   let bytesWritten = new Uint32Array(1);
+  let bytesContractVersion = contract_version.toBytes();
+
   let ret = externals.call_versioned_contract(
     packageHash.dataStart,
     packageHash.length,
-    version,
+    bytesContractVersion.dataStart,
+    bytesContractVersion.length,
     entryPointBytes.dataStart,
     entryPointBytes.length,
     argBytes.dataStart,
@@ -498,8 +496,7 @@ export function callVersionedContract(packageHash: Uint8Array, version: u8, entr
   }
 }
 
-export function addContractVersion(packageHash: Uint8Array, accessURef: URef, entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>>): Uint8Array {
-  let accessURefBytes = accessURef.toBytes();
+export function addContractVersion(packageHash: Uint8Array, entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>>): Uint8Array {
   var versionPtr = new Uint8Array(1);
   let entryPointsBytes = entryPoints.toBytes();
   let keyToBytes = function(key: Key): Array<u8> { return key.toBytes(); };
@@ -510,7 +507,6 @@ export function addContractVersion(packageHash: Uint8Array, accessURef: URef, en
   let ret = externals.add_contract_version(
     packageHash.dataStart,
     packageHash.length,
-    accessURefBytes.dataStart,
     versionPtr.dataStart, // output
     entryPointsBytes.dataStart,
     entryPointsBytes.length,
@@ -528,8 +524,7 @@ export function addContractVersion(packageHash: Uint8Array, accessURef: URef, en
   return keyBytes.slice(0, totalBytes[0])
 }
 
-export function createContractUserGroup(packageHash: Uint8Array, accessURef: URef, label: String, newURefs: u8, existingURefs: Array<URef>): Array<URef> {
-  let accessBytes = accessURef.toBytes();
+export function createContractUserGroup(packageHash: Uint8Array, label: String, newURefs: u8, existingURefs: Array<URef>): Array<URef> {
   let labelBytes = toBytesString(label);
 
   // NOTE: AssemblyScript sometimes is fine with closures, and sometimes
@@ -545,7 +540,6 @@ export function createContractUserGroup(packageHash: Uint8Array, accessURef: URe
   let ret = externals.create_contract_user_group(
     packageHash.dataStart,
     packageHash.length,
-    accessBytes.dataStart,
     labelBytes.dataStart,
     labelBytes.length,
     newURefs,
@@ -564,17 +558,13 @@ export function createContractUserGroup(packageHash: Uint8Array, accessURef: URe
 }
 
 export function removeContractUserGroup(
-  contract: Key,
-  access_key: URef,
+  packageHash: Uint8Array,
   label: String,
 ): void {
-  let contract_bytes = contract.toBytes();
-  let access_key_bytes = access_key.toBytes();
   let label_bytes = toBytesString(label);
   let ret = externals.remove_contract_user_group(
-    contract_bytes.dataStart,
-    contract_bytes.length,
-    access_key_bytes.dataStart,
+    packageHash.dataStart,
+    packageHash.length,
     label_bytes.dataStart,
     label_bytes.length,
   );
@@ -585,22 +575,16 @@ export function removeContractUserGroup(
 }
 
 export function extendContractUserGroupURefs(
-  contract: Key,
-  accessKey: URef,
+  packageHash: Uint8Array,
   label: String,
-  new_urefs_count: usize,
-): Array<URef> {
-  let contractBytes = contract.toBytes();
-  let accessKeyBytes = accessKey.toBytes();
+): URef {
   let label_bytes = toBytesString(label);
   let size = new Uint32Array(1);
-  let ret = externals.extend_contract_user_group_urefs(
-    contractBytes.dataStart,
-    contractBytes.length,
-    accessKeyBytes.dataStart,
+  let ret = externals.provision_contract_user_group_uref(
+    packageHash.dataStart,
+    packageHash.length,
     label_bytes.dataStart,
     label_bytes.length,
-    new_urefs_count,
     size.dataStart,
   );
   let err = Error.fromResult(ret);
@@ -608,27 +592,22 @@ export function extendContractUserGroupURefs(
     err.revert();
   }
   let bytes = readHostBuffer(size[0]);
-  let decode = function(bytes: Uint8Array): Result<URef> { return URef.fromBytes(bytes); };
-  return fromBytesArray<URef>(bytes, decode).unwrap();
+  return URef.fromBytes(bytes).unwrap();
 }
 
 export function removeContractUserGroupURefs(
-  contract: Key,
-  access_key: URef,
+  packageHash: Uint8Array,
   label: String,
   urefs: Array<URef>): void {
 
-  let contract_bytes = contract.toBytes();
-  let access_key_bytes = access_key.toBytes();
   let label_bytes = toBytesString(label);
 
   let encode = function(item: URef): Array<u8> { return item.toBytes(); };
   let urefsData = toBytesVecT(urefs, encode);
 
   let ret = externals.remove_contract_user_group_urefs(
-    contract_bytes.dataStart,
-    contract_bytes.length,
-    access_key_bytes.dataStart,
+    packageHash.dataStart,
+    packageHash.length,
     label_bytes.dataStart,
     label_bytes.length,
     urefsData.dataStart,

@@ -31,7 +31,7 @@ const POS_BONDING_PURSE: &str = "pos_bonding_purse";
 const POS_PAYMENT_PURSE: &str = "pos_payment_purse";
 const POS_REWARDS_PURSE: &str = "pos_rewards_purse";
 
-const ARG_MINT_METADATA_HASH: &str = "mint_contract_metadata_hash";
+const ARG_MINT_PACKAGE_HASH: &str = "mint_contract_package_hash";
 const ARG_GENESIS_VALIDATORS: &str = "genesis_validators";
 const ENTRY_POINT_MINT: &str = "mint";
 
@@ -70,7 +70,7 @@ pub extern "C" fn finalize_payment() {
 
 #[no_mangle]
 pub extern "C" fn install() {
-    let mint_metadata_hash: ContractPackageHash = runtime::get_named_arg(ARG_MINT_METADATA_HASH);
+    let mint_package_hash: ContractPackageHash = runtime::get_named_arg(ARG_MINT_PACKAGE_HASH);
     let genesis_validators: BTreeMap<PublicKey, U512> =
         runtime::get_named_arg(ARG_GENESIS_VALIDATORS);
 
@@ -83,9 +83,9 @@ pub extern "C" fn install() {
     let mut named_keys: BTreeMap<String, Key> =
         stakes.strings().map(|key| (key, PLACEHOLDER_KEY)).collect();
     let total_bonds: U512 = stakes.total_bonds();
-    let bonding_purse = mint_purse(mint_metadata_hash, total_bonds);
-    let payment_purse = mint_purse(mint_metadata_hash, U512::zero());
-    let rewards_purse = mint_purse(mint_metadata_hash, U512::zero());
+    let bonding_purse = mint_purse(mint_package_hash, total_bonds);
+    let payment_purse = mint_purse(mint_package_hash, U512::zero());
+    let rewards_purse = mint_purse(mint_package_hash, U512::zero());
 
     // Include PoS purses in its named_keys
     [
@@ -169,20 +169,20 @@ pub extern "C" fn install() {
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
     let contract_key =
-        storage::add_contract_version(contract_package_hash, access_uref, entry_points, named_keys);
+        storage::add_contract_version(contract_package_hash, entry_points, named_keys);
 
     let return_value = CLValue::from_t((contract_package_hash, contract_key)).unwrap_or_revert();
     runtime::ret(return_value);
 }
 
-fn mint_purse(contract_metadata_hash: ContractPackageHash, amount: U512) -> URef {
+fn mint_purse(contract_package_hash: ContractPackageHash, amount: U512) -> URef {
     let args = runtime_args! {
         ARG_AMOUNT => amount,
     };
 
     let result: Result<URef, mint::Error> = runtime::call_versioned_contract(
-        contract_metadata_hash,
-        CONTRACT_INITIAL_VERSION,
+        contract_package_hash,
+        Some(CONTRACT_INITIAL_VERSION),
         ENTRY_POINT_MINT,
         args,
     );

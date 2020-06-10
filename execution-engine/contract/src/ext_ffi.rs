@@ -15,23 +15,7 @@ extern "C" {
     pub fn add(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
     pub fn add_local(key_ptr: *const u8, key_size: usize, value_ptr: *const u8, value_size: usize);
     pub fn new_uref(uref_ptr: *mut u8, value_ptr: *const u8, value_size: usize);
-    // pub fn store_function(
-    //     function_name_ptr: *const u8,
-    //     function_name_size: usize,
-    //     named_keys_ptr: *const u8,
-    //     named_keys_size: usize,
-    //     uref_addr_ptr: *const u8,
-    // );
-    // pub fn store_function_at_hash(
-    //     function_name_ptr: *const u8,
-    //     function_name_size: usize,
-    //     named_keys_ptr: *const u8,
-    //     named_keys_size: usize,
-    //     hash_ptr: *const u8,
-    // );
     pub fn load_named_keys(total_keys: *mut usize, result_size: *mut usize) -> i32;
-    pub fn get_arg(index: usize, dest_ptr: *mut u8, dest_size: usize) -> i32;
-    pub fn get_arg_size(index: usize, dest_size: *mut usize) -> i32;
     pub fn ret(value_ptr: *const u8, value_size: usize) -> !;
     pub fn get_key(
         name_ptr: *const u8,
@@ -95,7 +79,6 @@ extern "C" {
     pub fn create_contract_user_group(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        access_ptr: *const u8,
         label_ptr: *const u8,
         label_size: usize,
         num_new_urefs: u8,
@@ -106,8 +89,7 @@ extern "C" {
     pub fn add_contract_version(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        access_ptr: *const u8,
-        version_ptr: *const u8,
+        version_ptr: *const u32,
         entry_points_ptr: *const u8,
         entry_points_size: usize,
         named_keys_ptr: *const u8,
@@ -116,11 +98,11 @@ extern "C" {
         output_size: usize,
         bytes_written_ptr: *mut usize,
     ) -> i32;
-    pub fn remove_contract_version(
+    pub fn disable_contract_version(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        access_ptr: *const u8,
-        version_ptr: *const u8,
+        contract_hash_ptr: *const u8,
+        contract_hash_size: usize,
     ) -> i32;
     pub fn call_contract(
         contract_hash_ptr: *const u8,
@@ -134,7 +116,8 @@ extern "C" {
     pub fn call_versioned_contract(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        version: u8,
+        contract_version_ptr: *const u8,
+        contract_version_size: usize,
         entry_point_name_ptr: *const u8,
         entry_point_name_size: usize,
         runtime_args_ptr: *const u8,
@@ -151,23 +134,19 @@ extern "C" {
     pub fn remove_contract_user_group(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        access_uref_ptr: *const u8,
         label_ptr: *const u8,
         label_size: usize,
     ) -> i32;
-    pub fn extend_contract_user_group_urefs(
+    pub fn provision_contract_user_group_uref(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        access_uref_ptr: *const u8,
         label_ptr: *const u8,
         label_size: usize,
-        new_urefs_count: usize,
         value_size_ptr: *const usize,
     ) -> i32;
     pub fn remove_contract_user_group_urefs(
         contract_package_hash_ptr: *const u8,
         contract_package_hash_size: usize,
-        access_uref_ptr: *const u8,
         label_ptr: *const u8,
         label_size: usize,
         urefs_ptr: *const u8,

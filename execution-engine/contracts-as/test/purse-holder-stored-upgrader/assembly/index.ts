@@ -17,6 +17,7 @@ const NEW_VERSION = "1.0.1";
 const VERSION = "version";
 const ACCESS_KEY_NAME = "purse_holder_access";
 const PURSE_HOLDER_STORED_CONTRACT_NAME = "purse_holder_stored";
+const ARG_CONTRACT_PACKAGE = "contract_package";
 
 enum CustomError {
   MissingPurseHolderURefArg = 0,
@@ -55,7 +56,7 @@ export function delegate(): void {
 }
 
 export function call(): void {
-  let contractPackageHash = CL.getNamedArg("contract_package");
+  let contractPackageHash = CL.getNamedArg(ARG_CONTRACT_PACKAGE);
   let accessKey = CL.getKey(ACCESS_KEY_NAME);
   if (accessKey === null) {
     Error.fromErrorCode(ErrorCode.GetKey).revert();
@@ -99,7 +100,6 @@ export function call(): void {
 
   let newContractHash = CL.addContractVersion(
     contractPackageHash,
-    <URef>accessKey.uref,
     entryPoints,
     new Array<Pair<String, Key>>(),
   );

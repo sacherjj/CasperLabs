@@ -74,8 +74,9 @@ pub fn call_contract<T: CLTyped + FromBytes>(
     deserialize_contract_result(bytes_written)
 }
 
-/// Invokes the specified `entry_point_name` of stored logic at a specific `contract_metadata_hash`
-/// address, for a specific `contract_version`, passing the provided `runtime_args`
+/// Invokes the specified `entry_point_name` of stored logic at a specific `contract_package_hash`
+/// address, for the most current version of a contract package by default or a specific
+/// `contract_version` if one is provided, and passing the provided `runtime_args` to it
 ///
 /// If the stored contract calls [`ret`], then that value is returned from
 /// `call_versioned_contract`.  If the stored contract calls [`revert`], then execution stops and
@@ -83,15 +84,17 @@ pub fn call_contract<T: CLTyped + FromBytes>(
 #[allow(clippy::ptr_arg)]
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
     contract_package_hash: ContractPackageHash,
-    contract_version: ContractVersion,
+    contract_version: Option<ContractVersion>,
     entry_point_name: &str,
     runtime_args: RuntimeArgs,
 ) -> T {
-    let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
+    let (contract_package_hash_ptr, contract_package_hash_size, _bytes) =
         contract_api::to_ptr(contract_package_hash);
-    let (entry_point_name_ptr, entry_point_name_size, _bytes2) =
+    let (contract_version_ptr, contract_version_size, _bytes) =
+        contract_api::to_ptr(contract_version);
+    let (entry_point_name_ptr, entry_point_name_size, _bytes) =
         contract_api::to_ptr(entry_point_name);
-    let (runtime_args_ptr, runtime_args_size, _bytes2) = contract_api::to_ptr(runtime_args);
+    let (runtime_args_ptr, runtime_args_size, _bytes) = contract_api::to_ptr(runtime_args);
 
     let bytes_written = {
         let mut bytes_written = MaybeUninit::uninit();
@@ -99,7 +102,8 @@ pub fn call_versioned_contract<T: CLTyped + FromBytes>(
             ext_ffi::call_versioned_contract(
                 contract_package_hash_ptr,
                 contract_package_hash_size,
-                contract_version,
+                contract_version_ptr,
+                contract_version_size,
                 entry_point_name_ptr,
                 entry_point_name_size,
                 runtime_args_ptr,
@@ -152,7 +156,6 @@ fn get_named_arg_size(name: &str) -> Option<usize> {
 /// Note that this is only relevant to contracts stored on-chain since a contract deployed directly
 /// is not invoked with any arguments.
 pub fn get_named_arg<T: FromBytes>(name: &str) -> T {
-    //Option<Result<T, bytesrepr::Error>> {
     let arg_size = get_named_arg_size(name).unwrap_or_revert_with(ApiError::MissingArgument);
     let arg_bytes = if arg_size > 0 {
         let res = {

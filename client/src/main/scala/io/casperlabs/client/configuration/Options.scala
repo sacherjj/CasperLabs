@@ -55,18 +55,32 @@ object Options {
         validate = fileCheck
       )
 
-    val sessionHash =
+    val sessionContractHash =
       opt[String](
         required = false,
-        descr = "Hash of the stored contract to be called in the session; base16 encoded.",
+        descr = "Hash of the stored contract hash to be called in the session; base16 encoded.",
         validate = hashCheck
       )
 
-    val sessionName =
+    val sessionPackageHash = opt[String](
+      required = false,
+      descr =
+        "Hash of the stored contract package hash to be called in the session; base16 encoded.",
+      validate = hashCheck
+    )
+
+    val sessionContractName =
       opt[String](
         required = false,
         descr =
           "Name of the stored contract (associated with the executing account) to be called in the session."
+      )
+
+    val sessionPackageName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract package (associated with the executing account) to be called in the session."
       )
 
     val sessionArgs =
@@ -82,10 +96,10 @@ object Options {
         descr = "Name of the method that will be used when calling the contract."
       )
 
-    val sessionSemVer =
-      opt[SemVer](
+    val sessionVer =
+      opt[Int](
         required = false,
-        descr = "Semantic version of the called contract. Matches the pattern `major.minor.patch`."
+        descr = "Version of the called contract."
       )
 
     val payment =
@@ -96,18 +110,31 @@ object Options {
         validate = fileCheck
       )
 
-    val paymentHash =
+    val paymentContractHash =
       opt[String](
         required = false,
         descr = "Hash of the stored contract to be called in the payment; base16 encoded.",
         validate = hashCheck
       )
 
-    val paymentName =
+    val paymentPackageHash =
+      opt[String](
+        required = false,
+        descr = "Hash of the stored contract package to be called in the payment; base16 encoded.",
+        validate = hashCheck
+      )
+
+    val paymentContractName =
       opt[String](
         required = false,
         descr =
           "Name of the stored contract (associated with the executing account) to be called in the payment."
+      )
+    val paymentPackageName =
+      opt[String](
+        required = false,
+        descr =
+          "Name of the stored contract package (associated with the executing account) to be called in the payment."
       )
 
     val paymentUref =
@@ -130,10 +157,10 @@ object Options {
         descr = "Name of the method that will be used when calling the contract."
       )
 
-    val paymentSemVer =
-      opt[SemVer](
+    val paymentVer =
+      opt[Int](
         required = false,
-        descr = "Semantic version of the payment contract. Matches the pattern `major.minor.patch`."
+        descr = "Version of the payment contract."
       )
 
     val gasPrice = opt[Long](
@@ -182,38 +209,15 @@ object Options {
       opt[Long](descr = "Timeout in seconds.", default = Option(TIMEOUT_SECONDS_DEFAULT.toSeconds))
 
     addValidation {
-      val missingSemVer: String => Either[String, Unit] =
-        what => Left(s"Missing semver for $what.")
+      val storedPaymentCode = paymentContractHash.isDefined || paymentContractName.isDefined || paymentPackageHash.isDefined || paymentPackageName.isDefined
+      val sessionProvided   = sessionPackageHash.isDefined || sessionContractHash.isDefined || sessionContractName.isDefined || sessionPackageName.isDefined
 
-      val missingEntrypoint: String => Either[String, Unit] =
-        what => Left(s"Missing entrpoint for $what")
-
-      val storedPaymentCode = paymentHash.isDefined || paymentName.isDefined
-      val storedSessionCode = sessionSemVer.isDefined || sessionSemVer.isDefined
-      val sessionsProvided =
-        List(session.isDefined, sessionHash.isDefined, sessionName.isDefined)
-          .count(identity)
-      val paymentsProvided =
-        List(payment.isDefined, paymentHash.isDefined, paymentName.isDefined)
-          .count(identity)
-      if (sessionRequired && sessionsProvided == 0)
+      if (sessionRequired && !session.isDefined && !sessionProvided)
         Left("No session contract options provided; please specify exactly one.")
-      else if (sessionsProvided > 1)
-        Left("Multiple session contract options provided; please specify exactly one.")
-      else if (paymentsProvided > 1)
-        Left("Multiple payment contract options provided; please specify exactly one.")
-      else if (paymentsProvided == 0 && paymentAmount.isEmpty)
+      else if (storedPaymentCode && paymentAmount.isEmpty)
         Left(
           "No payment contract options provided; please specify --payment-amount for the standard payment."
         )
-      else if (storedPaymentCode && paymentSemVer.isEmpty)
-        missingSemVer("payment contract")
-      else if (storedSessionCode && sessionSemVer.isEmpty)
-        missingSemVer("session contract")
-      else if (storedPaymentCode && paymentEntryPoint.isEmpty)
-        missingEntrypoint("payment contract")
-      else if (storedSessionCode && sessionEntryPoint.isEmpty)
-        missingEntrypoint("stored contract")
       else Right(())
     }
   }

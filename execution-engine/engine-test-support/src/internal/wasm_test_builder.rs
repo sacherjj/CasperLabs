@@ -31,7 +31,6 @@ use engine_grpc_server::engine_server::{
 use engine_shared::{
     account::Account,
     additive_map::AdditiveMap,
-    contract_wasm::ContractWasm,
     gas::Gas,
     logging::{self, Settings, Style},
     newtypes::{Blake2bHash, CorrelationId},
@@ -48,7 +47,7 @@ use engine_storage::{
 use types::{
     account::PublicKey,
     bytesrepr::{self},
-    CLValue, Contract, ContractHash, Key, URef, U512,
+    CLValue, Contract, ContractHash, ContractWasm, Key, URef, U512,
 };
 
 use crate::internal::utils;
@@ -92,7 +91,7 @@ pub struct WasmTestBuilder<S> {
 
 impl<S> WasmTestBuilder<S> {
     fn initialize_logging() {
-        let log_settings = Settings::new(LevelFilter::Debug).with_style(Style::HumanReadable);
+        let log_settings = Settings::new(LevelFilter::Error).with_style(Style::HumanReadable);
         let _ = logging::initialize(log_settings);
     }
 }
@@ -605,9 +604,6 @@ where
 
     pub fn get_purse_balance(&self, purse: URef) -> U512 {
         let purse_addr = purse.addr();
-        // let purse_bytes =
-        //     ToBytes::to_bytes(&purse_addr).expect("should be able to serialize purse bytes");
-        // let balance_mapping_key = Key::local(mint_package_hash, &purse_bytes);
         let balance_mapping_key = Key::Hash(purse_addr);
 
         let base_key = self

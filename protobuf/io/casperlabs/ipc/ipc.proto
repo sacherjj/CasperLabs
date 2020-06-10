@@ -27,14 +27,18 @@ message StoredContractName{
 
 message StoredContractPackage {
     string name = 1; // key name
-    uint32 version = 2; // optional specific version (defaults to highest)
+    oneof optional_version {
+        uint32 version = 2; // optional specific version (defaults to highest)
+    }
     string entry_point_name = 3; // finds header by entrypoint name
     bytes args = 4; // ABI-encoded arguments
 }
 
 message StoredContractPackageHash {
     bytes hash = 1; // public hash of a stored contract package
-    uint32 version = 2;     // finds active version
+    oneof optional_version {
+        uint32 version = 2;     // finds active version
+    }
     string entry_point_name = 3; // finds header by entrypoint name
     bytes args = 4; // ABI-encoded arguments
 }

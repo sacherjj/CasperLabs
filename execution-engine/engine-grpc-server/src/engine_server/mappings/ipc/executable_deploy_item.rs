@@ -36,10 +36,13 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
             DeployPayload_oneof_payload::stored_package_by_name(mut pb_stored_package_by_name) => {
                 ExecutableDeployItem::StoredVersionedContractByName {
                     name: pb_stored_package_by_name.take_name(),
-                    version: pb_stored_package_by_name
-                        .get_version()
-                        .try_into()
-                        .map_err(|_| MappingError::MissingPayload)?,
+                    version: if pb_stored_package_by_name.has_version()
+                        && pb_stored_package_by_name.get_version() > 0
+                    {
+                        Some(pb_stored_package_by_name.get_version())
+                    } else {
+                        None
+                    },
                     entry_point: pb_stored_package_by_name.entry_point_name,
                     args: pb_stored_package_by_name.args,
                 }
@@ -52,10 +55,13 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
                     .map_err(|_| MappingError::invalid_hash_length(hash_bytes.len()))?;
                 ExecutableDeployItem::StoredVersionedContractByHash {
                     hash,
-                    version: pb_stored_package_by_hash
-                        .get_version()
-                        .try_into()
-                        .map_err(|_| MappingError::MissingPayload)?,
+                    version: if pb_stored_package_by_hash.has_version()
+                        && pb_stored_package_by_hash.get_version() > 0
+                    {
+                        Some(pb_stored_package_by_hash.get_version())
+                    } else {
+                        None
+                    },
                     entry_point: pb_stored_package_by_hash.entry_point_name,
                     args: pb_stored_package_by_hash.args,
                 }
@@ -101,7 +107,9 @@ impl From<ExecutableDeployItem> for DeployPayload {
             } => {
                 let inner = result.mut_stored_package_by_name();
                 inner.set_name(name);
-                inner.set_version(version.into());
+                if let Some(ver) = version {
+                    inner.set_version(ver)
+                }
                 inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }
@@ -113,7 +121,9 @@ impl From<ExecutableDeployItem> for DeployPayload {
             } => {
                 let inner = result.mut_stored_package_by_hash();
                 inner.set_hash(hash.to_vec());
-                inner.set_version(version.into());
+                if let Some(ver) = version {
+                    inner.set_version(ver)
+                }
                 inner.set_entry_point_name(entry_point);
                 inner.set_args(args);
             }

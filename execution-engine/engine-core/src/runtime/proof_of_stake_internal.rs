@@ -15,8 +15,17 @@ use types::{
 
 use crate::{execution, runtime::Runtime};
 
-const BONDING_KEY: u8 = 1;
-const UNBONDING_KEY: u8 = 2;
+const BONDING_KEY: [u8; 32] = {
+    let mut result = [0; 32];
+    result[31] = 1;
+    result
+};
+
+const UNBONDING_KEY: [u8; 32] = {
+    let mut result = [0; 32];
+    result[31] = 2;
+    result
+};
 
 // TODO: Update MintProvider to better handle errors
 impl<'a, R> MintProvider for Runtime<'a, R>

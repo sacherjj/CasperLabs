@@ -47,7 +47,6 @@ export function call(): void {
 
   let key = CL.addContractVersion(
     <Uint8Array>doNothingPackageHash.hash,
-    <URef>doNothingURef.uref,
     entryPoints,
     new Array<Pair<String, Key>>(),
   );

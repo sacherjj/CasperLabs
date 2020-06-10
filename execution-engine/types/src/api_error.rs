@@ -185,22 +185,19 @@ const HEADER_ERROR_MAX: u32 = HEADER_ERROR_OFFSET + u8::MAX as u32;
 /// // Contract header errors:
 /// use casperlabs_types::contracts::Error as ContractHeaderError;
 /// # show_and_check!(
-/// 64_769 => ContractHeaderError::InvalidAccessKey
+/// 64_769 => ContractHeaderError::PreviouslyUsedVersion
 /// # );
 /// # show_and_check!(
-/// 64_770 => ContractHeaderError::PreviouslyUsedVersion
+/// 64_770 => ContractHeaderError::ContractNotFound
 /// # );
 /// # show_and_check!(
-/// 64_771 => ContractHeaderError::VersionNotFound
+/// 64_771 => ContractHeaderError::GroupAlreadyExists
 /// # );
 /// # show_and_check!(
-/// 64_772 => ContractHeaderError::GroupAlreadyExists
+/// 64_772 => ContractHeaderError::MaxGroupsExceeded
 /// # );
 /// # show_and_check!(
-/// 64_773 => ContractHeaderError::MaxGroupsExceeded
-/// # );
-/// # show_and_check!(
-/// 64_774 => ContractHeaderError::MaxTotalURefsExceeded
+/// 64_773 => ContractHeaderError::MaxTotalURefsExceeded
 /// # );
 /// // Mint errors:
 /// use casperlabs_types::system_contract_errors::mint::Error as MintError;

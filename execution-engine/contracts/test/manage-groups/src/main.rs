@@ -22,8 +22,8 @@ use types::{
     CLType, ContractPackageHash, Key, Parameter, URef,
 };
 
-const METADATA_HASH_KEY: &str = "metadata_hash_key";
-const METADATA_ACCESS_KEY: &str = "metadata_access_key";
+const PACKAGE_HASH_KEY: &str = "package_hash_key";
+const PACKAGE_ACCESS_KEY: &str = "package_access_key";
 const CREATE_GROUP: &str = "create_group";
 const REMOVE_GROUP: &str = "remove_group";
 const EXTEND_GROUP_UREFS: &str = "extend_group_urefs";
@@ -35,22 +35,16 @@ const TOTAL_EXISTING_UREFS_ARG: &str = "total_existing_urefs";
 
 #[no_mangle]
 pub extern "C" fn create_group() {
-    let metadata_hash_key: ContractPackageHash = runtime::get_key(METADATA_HASH_KEY)
-        .unwrap_or_revert()
-        .into_hash()
-        .unwrap();
-    let metadata_access_key = runtime::get_key(METADATA_ACCESS_KEY)
-        .unwrap_or_revert()
-        .try_into()
-        .unwrap();
+    let package_hash_key: ContractPackageHash = runtime::get_key(PACKAGE_HASH_KEY)
+        .and_then(Key::into_hash)
+        .unwrap_or_revert();
     let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG);
     let total_urefs: u64 = runtime::get_named_arg(TOTAL_NEW_UREFS_ARG);
     let total_existing_urefs: u64 = runtime::get_named_arg(TOTAL_EXISTING_UREFS_ARG);
     let existing_urefs: Vec<URef> = (0..total_existing_urefs).map(storage::new_uref).collect();
 
-    let _new_urefs = storage::create_contract_user_group(
-        metadata_hash_key,
-        metadata_access_key,
+    let _new_uref = storage::create_contract_user_group(
+        package_hash_key,
         &group_name,
         total_urefs as u8,
         BTreeSet::from_iter(existing_urefs),
@@ -60,59 +54,43 @@ pub extern "C" fn create_group() {
 
 #[no_mangle]
 pub extern "C" fn remove_group() {
-    let metadata_hash_key: Key = runtime::get_key(METADATA_HASH_KEY)
-        .unwrap_or_revert()
-        .try_into()
-        .unwrap();
-    let metadata_access_key: URef = runtime::get_key(METADATA_ACCESS_KEY)
-        .unwrap_or_revert()
-        .try_into()
-        .unwrap();
-    let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG);
-    storage::remove_contract_user_group(metadata_hash_key, metadata_access_key, &group_name)
+    let package_hash_key: ContractPackageHash = runtime::get_key(PACKAGE_HASH_KEY)
+        .and_then(Key::into_hash)
         .unwrap_or_revert();
+    let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG);
+    storage::remove_contract_user_group(package_hash_key, &group_name).unwrap_or_revert();
 }
 
 #[no_mangle]
 pub extern "C" fn extend_group_urefs() {
-    let metadata_hash_key: Key = runtime::get_key(METADATA_HASH_KEY)
-        .unwrap_or_revert()
-        .try_into()
-        .unwrap();
-    let metadata_access_key: URef = runtime::get_key(METADATA_ACCESS_KEY)
-        .unwrap_or_revert()
-        .try_into()
-        .unwrap();
+    let package_hash_key: ContractPackageHash = runtime::get_key(PACKAGE_HASH_KEY)
+        .and_then(Key::into_hash)
+        .unwrap_or_revert();
     let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG);
     let new_urefs_count: u64 = runtime::get_named_arg(TOTAL_NEW_UREFS_ARG);
 
-    // Creates 1 additional uref inside group
-    let new_urefs = storage::extend_contract_user_group_urefs(
-        metadata_hash_key,
-        metadata_access_key,
-        &group_name,
-        new_urefs_count as usize,
-    )
-    .unwrap_or_revert();
-    assert_eq!(new_urefs.len(), new_urefs_count as usize);
-    let _uref = new_urefs.iter().next().expect("should get first uref");
+    // Provisions additional urefs inside group
+    for _ in 1..=new_urefs_count {
+        let _new_uref = storage::provision_contract_user_group_uref(package_hash_key, &group_name)
+            .unwrap_or_revert();
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn remove_group_urefs() {
-    let metadata_hash_key: Key = runtime::get_key(METADATA_HASH_KEY)
+    let package_hash_key: ContractPackageHash = runtime::get_key(PACKAGE_HASH_KEY)
+        .and_then(Key::into_hash)
         .unwrap_or_revert()
         .try_into()
         .unwrap();
-    let metadata_access_key: URef = runtime::get_key(METADATA_ACCESS_KEY)
+    let _package_access_key: URef = runtime::get_key(PACKAGE_ACCESS_KEY)
         .unwrap_or_revert()
         .try_into()
         .unwrap();
     let group_name: String = runtime::get_named_arg(GROUP_NAME_ARG);
     let urefs: Vec<URef> = runtime::get_named_arg(UREFS_ARG);
     storage::remove_contract_user_group_urefs(
-        metadata_hash_key,
-        metadata_access_key,
+        package_hash_key,
         &group_name,
         BTreeSet::from_iter(urefs),
     )
@@ -172,19 +150,19 @@ fn create_entry_points_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(package_hash: ContractPackageHash, access_uref: URef) {
+fn install_version_1(package_hash: ContractPackageHash) {
     let contract_named_keys = BTreeMap::new();
 
     let entry_points = create_entry_points_1();
-    storage::add_contract_version(package_hash, access_uref, entry_points, contract_named_keys);
+    storage::add_contract_version(package_hash, entry_points, contract_named_keys);
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     let (package_hash, access_uref) = storage::create_contract_package_at_hash();
 
-    runtime::put_key(METADATA_HASH_KEY, package_hash.into());
-    runtime::put_key(METADATA_ACCESS_KEY, access_uref.into());
+    runtime::put_key(PACKAGE_HASH_KEY, package_hash.into());
+    runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
 
-    install_version_1(package_hash, access_uref);
+    install_version_1(package_hash);
 }

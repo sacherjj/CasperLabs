@@ -8,8 +8,8 @@ import { CLValue, CLType, CLTypeTag } from "../../../../contract-as/assembly/clv
 import { Pair } from "../../../../contract-as/assembly/pair";
 import { RuntimeArgs } from "../../../../contract-as/assembly/runtime_args";
 
-const METADATA_HASH_KEY = "metadata_hash_key";
-const METADATA_ACCESS_KEY = "metadata_access_key";
+const PACKAGE_HASH_KEY = "package_hash_key";
+const PACKAGE_ACCESS_KEY = "package_access_key";
 const CREATE_GROUP = "create_group";
 const REMOVE_GROUP = "remove_group";
 const EXTEND_GROUP_UREFS = "extend_group_urefs";
@@ -20,12 +20,12 @@ const TOTAL_NEW_UREFS_ARG = "total_new_urefs";
 const TOTAL_EXISTING_UREFS_ARG = "total_existing_urefs";
 
 export function create_group(): void {
-  let packageHashKey = CL.getKey(METADATA_HASH_KEY);
+  let packageHashKey = CL.getKey(PACKAGE_HASH_KEY);
   if (packageHashKey === null) {
     Error.fromErrorCode(ErrorCode.GetKey).revert();
     return;
   }
-  let packageAccessKey = CL.getKey(METADATA_ACCESS_KEY);
+  let packageAccessKey = CL.getKey(PACKAGE_ACCESS_KEY);
   if (packageAccessKey === null) {
     Error.fromErrorCode(ErrorCode.GetKey).revert();
     return;
@@ -47,7 +47,6 @@ export function create_group(): void {
 
   let newURefs = CL.createContractUserGroup(
     <Uint8Array>packageHashKey.hash,
-    <URef>packageAccessKey.uref,
     group_name,
     total_urefs as u8,
     existingURefs,
@@ -55,55 +54,43 @@ export function create_group(): void {
 }
 
 export function remove_group(): void {
-  let packageHashKey = CL.getKey(METADATA_HASH_KEY);
+  let packageHashKey = CL.getKey(PACKAGE_HASH_KEY);
   if (packageHashKey === null) {
     Error.fromErrorCode(ErrorCode.GetKey).revert();
     return;
   }
-  let packageAccessKey = CL.getKey(METADATA_ACCESS_KEY);
-  if (packageAccessKey === null) {
-    Error.fromErrorCode(ErrorCode.GetKey).revert();
-    return;
-  }
-  let group_name: String = fromBytesString(CL.getNamedArg(GROUP_NAME_ARG)).unwrap();
+  let groupName: String = fromBytesString(CL.getNamedArg(GROUP_NAME_ARG)).unwrap();
   CL.removeContractUserGroup(
-    <Key>packageHashKey,
-    <URef>packageAccessKey.uref,
-    group_name);
+    <Uint8Array>packageHashKey.hash,
+    groupName);
 }
 
 export function extend_group_urefs(): void {
-  let packageHashKey = CL.getKey(METADATA_HASH_KEY);
+  let packageHashKey = CL.getKey(PACKAGE_HASH_KEY);
   if (packageHashKey === null) {
     Error.fromErrorCode(ErrorCode.GetKey).revert();
     return;
   }
-  let packageAccessKey = CL.getKey(METADATA_ACCESS_KEY);
+  let packageAccessKey = CL.getKey(PACKAGE_ACCESS_KEY);
   if (packageAccessKey === null) {
     Error.fromErrorCode(ErrorCode.GetKey).revert();
     return;
   }
-  let group_name: String = fromBytesString(CL.getNamedArg(GROUP_NAME_ARG)).unwrap();
+  let groupName: String = fromBytesString(CL.getNamedArg(GROUP_NAME_ARG)).unwrap();
   let newURefsCount: u64 = fromBytesU64(CL.getNamedArg(TOTAL_NEW_UREFS_ARG)).unwrap();
 
   // Creates 1 additional uref inside group
-  let new_urefs = CL.extendContractUserGroupURefs(
-    <Key>packageHashKey,
-    <URef>packageAccessKey.uref,
-    group_name,
-    newURefsCount as usize,
-  );
-  assert(new_urefs.length == newURefsCount);
+  for (var i = <u64>0; i < newURefsCount; i++) {
+    let _newURef = CL.extendContractUserGroupURefs(
+      <Uint8Array>packageHashKey.hash,
+      groupName
+    );
+  }
 }
 
 export function remove_group_urefs(): void {
-  let packageHashKey = CL.getKey(METADATA_HASH_KEY);
+  let packageHashKey = CL.getKey(PACKAGE_HASH_KEY);
   if (packageHashKey === null) {
-    Error.fromErrorCode(ErrorCode.GetKey).revert();
-    return;
-  }
-  let packageAccessKey = CL.getKey(METADATA_ACCESS_KEY);
-  if (packageAccessKey === null) {
     Error.fromErrorCode(ErrorCode.GetKey).revert();
     return;
   }
@@ -115,8 +102,7 @@ export function remove_group_urefs(): void {
   let urefs: Array<URef> = fromBytesArray<URef>(urefsBytes, decode).unwrap();
 
   CL.removeContractUserGroupURefs(
-    <Key>packageHashKey,
-    <URef>packageAccessKey.uref,
+    <Uint8Array>packageHashKey.hash,
     groupName,
     urefs,
   );
@@ -187,17 +173,17 @@ function createEntryPoints1(): CL.EntryPoints {
   return entryPoints;
 }
 
-function install_version_1(package_hash: Uint8Array, access_uref: URef): void {
+function installVersion1(package_hash: Uint8Array): void {
   let contractNamedKeys = new Array<Pair<String, Key>>();
   let entryPoints = createEntryPoints1();
-  CL.addContractVersion(package_hash, access_uref, entryPoints, contractNamedKeys);
+  CL.addContractVersion(package_hash, entryPoints, contractNamedKeys);
 }
 
 export function call(): void {
   let result = CL.createContractPackageAtHash();
 
-  CL.putKey(METADATA_HASH_KEY, Key.fromHash(result.packageHash));
-  CL.putKey(METADATA_ACCESS_KEY, Key.fromURef(result.accessURef));
+  CL.putKey(PACKAGE_HASH_KEY, Key.fromHash(result.packageHash));
+  CL.putKey(PACKAGE_ACCESS_KEY, Key.fromURef(result.accessURef));
 
-  install_version_1(result.packageHash, result.accessURef);
+  installVersion1(result.packageHash);
 }

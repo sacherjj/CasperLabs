@@ -61,7 +61,7 @@ fn upgrade_mint() -> ContractHash {
         .expect("should have mint")
         .into_hash()
         .expect("should be hash");
-    let mint_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
+    let _mint_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
         .unwrap_or_revert()
         .into_uref()
         .expect("shuold be uref");
@@ -77,7 +77,7 @@ fn upgrade_mint() -> ContractHash {
     entry_points.add_entry_point(entry_point);
 
     let named_keys = NamedKeys::new();
-    storage::add_contract_version(mint_package_hash, mint_access_key, entry_points, named_keys)
+    storage::add_contract_version(mint_package_hash, entry_points, named_keys)
 }
 
 fn upgrade_proof_of_stake() -> ContractHash {
@@ -93,10 +93,10 @@ fn upgrade_proof_of_stake() -> ContractHash {
         .expect("should have mint")
         .into_hash()
         .expect("should be hash");
-    let pos_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
+    let _pos_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
         .unwrap_or_revert()
         .into_uref()
-        .expect("shuold be uref");
+        .expect("should be uref");
 
     let entry_points = {
         let mut entry_points = EntryPoints::new();
@@ -166,7 +166,7 @@ fn upgrade_proof_of_stake() -> ContractHash {
 
     let named_keys = NamedKeys::new();
 
-    storage::add_contract_version(pos_package_hash, pos_access_key, entry_points, named_keys)
+    storage::add_contract_version(pos_package_hash, entry_points, named_keys)
 }
 
 #[no_mangle]
@@ -208,7 +208,7 @@ fn upgrade_standard_payment() -> ContractHash {
         .expect("should have mint")
         .into_hash()
         .expect("should be hash");
-    let standard_payment_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
+    let _standard_payment_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
         .unwrap_or_revert()
         .into_uref()
         .expect("shuold be uref");
@@ -233,12 +233,7 @@ fn upgrade_standard_payment() -> ContractHash {
 
     let named_keys = NamedKeys::new();
 
-    storage::add_contract_version(
-        standard_payment_package_hash,
-        standard_payment_access_key,
-        entry_points,
-        named_keys,
-    )
+    storage::add_contract_version(standard_payment_package_hash, entry_points, named_keys)
 }
 
 #[no_mangle]

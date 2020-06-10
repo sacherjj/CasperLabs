@@ -12,7 +12,7 @@ use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
     contracts::{ContractVersion, EntryPoints},
-    AccessRights, ApiError, CLTyped, CLValue, ContractHash, ContractPackageHash, Key, SemVer, URef,
+    AccessRights, ApiError, CLTyped, CLValue, ContractHash, ContractPackageHash, Key, URef,
     UREF_SERIALIZED_LENGTH,
 };
 
@@ -162,7 +162,7 @@ pub fn new_contract(
         None => BTreeMap::new(),
     };
 
-    add_contract_version(contract_package_hash, access_uref, entry_points, named_keys)
+    add_contract_version(contract_package_hash, entry_points, named_keys)
 }
 
 /// Create a new (versioned) contract stored under a Key::Hash. Initially there
@@ -189,14 +189,12 @@ pub fn create_contract_package_at_hash() -> (ContractPackageHash, URef) {
 /// contain `num_new_urefs` elements).
 pub fn create_contract_user_group(
     contract_package_hash: ContractPackageHash,
-    access_uref: URef,
     group_label: &str,
     num_new_urefs: u8, // number of new urefs to populate the group with
     existing_urefs: BTreeSet<URef>, // also include these existing urefs in the group
 ) -> Result<Vec<URef>, ApiError> {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);
-    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_uref);
     let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(group_label);
     let (existing_urefs_ptr, existing_urefs_size, _bytes4) = contract_api::to_ptr(existing_urefs);
 
@@ -206,7 +204,6 @@ pub fn create_contract_user_group(
             ext_ffi::create_contract_user_group(
                 contract_package_hash_ptr,
                 contract_package_hash_size,
-                access_ptr,
                 label_ptr,
                 label_size,
                 num_new_urefs,
@@ -223,26 +220,22 @@ pub fn create_contract_user_group(
     Ok(bytesrepr::deserialize(value_bytes).unwrap_or_revert())
 }
 
-/// Extends specified group with new urefss
-pub fn extend_contract_user_group_urefs(
-    contract: Key,
-    access_key: URef,
+/// Extends specified group with a new `URef`.
+pub fn provision_contract_user_group_uref(
+    package_hash: ContractPackageHash,
     label: &str,
-    new_urefs_count: usize,
-) -> Result<BTreeSet<URef>, ApiError> {
-    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
-    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
-    let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
+) -> Result<URef, ApiError> {
+    let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
+        contract_api::to_ptr(package_hash);
+    let (label_ptr, label_size, _bytes2) = contract_api::to_ptr(label);
     let value_size = {
         let mut value_size = MaybeUninit::uninit();
         let ret = unsafe {
-            ext_ffi::extend_contract_user_group_urefs(
-                meta_ptr,
-                meta_size,
-                access_ptr,
+            ext_ffi::provision_contract_user_group_uref(
+                contract_package_hash_ptr,
+                contract_package_hash_size,
                 label_ptr,
                 label_size,
-                new_urefs_count,
                 value_size.as_mut_ptr(),
             )
         };
@@ -255,18 +248,22 @@ pub fn extend_contract_user_group_urefs(
 
 /// Removes specified urefs from a named group.
 pub fn remove_contract_user_group_urefs(
-    contract: Key,
-    access_key: URef,
+    package_hash: ContractPackageHash,
     label: &str,
     urefs: BTreeSet<URef>,
 ) -> Result<(), ApiError> {
-    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
-    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
+        contract_api::to_ptr(package_hash);
     let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
     let (urefs_ptr, urefs_size, _bytes4) = contract_api::to_ptr(urefs);
     let ret = unsafe {
         ext_ffi::remove_contract_user_group_urefs(
-            meta_ptr, meta_size, access_ptr, label_ptr, label_size, urefs_ptr, urefs_size,
+            contract_package_hash_ptr,
+            contract_package_hash_size,
+            label_ptr,
+            label_size,
+            urefs_ptr,
+            urefs_size,
         )
     };
     api_error::result_from(ret)
@@ -274,15 +271,19 @@ pub fn remove_contract_user_group_urefs(
 
 /// Remove a named group from given contract.
 pub fn remove_contract_user_group(
-    contract: Key,
-    access_key: URef,
+    package_hash: ContractPackageHash,
     label: &str,
 ) -> Result<(), ApiError> {
-    let (meta_ptr, meta_size, _bytes1) = contract_api::to_ptr(contract);
-    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
+    let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
+        contract_api::to_ptr(package_hash);
     let (label_ptr, label_size, _bytes3) = contract_api::to_ptr(label);
     let ret = unsafe {
-        ext_ffi::remove_contract_user_group(meta_ptr, meta_size, access_ptr, label_ptr, label_size)
+        ext_ffi::remove_contract_user_group(
+            contract_package_hash_ptr,
+            contract_package_hash_size,
+            label_ptr,
+            label_size,
+        )
     };
     api_error::result_from(ret)
 }
@@ -292,17 +293,15 @@ pub fn remove_contract_user_group(
 /// `create_contract` or `create_contract_package_at_hash` first.
 pub fn add_contract_version(
     contract_package_hash: ContractPackageHash,
-    access_uref: URef,
     entry_points: EntryPoints,
     named_keys: BTreeMap<String, Key>,
 ) -> ContractHash {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);
-    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_uref);
     let (entry_points_ptr, entry_points_size, _bytes4) = contract_api::to_ptr(entry_points);
     let (named_keys_ptr, named_keys_size, _bytes5) = contract_api::to_ptr(named_keys);
 
-    let mut key_bytes = vec![0u8; Key::max_serialized_length()];
+    let mut output_ptr = vec![0u8; Key::max_serialized_length()];
     let mut total_bytes: usize = 0;
 
     let mut contract_version: ContractVersion = 0;
@@ -311,14 +310,13 @@ pub fn add_contract_version(
         ext_ffi::add_contract_version(
             contract_package_hash_ptr,
             contract_package_hash_size,
-            access_ptr,
             &mut contract_version as *mut ContractVersion,
             entry_points_ptr,
             entry_points_size,
             named_keys_ptr,
             named_keys_size,
-            key_bytes.as_mut_ptr(),
-            key_bytes.len(),
+            output_ptr.as_mut_ptr(),
+            output_ptr.len(),
             &mut total_bytes as *mut usize,
         )
     };
@@ -326,30 +324,28 @@ pub fn add_contract_version(
         Ok(_) => {}
         Err(e) => revert(e),
     }
-    key_bytes.truncate(total_bytes);
-    bytesrepr::deserialize(key_bytes).unwrap_or_revert()
+    output_ptr.truncate(total_bytes);
+    bytesrepr::deserialize(output_ptr).unwrap_or_revert()
 }
 
-/// Remove a version of a contract from the contract stored at the given
+/// Disable a version of a contract from the contract stored at the given
 /// `Key`. That version of the contract will no longer be callable by
 /// `call_versioned_contract`. Note that this contract must have been created by
 /// `create_contract` or `create_contract_package_at_hash` first.
-pub fn remove_contract_version(
-    contract_package_hash: Key,
-    access_key: URef,
-    version: SemVer,
+pub fn disable_contract_version(
+    contract_package_hash: ContractPackageHash,
+    contract_hash: ContractHash,
 ) -> Result<(), ApiError> {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);
-    let (access_ptr, _access_size, _bytes2) = contract_api::to_ptr(access_key);
-    let (version_ptr, _version_size, _bytes3) = contract_api::to_ptr(version);
+    let (contract_hash_ptr, contract_hash_size, _bytes2) = contract_api::to_ptr(contract_hash);
 
     let result = unsafe {
-        ext_ffi::remove_contract_version(
+        ext_ffi::disable_contract_version(
             contract_package_hash_ptr,
             contract_package_hash_size,
-            access_ptr,
-            version_ptr,
+            contract_hash_ptr,
+            contract_hash_size,
         )
     };
 

@@ -37,9 +37,9 @@ pub enum FunctionIndex {
     GetSystemContractIndex,
     GetMainPurseIndex,
     ReadHostBufferIndex,
-    CreateContractMetadataAtHash,
+    CreateContractPackageAtHash,
     AddContractVersion,
-    RemoveContractVersion,
+    DisableContractVersion,
     CallVersionedContract,
     CreateContractUserGroup,
     #[cfg(feature = "test-support")]

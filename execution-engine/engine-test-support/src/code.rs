@@ -1,8 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use types::URef;
-
-use crate::{Hash, URefAddr};
+use crate::Hash;
 
 /// Represents the types of session or payment code.
 pub enum Code {
@@ -10,8 +8,6 @@ pub enum Code {
     Path(PathBuf),
     /// A named key providing the location of a stored contract.
     NamedKey(String, String),
-    /// A [`URef`] to a stored contract.
-    URef(URefAddr),
     /// A hash providing the location of a stored contract.
     Hash(Hash, String),
 }
@@ -34,11 +30,5 @@ impl<'a> From<&'a Path> for Code {
 impl From<PathBuf> for Code {
     fn from(path: PathBuf) -> Code {
         Code::Path(path)
-    }
-}
-
-impl From<URef> for Code {
-    fn from(uref: URef) -> Code {
-        Code::URef(uref.addr())
     }
 }

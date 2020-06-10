@@ -23,6 +23,7 @@ pub const NEW_VERSION: &str = "1.0.1";
 const VERSION: &str = "version";
 const ACCESS_KEY_NAME: &str = "purse_holder_access";
 const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
+const ARG_CONTRACT_PACKAGE: &str = "contract_package";
 
 fn purse_name() -> String {
     runtime::get_named_arg(ARG_PURSE_NAME)
@@ -48,8 +49,8 @@ pub extern "C" fn version() {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_package: ContractPackageHash = runtime::get_named_arg("contract_package");
-    let access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
+    let contract_package: ContractPackageHash = runtime::get_named_arg(ARG_CONTRACT_PACKAGE);
+    let _access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
         .expect("should have access key")
         .into_uref()
         .expect("should be uref");
@@ -85,7 +86,7 @@ pub extern "C" fn call() {
     };
     // this should overwrite the previous contract obj with the new contract obj at the same uref
     let new_contract_hash =
-        storage::add_contract_version(contract_package, access_key, entry_points, NamedKeys::new());
+        storage::add_contract_version(contract_package, entry_points, NamedKeys::new());
     runtime::put_key(PURSE_HOLDER_STORED_CONTRACT_NAME, new_contract_hash.into());
     // set new version
     let version_key = storage::new_uref(NEW_VERSION).into();

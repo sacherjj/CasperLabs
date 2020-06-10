@@ -42,14 +42,14 @@ fn upgrade_mint() -> ContractHash {
         .expect("should have mint")
         .into_hash()
         .expect("should be hash");
-    let mint_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
+    let _mint_access_key: URef = runtime::get_key(ACCESS_KEY_NAME)
         .unwrap_or_revert()
         .into_uref()
         .expect("should be uref");
 
     let entry_points = modified_mint::get_entry_points();
     let named_keys = NamedKeys::new();
-    storage::add_contract_version(mint_package_hash, mint_access_key, entry_points, named_keys)
+    storage::add_contract_version(mint_package_hash, entry_points, named_keys)
 }
 
 #[no_mangle]

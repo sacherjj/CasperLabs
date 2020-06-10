@@ -26,6 +26,7 @@ mod tests {
     // define KEY constant to match that in the contract
     const KEY: &str = "special_value";
     const VALUE: &str = "hello world";
+    const ARG_MESSAGE: &str = "message";
 
     #[test]
     fn should_store_hello_world() {
@@ -37,7 +38,9 @@ mod tests {
         // relative to the current working dir (e.g. 'wasm/contract.wasm') can also be used, as can
         // absolute paths.
         let session_code = Code::from("contract.wasm");
-        let session_args = (VALUE,);
+        let session_args = runtime_args! {
+            ARG_MESSAGE => VALUE,
+        };
         let session = SessionBuilder::new(session_code, session_args)
             .with_address(MY_ACCOUNT)
             .with_authorization_keys(&[MY_ACCOUNT])

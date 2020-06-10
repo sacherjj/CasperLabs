@@ -11,35 +11,37 @@ use crate::engine_server::{mappings::ParsingError, state};
 
 impl From<ContractPackage> for state::ContractPackage {
     fn from(value: ContractPackage) -> state::ContractPackage {
-        let mut metadata = state::ContractPackage::new();
-        metadata.set_access_key(value.access_key().into());
+        let mut contract_package = state::ContractPackage::new();
+        contract_package.set_access_key(value.access_key().into());
 
-        for &removed_version in value.removed_versions().iter() {
-            metadata.mut_removed_versions().push(removed_version.into())
+        for &disabled_version in value.disabled_versions().iter() {
+            contract_package
+                .mut_disabled_versions()
+                .push(disabled_version.into())
         }
 
         for (existing_group, urefs) in value.groups().iter() {
             let mut entrypoint_group = state::Contract_EntryPoint_Group::new();
             entrypoint_group.set_name(existing_group.value().to_string());
 
-            let mut metadata_group = state::ContractPackage_Group::new();
-            metadata_group.set_group(entrypoint_group);
+            let mut contract_package_group = state::ContractPackage_Group::new();
+            contract_package_group.set_group(entrypoint_group);
 
             for &uref in urefs {
-                metadata_group.mut_urefs().push(uref.into());
+                contract_package_group.mut_urefs().push(uref.into());
             }
 
-            metadata.mut_groups().push(metadata_group);
+            contract_package.mut_groups().push(contract_package_group);
         }
 
         for (version, contract_header) in value.take_versions().into_iter() {
             let mut active_version = state::ContractPackage_Version::new();
             active_version.set_version(version.into());
             active_version.set_contract_hash(contract_header.to_vec());
-            metadata.mut_active_versions().push(active_version)
+            contract_package.mut_active_versions().push(active_version)
         }
 
-        metadata
+        contract_package
     }
 }
 
@@ -53,10 +55,10 @@ impl TryFrom<state::ContractPackage> for ContractPackage {
             let header = active_version.take_contract_hash().as_slice().try_into()?;
             contract_package.versions_mut().insert(version, header);
         }
-        for removed_version in value.take_removed_versions().into_iter() {
+        for disabled_version in value.take_disabled_versions().into_iter() {
             contract_package
-                .removed_versions_mut()
-                .insert(removed_version.try_into()?);
+                .disabled_versions_mut()
+                .insert(disabled_version.try_into()?);
         }
 
         let groups = contract_package.groups_mut();
@@ -164,7 +166,7 @@ impl From<ContractVersionKey> for state::ContractVersionKey {
     fn from(version: ContractVersionKey) -> Self {
         let mut contract_version_key = state::ContractVersionKey::new();
         contract_version_key.set_protocol_version_major(version.protocol_version_major());
-        contract_version_key.set_contract_version(version.contract_version().into());
+        contract_version_key.set_contract_version(version.contract_version());
         contract_version_key
     }
 }

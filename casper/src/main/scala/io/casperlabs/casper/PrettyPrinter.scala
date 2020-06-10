@@ -46,6 +46,111 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
     case NamedKey(name, Some(key)) => s"NamedKey($name, ${buildString(key)})"
   }
 
+  def buildString(clType: CLType): String = clType match {
+    case CLType(CLType.Variants.Empty) => "Empty"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.Unrecognized(i))) =>
+      s"Unrecognized(${i})"
+
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.BOOL)) =>
+      "Bool"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.I32)) =>
+      "I32"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.I64)) =>
+      "I64"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.U8)) => "U8"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.U32)) =>
+      "U32"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.U64)) =>
+      "U64"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.U128)) =>
+      "U128"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.U256)) =>
+      "U256"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.U512)) =>
+      "U512"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.UNIT)) =>
+      "Unit"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.STRING)) =>
+      "String"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.KEY)) =>
+      "Key"
+    case CLType(CLType.Variants.SimpleType(CLType.Simple.UREF)) =>
+      "URef"
+
+    case CLType(CLType.Variants.OptionType(CLType.OptionProto(innerProto))) =>
+      innerProto match {
+        case None    => "Unspecified type"
+        case Some(t) => buildString(t)
+      }
+
+    case CLType(CLType.Variants.ListType(CLType.List(innerProto))) =>
+      innerProto match {
+        case None    => "Unspecified type"
+        case Some(t) => s"List(${buildString(t)})"
+      }
+
+    case CLType(
+        CLType.Variants.FixedListType(CLType.FixedList(innerProto, length))
+        ) =>
+      innerProto match {
+        case None    => "Unspecified type"
+        case Some(t) => s"FixedList(${buildString(t)}, ${length})"
+      }
+
+    case CLType(CLType.Variants.ResultType(CLType.Result(okProto, errProto))) =>
+      s"Result{ok: ${okProto.map(buildString).getOrElse("Unspecified type")}, err: ${errProto.map(buildString).getOrElse("Unspecified type")}"
+
+    case CLType(CLType.Variants.MapType(CLType.Map(keyProto, valueProto))) =>
+      s"Map{key: ${keyProto.map(buildString).getOrElse("Unspecified type")}, value: ${valueProto.map(buildString).getOrElse("Unspecified type")}"
+
+    case CLType(CLType.Variants.Tuple1Type(CLType.Tuple1(innerProto))) =>
+      innerProto match {
+        case None    => "Unspecified type"
+        case Some(t) => s"Tuple(${buildString(t)})"
+      }
+
+    case CLType(CLType.Variants.Tuple2Type(CLType.Tuple2(t1Proto, t2Proto))) =>
+      s"Tuple(${t1Proto.map(buildString).getOrElse("Unspecified type")}, ${t2Proto.map(buildString).getOrElse("Unspecified type")})"
+
+    case CLType(
+        CLType.Variants.Tuple3Type(CLType.Tuple3(t1Proto, t2Proto, t3Proto))
+        ) =>
+      s"Tuple(${t1Proto.map(buildString).getOrElse("Unspecified type")}, ${t2Proto
+        .map(buildString)
+        .getOrElse("Unspecified type")}, ${t3Proto.map(buildString).getOrElse("Unspecified type")})"
+
+    case CLType(CLType.Variants.AnyType(CLType.Any())) => "Any"
+  }
+
+  def buildString(access: Contract.EntryPoint.Access): String = access match {
+    case Contract.EntryPoint.Access.Public(Contract.EntryPoint.Public()) => "Public"
+    case Contract.EntryPoint.Access.Groups(Contract.EntryPoint.Groups(groups)) =>
+      s"Groups(${groups
+        .map { x =>
+          x.name
+        }
+        .mkString(",")})"
+
+    case Contract.EntryPoint.Access.Empty => "Empty"
+  }
+
+  def buildString(entryPointType: Contract.EntryPoint.EntryPointType): String =
+    entryPointType match {
+      case Contract.EntryPoint.EntryPointType.Session(Contract.EntryPoint.Session())   => "Session"
+      case Contract.EntryPoint.EntryPointType.Contract(Contract.EntryPoint.Contract()) => "Contract"
+      case Contract.EntryPoint.EntryPointType.Empty                                    => "Empty"
+    }
+
+  def buildString(arg: Contract.EntryPoint.Arg): String =
+    s"Arg(${arg.name}, ${arg.clType.map(buildString).getOrElse("Unspecified type")}"
+
+  def buildString(entryPoint: Contract.EntryPoint): String =
+    s"EntryPoint(${entryPoint.name}, ${entryPoint.args
+      .map(buildString)
+      .mkString(", ")}, ${entryPoint.ret.map(buildString).getOrElse("Unspecified type")}, ${buildString(
+      entryPoint.access
+    )}, ${buildString(entryPoint.entryPointType)})"
+
   def buildString(v: StoredValue): String = v.variants match {
     case StoredValue.Variants.Account(
         Account(
@@ -60,12 +165,39 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
         .map(buildString)}, {${associatedKeys
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
-    case StoredValue.Variants.Contract(Contract(body, urefs, protocolVersion)) =>
-      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
-    case StoredValue.Variants.ClValue(_)          => "ClValue"
-    case StoredValue.Variants.ContractMetadata(_) => "ContractMetadata"
-    case StoredValue.Variants.Empty               => "Empty"
+    case StoredValue.Variants.Contract(
+        Contract(
+          contractPackageHash,
+          contractWasmHash,
+          namedKeys,
+          entryPoints @ _,
+          protocolVersion @ _
+        )
+        ) =>
+      s"Contract(${buildString(contractPackageHash)}, ${buildString(contractWasmHash)}, {${namedKeys
+        .map(buildString)
+        .mkString(", ")}}, {${entryPoints.map(buildString).mkString(", ")}}, ${buildString(protocolVersion)})"
+    case StoredValue.Variants.ClValue(_) => "ClValue"
+    case StoredValue.Variants.ContractPackage(
+        ContractPackage(accessKey, activeVersions, disabledVersions, groups)
+        ) =>
+      s"ContractPackage(${accessKey.map(buildString).getOrElse("No access key")}, {${activeVersions
+        .map(buildString)
+        .mkString(", ")}}, {${disabledVersions.map(buildString).mkString(", ")}}, {${groups.map(buildString).mkString(", ")}})"
+    case StoredValue.Variants.ContractWasm(_) => "ContractWasm"
+    case StoredValue.Variants.Empty           => "Empty"
   }
+
+  def buildString(v: ContractVersionKey): String =
+    s"ContractVersionKey(${v.protocolVersionMajor}, ${v.contractVersion})"
+
+  def buildString(v: Contract.EntryPoint.Group): String = s"${v.name}"
+
+  def buildString(v: ContractPackage.Group): String =
+    s"Group(${v.group.map(buildString).getOrElse("No name")}, ${v.urefs.map(buildString).mkString(", ")})"
+
+  def buildString(v: ContractPackage.Version): String =
+    s"Version(${v.version.map(buildString).getOrElse(", ")}, ${buildString(v.contractHash)})"
 
   def buildString(v: Value): String = v.value match {
     case Value.Value.Empty => "ValueEmpty"
@@ -83,8 +215,8 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
         .map(buildString)
         .mkString(",")}, {${actionThresholds.map(buildString)}})"
     case Value.Value.BytesValue(bytes) => s"ByteArray(${buildString(bytes)})"
-    case Value.Value.Contract(Contract(body, urefs, protocolVersion)) =>
-      s"Contract(${buildString(body)}, {${urefs.map(buildString).mkString(",")}}, ${buildString(protocolVersion)})"
+    case Value.Value.Contract(_)       => "Contract";
+
     case Value.Value.IntList(IntList(list))       => s"List(${list.mkString(",")})"
     case Value.Value.IntValue(i)                  => s"Int32($i)"
     case Value.Value.NamedKey(nk)                 => buildString(nk)

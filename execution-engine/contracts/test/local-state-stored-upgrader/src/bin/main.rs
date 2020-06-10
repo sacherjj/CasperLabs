@@ -8,7 +8,7 @@ use contract::{
 use types::{
     contracts::{NamedKeys, Parameters},
     CLType, ContractHash, ContractPackageHash, EntryPoint, EntryPointAccess, EntryPointType,
-    EntryPoints, URef,
+    EntryPoints,
 };
 
 const CONTRACT_NAME: &str = "local_state_stored";
@@ -21,7 +21,7 @@ pub extern "C" fn delegate() {
     local_state_stored_upgraded::delegate()
 }
 
-fn upgrade(contract_package_hash: ContractPackageHash, access_key: URef) -> ContractHash {
+fn upgrade(contract_package_hash: ContractPackageHash) -> ContractHash {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 
@@ -38,21 +38,16 @@ fn upgrade(contract_package_hash: ContractPackageHash, access_key: URef) -> Cont
         entry_points
     };
 
-    storage::add_contract_version(
-        contract_package_hash,
-        access_key,
-        entry_points,
-        NamedKeys::new(),
-    )
+    storage::add_contract_version(contract_package_hash, entry_points, NamedKeys::new())
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
     let contract_package_hash = runtime::get_named_arg(CONTRACT_PACKAGE_KEY);
-    let access_key = runtime::get_key(CONTRACT_ACCESS_KEY)
+    let _access_key = runtime::get_key(CONTRACT_ACCESS_KEY)
         .unwrap_or_revert()
         .into_uref()
         .unwrap_or_revert();
-    let contract_hash = upgrade(contract_package_hash, access_key);
+    let contract_hash = upgrade(contract_package_hash);
     runtime::put_key(CONTRACT_NAME, contract_hash.into());
 }

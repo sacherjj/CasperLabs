@@ -8,7 +8,7 @@ import cats.implicits._
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block.{GlobalState, Justification, MessageType}
-import io.casperlabs.casper.consensus.Deploy.Code.StoredContract
+import io.casperlabs.casper.consensus.Deploy.Code.{StoredContract, StoredVersionedContract}
 import io.casperlabs.casper.consensus.state.ProtocolVersion
 import io.casperlabs.casper.consensus.{BlockSummary, _}
 import io.casperlabs.casper.{PrettyPrinter, ValidatorIdentity}
@@ -643,45 +643,79 @@ object ProtoUtil {
       val payload = code.contract match {
         case Deploy.Code.Contract.Wasm(wasm) =>
           Success(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(wasm, args)))
-        case Deploy.Code.Contract.StoredContract(StoredContract(contractVersion, address)) =>
-          contractVersion.fold[Try[io.casperlabs.ipc.DeployPayload.Payload]](
-            Failure(
-              new SmartContractEngineError("Missing version of the called contract.")
+        case Deploy.Code.Contract.StoredContract(StoredContract(address)) =>
+          if (address.isName) {
+            Success(
+              ipc.DeployPayload.Payload.StoredContractName(
+                io.casperlabs.ipc
+                  .StoredContractName(
+                    address.name.get,
+                    args,
+                    code.entryPoint
+                  )
+              )
             )
-          )(
-            semver => {
-              if (address.isHash) {
-                Success(
-                  ipc.DeployPayload.Payload.StoredVersionedContractByHash(
-                    io.casperlabs.ipc
-                      .StoredVersionedContractByHash(
-                        address.hash.get,
-                        Some(semver),
-                        code.entryPoint,
-                        args
-                      )
+          } else if (address.isContractHash) {
+            Success(
+              ipc.DeployPayload.Payload.StoredContractHash(
+                io.casperlabs.ipc
+                  .StoredContractHash(
+                    address.contractHash.get,
+                    args,
+                    code.entryPoint
                   )
-                )
-              } else if (address.isName) {
-                Success(
-                  ipc.DeployPayload.Payload.StoredVersionedContractByName(
-                    io.casperlabs.ipc
-                      .StoredVersionedContractByName(
-                        address.name.get,
-                        Some(semver),
-                        code.entryPoint,
-                        args
-                      )
+              )
+            )
+          } else
+            Failure(
+              new SmartContractEngineError(
+                s"$address is not valid contract pointer. Only hash and named key label are supported."
+              )
+            )
+
+        case Deploy.Code.Contract
+              .StoredVersionedContract(StoredVersionedContract(address, optionalVersion)) =>
+          if (address.isName) {
+            Success(
+              ipc.DeployPayload.Payload.StoredPackageByName(
+                io.casperlabs.ipc
+                  .StoredContractPackage(
+                    address.name.get,
+                    code.entryPoint,
+                    args,
+                    optionalVersion match {
+                      case StoredVersionedContract.OptionalVersion.Empty =>
+                        ipc.StoredContractPackage.OptionalVersion.Empty
+                      case StoredVersionedContract.OptionalVersion.Version(ver) =>
+                        ipc.StoredContractPackage.OptionalVersion.Version(ver)
+                    }
                   )
-                )
-              } else
-                Failure(
-                  new SmartContractEngineError(
-                    s"$address is not valid contract pointer. Only hash and named key label are supported."
+              )
+            )
+          } else if (address.isPackageHash) {
+            Success(
+              ipc.DeployPayload.Payload.StoredPackageByHash(
+                io.casperlabs.ipc
+                  .StoredContractPackageHash(
+                    address.packageHash.get,
+                    code.entryPoint,
+                    args,
+                    optionalVersion match {
+                      case StoredVersionedContract.OptionalVersion.Empty =>
+                        ipc.StoredContractPackageHash.OptionalVersion.Empty
+                      case StoredVersionedContract.OptionalVersion.Version(ver) =>
+                        ipc.StoredContractPackageHash.OptionalVersion.Version(ver)
+                    }
                   )
-                )
-            }
-          )
+              )
+            )
+          } else
+            Failure(
+              new SmartContractEngineError(
+                s"$address is not valid contract pointer. Only hash and named key label are supported."
+              )
+            )
+
         case Deploy.Code.Contract.Empty =>
           Success(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(ByteString.EMPTY, args)))
       }

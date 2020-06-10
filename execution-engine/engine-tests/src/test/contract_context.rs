@@ -21,7 +21,7 @@ const ARG_AMOUNT: &str = "amount";
 
 #[ignore]
 #[test]
-fn should_calling_session_and_contract_has_correct_context() {
+fn should_enforce_intended_execution_contexts() {
     // This test runs a contract that's after every call extends the same key with
     // more data
     let exec_request_1 = ExecuteRequestBuilder::standard(
@@ -37,7 +37,7 @@ fn should_calling_session_and_contract_has_correct_context() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 SESSION_CODE_TEST,
                 args,
             )
@@ -55,7 +55,7 @@ fn should_calling_session_and_contract_has_correct_context() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 CONTRACT_CODE_TEST,
                 args,
             )
@@ -73,7 +73,7 @@ fn should_calling_session_and_contract_has_correct_context() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 ADD_NEW_KEY_AS_SESSION,
                 args,
             )
@@ -103,14 +103,14 @@ fn should_calling_session_and_contract_has_correct_context() {
         .cloned()
         .expect("should be account");
 
-    let _metadata_hash = account
+    let _package_hash = account
         .named_keys()
         .get(PACKAGE_HASH_KEY)
-        .expect("should have contract metadata");
+        .expect("should have contract package");
     let _access_uref = account
         .named_keys()
         .get(PACKAGE_ACCESS_KEY)
-        .expect("should have metadata hash");
+        .expect("should have package hash");
 
     let account = builder
         .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
@@ -164,7 +164,7 @@ fn should_not_call_session_from_contract() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 PACKAGE_HASH_KEY,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 SESSION_CODE_CALLER_AS_CONTRACT,
                 args,
             )

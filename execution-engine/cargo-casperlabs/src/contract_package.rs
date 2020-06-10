@@ -24,6 +24,7 @@ use casperlabs_contract::{
 use casperlabs_types::{ApiError, Key, URef};
 
 const KEY: &str = "special_value";
+const ARG_VALUE: &str = "value";
 
 fn store(value: String) {
     // Store `value` under a new unforgeable reference.
@@ -40,7 +41,7 @@ fn store(value: String) {
 #[no_mangle]
 pub extern "C" fn call() {
     // Get the optional first argument supplied to the argument.
-    let value: String = runtime::get_named_arg("value");
+    let value: String = runtime::get_named_arg(ARG_VALUE);
     store(value);
 }
 "#;

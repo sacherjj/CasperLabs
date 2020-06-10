@@ -12,7 +12,7 @@ use core::convert::TryInto;
 
 use types::{
     contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
-    CLType, Key,
+    CLType, Key, URef,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
@@ -45,14 +45,13 @@ pub extern "C" fn call() {
     let do_nothing_package_hash =
         runtime::get_key(DO_NOTHING_PACKAGE_HASH_KEY_NAME).unwrap_or_revert();
 
-    let do_nothing_uref = runtime::get_key(DO_NOTHING_ACCESS_KEY_NAME)
+    let _do_nothing_uref: URef = runtime::get_key(DO_NOTHING_ACCESS_KEY_NAME)
         .unwrap_or_revert()
         .try_into()
         .unwrap_or_revert();
 
     let key = storage::add_contract_version(
         do_nothing_package_hash.into_hash().unwrap(),
-        do_nothing_uref,
         entry_points,
         BTreeMap::new(),
     );

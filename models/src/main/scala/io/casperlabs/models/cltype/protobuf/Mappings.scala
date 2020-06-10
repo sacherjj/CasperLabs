@@ -24,14 +24,94 @@ object Mappings {
     case StoredValue.Account(account) =>
       Right(state.StoredValueInstance(state.StoredValueInstance.Value.Account(toProto(account))))
 
+    case StoredValue.ContractWasm(contractWasm) =>
+      Right(
+        state
+          .StoredValueInstance(state.StoredValueInstance.Value.ContractWasm(toProto(contractWasm)))
+      )
+
     case StoredValue.Contract(contract) =>
       Right(state.StoredValueInstance(state.StoredValueInstance.Value.Contract(toProto(contract))))
+
+    case StoredValue.ContractPackage(contractPackage) =>
+      Right(
+        state.StoredValueInstance(
+          state.StoredValueInstance.Value.ContractPackage(toProto(contractPackage))
+        )
+      )
   }
 
+  def toProto(entryPoint: EntryPoint): state.Contract.EntryPoint = state.Contract.EntryPoint(
+    name = entryPoint.name,
+    args = entryPoint.parameters.map {
+      case (k, v) =>
+        state.Contract.EntryPoint.Arg(
+          name = k,
+          clType = Some(toProto(v))
+        )
+    }.toSeq,
+    ret = Some(toProto(entryPoint.ret)),
+    access = entryPoint.access match {
+      case EntryPointAccess.Public() =>
+        state.Contract.EntryPoint.Access.Public(state.Contract.EntryPoint.Public())
+      case EntryPointAccess.Groups(groups) =>
+        state.Contract.EntryPoint.Access.Groups(
+          state.Contract.EntryPoint.Groups(
+            groups = groups.map { g =>
+              state.Contract.EntryPoint.Group(name = g)
+            }.toSeq
+          )
+        )
+    }
+  )
+
+  def toProto(c: ContractWasm): state.ContractWasm = state.ContractWasm(
+    wasm = ByteString.copyFrom(c.bytes.toArray)
+  )
+
   def toProto(c: Contract): state.Contract = state.Contract(
-    body = ByteString.copyFrom(c.bytes.toArray),
+    contractPackageHash = ByteString.copyFrom(c.contractPackageHash.bytes.toArray),
+    contractWasmHash = ByteString.copyFrom(c.contractWasmHash.bytes.toArray),
     namedKeys = toProto(c.namedKeys),
+    entryPoints = c.entryPoints.map {
+      case (k @ _, v) => toProto(v)
+    }.toSeq,
     protocolVersion = Some(toProto(c.protocolVersion))
+  )
+
+  def toProto(c: ContractPackage): state.ContractPackage = state.ContractPackage(
+    accessKey = Some(toProto(c.accessURef)),
+    activeVersions = c.versions.map {
+      case (k, v) =>
+        state.ContractPackage.Version(
+          version = Some(
+            state.ContractVersionKey(
+              protocolVersionMajor = k._1,
+              contractVersion = k._2
+            )
+          ),
+          contractHash = ByteString.copyFrom(v.bytes.toArray)
+        )
+    }.toSeq,
+    disabledVersions = c.disabledVersions.map { v =>
+      state.ContractVersionKey(
+        protocolVersionMajor = v._1,
+        contractVersion = v._2
+      )
+    }.toSeq,
+    groups = c.groups.map {
+      case (k, v) =>
+        state.ContractPackage.Group(
+          group = Some(
+            state.Contract.EntryPoint.Group(
+              name = k
+            )
+          ),
+          urefs = v.map { uref =>
+            toProto(uref)
+          }.toSeq
+        )
+    }.toSeq
   )
 
   def toProto(a: Account): state.Account = state.Account(

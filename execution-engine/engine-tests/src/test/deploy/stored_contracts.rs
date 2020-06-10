@@ -198,7 +198,7 @@ fn should_exec_stored_code_by_hash() {
                 )
                 .with_stored_versioned_payment_contract_by_hash(
                     hash,
-                    CONTRACT_INITIAL_VERSION,
+                    Some(CONTRACT_INITIAL_VERSION),
                     PAY,
                     runtime_args! {
                         ARG_AMOUNT => U512::from(payment_purse_amount),
@@ -295,7 +295,7 @@ fn should_exec_stored_code_by_named_hash() {
                 )
                 .with_stored_versioned_payment_contract_by_name(
                     STORED_PAYMENT_CONTRACT_PACKAGE_HASH_NAME,
-                    CONTRACT_INITIAL_VERSION,
+                    Some(CONTRACT_INITIAL_VERSION),
                     PAY,
                     runtime_args! {
                         ARG_AMOUNT => U512::from(payment_purse_amount),
@@ -386,7 +386,7 @@ fn should_exec_payment_and_session_stored_code() {
             )
             .with_stored_versioned_payment_contract_by_name(
                 STORED_PAYMENT_CONTRACT_PACKAGE_HASH_NAME,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 PAY,
                 runtime_args! {
                     ARG_AMOUNT => U512::from(payment_purse_amount),
@@ -422,7 +422,7 @@ fn should_exec_payment_and_session_stored_code() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 TRANSFER,
                 runtime_args! {
                     ARG_TARGET => ACCOUNT_1_ADDR,
@@ -431,7 +431,7 @@ fn should_exec_payment_and_session_stored_code() {
             )
             .with_stored_versioned_payment_contract_by_name(
                 STORED_PAYMENT_CONTRACT_PACKAGE_HASH_NAME,
-                CONTRACT_INITIAL_VERSION,
+                Some(CONTRACT_INITIAL_VERSION),
                 PAY,
                 runtime_args! {
                     ARG_AMOUNT => U512::from(payment_purse_amount),
@@ -726,7 +726,7 @@ fn should_fail_payment_stored_at_named_key_with_incompatible_major_version() {
             )
             // .with_stored_versioned_payment_contract_by_name(
             //     STORED_PAYMENT_CONTRACT_PACKAGE_HASH_NAME,
-            //     CONTRACT_INITIAL_VERSION,
+            //                   Some(CONTRACT_INITIAL_VERSION),
             //     PAY,
             //     runtime_args! {
             //         ARG_AMOUNT => U512::from(payment_purse_amount),
@@ -991,7 +991,7 @@ fn should_fail_session_stored_at_named_key_with_missing_new_major_version() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 DO_NOTHING_CONTRACT_PACKAGE_HASH_NAME,
-                INITIAL_VERSION,
+                Some(INITIAL_VERSION),
                 ENTRY_FUNCTION_NAME,
                 RuntimeArgs::new(),
             )
@@ -1180,7 +1180,7 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
             .with_address(DEFAULT_ACCOUNT_ADDR)
             .with_stored_versioned_contract_by_name(
                 DO_NOTHING_CONTRACT_PACKAGE_HASH_NAME,
-                INITIAL_VERSION,
+                Some(INITIAL_VERSION),
                 ENTRY_FUNCTION_NAME,
                 RuntimeArgs::new(),
             )
