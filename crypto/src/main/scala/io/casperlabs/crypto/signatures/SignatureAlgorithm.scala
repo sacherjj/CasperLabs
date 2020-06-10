@@ -217,7 +217,6 @@ object SignatureAlgorithm {
     // http://www.bouncycastle.org/wiki/pages/viewpage.action?pageId=362269
     protected val PrivateKeyLength = 32
     protected val PublicKeyLength  = 65
-    protected val provider         = new BouncyCastleProvider()
 
     /**
       * Expects the key to be in PEM format without parameters section or raw key encoded in base64.
@@ -294,7 +293,7 @@ object SignatureAlgorithm {
       }
 
     override def newKeyPair: (PrivateKey, PublicKey) = {
-      val kpg = KeyPairGenerator.getInstance("ECDSA", provider)
+      val kpg = KeyPairGenerator.getInstance("ECDSA", new BouncyCastleProvider())
       kpg.initialize(new ECGenParameterSpec(name), SecureRandomUtil.secureRandomNonBlocking)
       val kp = kpg.generateKeyPair
 
