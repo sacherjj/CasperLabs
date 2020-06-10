@@ -141,14 +141,11 @@ object LeaderSequencer extends LeaderSequencer {
     * https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
     * */
   private def shuffle[T](arr: Array[T], rand: SecureRandom): Array[T] = {
-    val n = arr.size
-    if (n > 1) {
-      for (i <- n - 1 to 1 by -1) {
-        val r = rand.nextInt(n)
-        val t = arr(i)
-        arr(i) = arr(r)
-        arr(r) = t
-      }
+    for (i <- arr.size - 1 to 1 by -1) {
+      val r = rand.nextInt(i + 1)
+      val t = arr(i)
+      arr(i) = arr(r)
+      arr(r) = t
     }
     arr
   }
