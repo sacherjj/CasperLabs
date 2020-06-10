@@ -92,7 +92,7 @@ abstract class HashSetCasperTest
     makeValidatorIdentity(Ed25519)
 
   private val (validatorKeys, validators) = {
-    val validatorIds = (1 to 4) map (_ % 2) map {
+    val validatorIds = (1 to 4) map (_ % 3) map {
       case 0 => Ed25519
       case 1 => Secp256k1
       case 2 => Secp256r1
