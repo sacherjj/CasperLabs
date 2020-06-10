@@ -435,6 +435,27 @@ steps:
   - rust-compile-test-bors
   - sbt-test-docker-bors
 
+- name: docker-build-explorer-bors
+  commands:
+  - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "~/.cargo/bin/rustup toolchain install $(cat execution-engine/rust-toolchain)"
+  - "rustup target add --toolchain $(cat execution-engine/rust-toolchain) wasm32-unknown-unknown"
+  - "make docker-build/explorer"
+  - "make docker-build/grpcwebproxy"
+  environment:
+    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
+  image: "casperlabs/buildenv:latest"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  when:
+    branch:
+    - staging
+    - trying
+  depends_on:
+  - rust-compile-test-bors
+  - sbt-test-docker-bors
+
 - name: docker-keys-gen-test-bors
   commands:
   - "mkdir /tmp/keys-DRONE-${DRONE_BUILD_NUMBER}"
