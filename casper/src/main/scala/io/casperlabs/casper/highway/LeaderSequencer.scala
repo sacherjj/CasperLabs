@@ -11,19 +11,28 @@ import java.security.SecureRandom
 import java.nio.{ByteBuffer, ByteOrder}
 
 trait LeaderSequencer {
-  def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction]
+  def leaderFunction[F[_]: MonadThrowable](era: Era): F[LeaderFunction]
+  def omegaFunction[F[_]: MonadThrowable](era: Era): F[OmegaFunction]
 }
 
 object LeaderSequencer extends LeaderSequencer {
 
-  override def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
+  override def leaderFunction[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
+    withBonds(leaderFunction(_, _))
+
+  override def omegaFunction[F[_]: MonadThrowable](era: Era): F[OmegaFunction] =
+    ???
+
+  private def withBonds[F[_]: MonadThrowable, T](
+      era: Era
+  )(f: (Array[Byte], NonEmptyList[Bond]) => T): F[T] =
     MonadThrowable[F].fromOption(
       NonEmptyList
         .fromList {
           era.bonds.filterNot(x => x.getStake.value.isEmpty || x.getStake.value == "0").toList
         }
         .map { bonds =>
-          apply(era.bookingBlockHash.toByteArray, bonds)
+          f(era.bookingBlockHash.toByteArray, bonds)
         },
       new IllegalStateException("There must be some bonded validators in the era!")
     )
@@ -49,7 +58,7 @@ object LeaderSequencer extends LeaderSequencer {
 
   /** Make a function that assigns a leader to each round, deterministically,
     * with a relative frequency based on their weight. */
-  def apply(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): LeaderFunction = {
+  def leaderFunction(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): LeaderFunction = {
     // Make a list of (validator, from, to) triplets.
     type ValidatorRange = (PublicKeyBS, BigInt, BigInt)
 

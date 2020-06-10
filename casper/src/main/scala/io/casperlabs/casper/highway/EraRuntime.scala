@@ -52,6 +52,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
+    omegaFunction: OmegaFunction,
     roundExponentRef: Ref[F, Int],
     maybeMessageProducer: Option[MessageProducer[F]],
     // Make sure only one message is created by us at any time to avoid an equivocation.
@@ -69,9 +70,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     // messages build on blocks long gone and check a huge swathe of the DAG for merge
     // conflicts.
     isSynced: => F[Boolean],
-    dag: DagRepresentation[F],
-    // Random number generator used to pick the omega delay.
-    rng: Random = new Random()
+    dag: DagRepresentation[F]
 ) {
   import EraRuntime._, Agenda._
   import HighwayConf.VotingDuration
@@ -499,7 +498,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
 
   /** Pick a time during the round to send the omega message. */
   private def chooseOmegaTick(roundStart: Ticks, roundEnd: Ticks): Ticks = {
-    val r = rng.nextDouble()
+    val r = ???
     val o = conf.omegaMessageTimeStart + r * (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart)
     val t = roundStart + o * (roundEnd - roundStart)
     Ticks(t.toLong)
@@ -779,7 +778,8 @@ object EraRuntime {
       leaderSequencer: LeaderSequencer = LeaderSequencer
   ): F[EraRuntime[F]] =
     for {
-      leaderFunction   <- leaderSequencer[F](era)
+      leaderFunction   <- leaderSequencer.leaderFunction[F](era)
+      omegaFunction    <- leaderSequencer.omegaFunction[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
       dag              <- DagStorage[F].getRepresentation
       semaphoreMap     <- SemaphoreMap[F, PublicKeyBS](1)
@@ -789,6 +789,7 @@ object EraRuntime {
         conf,
         era,
         leaderFunction,
+        omegaFunction,
         roundExponentRef,
         // Whether the validator is bonded depends on the booking block. Only bonded validators
         // have to produce blocks and ballots in the era.
