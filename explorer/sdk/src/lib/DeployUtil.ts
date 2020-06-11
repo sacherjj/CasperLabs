@@ -22,7 +22,7 @@ export const makeDeploy = (
   session: ByteArray,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray
+  accountPublicKeyHash: ByteArray
 ): Deploy => {
   const sessionCode = new Deploy.Code();
   if (type === ContractType.WASM) {
@@ -43,7 +43,7 @@ export const makeDeploy = (
   body.setPayment(payment);
 
   const header = new Deploy.Header();
-  header.setAccountPublicKey(accountPublicKey);
+  header.setAccountPublicKeyHash(accountPublicKeyHash);
   header.setTimestamp(new Date().getTime());
   header.setBodyHash(protoHash(body));
   // we will remove gasPrice eventually
