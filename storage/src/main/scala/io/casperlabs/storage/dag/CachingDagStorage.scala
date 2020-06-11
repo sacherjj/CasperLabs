@@ -33,7 +33,6 @@ class CachingDagStorage[F[_]: Concurrent](
     private[dag] val justificationCache: Cache[BlockHash, Set[BlockHash]],
     private[dag] val messagesCache: Cache[BlockHash, Message],
     private[dag] val finalityCache: Cache[BlockHash, FinalityStorage.FinalityStatus],
-    private[dag] val lfbCache: Ref[F, Option[BlockHash]],
     private[dag] val ranksRanges: TrieMap[Rank, Unit],
     semaphore: Semaphore[F]
 ) extends DagStorage[F]
@@ -57,21 +56,6 @@ class CachingDagStorage[F[_]: Concurrent](
           intoCache(a); a
         }
       case Some(a) => a.pure[F]
-    }
-
-  private def cacheOrUnderlyingF[A](
-      fromCache: F[Option[A]],
-      fromUnderlying: F[A],
-      intoCache: A => F[Unit]
-  ) =
-    fromCache flatMap {
-      case None =>
-        for {
-          a <- fromUnderlying
-          _ <- intoCache(a)
-        } yield a
-      case Some(a) =>
-        a.pure[F]
     }
 
   private def cacheOrUnderlyingOpt[A](fromCache: => Option[A], fromUnderlying: F[Option[A]]) =
@@ -167,7 +151,7 @@ class CachingDagStorage[F[_]: Concurrent](
       messagesCache.invalidateAll()
       finalityCache.invalidateAll()
       ranksRanges.clear()
-    } >> lfbCache.set(None) >> underlying.clear()
+    } >> underlying.clear()
 
   override def close(): F[Unit] = underlying.close()
 
@@ -218,8 +202,9 @@ class CachingDagStorage[F[_]: Concurrent](
       orphaned: Set[BlockHash]
   ): F[Unit] =
     for {
+      // NOTE: Not caching the `mainParent` as current LFB because every time we start the system
+      // the Genesis block is marked as the LFB, which if served back would reset the state.
       _ <- underlying.markAsFinalized(mainParent, secondary, orphaned)
-      _ <- lfbCache.set(Some(mainParent))
       _ <- Sync[F].delay {
             finalityCache.put(mainParent, Finality.FINALIZED)
             secondary.foreach(finalityCache.put(_, Finality.FINALIZED))
@@ -235,11 +220,7 @@ class CachingDagStorage[F[_]: Concurrent](
     )
 
   override def getLastFinalizedBlock: F[BlockHash] =
-    cacheOrUnderlyingF(
-      lfbCache.get,
-      underlying.getLastFinalizedBlock,
-      intoCache = a => lfbCache.set(Some(a))
-    )
+    underlying.getLastFinalizedBlock
 }
 
 object CachingDagStorage {
@@ -304,7 +285,6 @@ object CachingDagStorage {
       justificationCache <- createBlockHashesSetCache
       messagesCache      <- createMessagesCache(createMessageRemovalListener(ranksRanges))
       finalityCache      <- createFinalityCache
-      lfbCache           <- Ref.of[F, Option[BlockHash]](None)
 
       store = new CachingDagStorage[F](
         neighborhoodBefore,
@@ -314,7 +294,6 @@ object CachingDagStorage {
         justificationCache,
         messagesCache,
         finalityCache,
-        lfbCache,
         ranksRanges,
         semaphore
       ) with MeteredDagStorage[F] with MeteredDagRepresentation[F] {
