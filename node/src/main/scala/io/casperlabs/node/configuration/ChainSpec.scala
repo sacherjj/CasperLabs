@@ -166,7 +166,8 @@ object ChainSpec extends ParserImplicits {
               } yield Account(accountHash, balance, bondedAmount)
 
             case _ =>
-              s"Could not parse line into an Account: $line".asLeft[Account]
+              s"Could not parse line into an Account: $line; expected <pk>,<algo>,<balance>,<bond>"
+                .asLeft[Account]
           }
         }
         .toList
