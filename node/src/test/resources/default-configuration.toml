@@ -95,6 +95,7 @@ auto-propose-ballot-interval = "1second"
 auto-propose-acc-interval = "1second"
 auto-propose-acc-count = 1
 min-ttl = "1hour"
+max-block-cost = 0
 
 [highway]
 enabled = false

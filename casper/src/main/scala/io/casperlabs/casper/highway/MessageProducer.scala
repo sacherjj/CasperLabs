@@ -78,7 +78,8 @@ object MessageProducer {
       validatorIdentity: ValidatorIdentity,
       chainName: String,
       upgrades: Seq[ipc.ChainSpec.UpgradePoint],
-      onlyTakeOwnLatestFromJustifications: Boolean = false
+      onlyTakeOwnLatestFromJustifications: Boolean = false,
+      maxBlockCost: Long = 0
   ): MessageProducer[F] =
     new MessageProducer[F] {
       override val validatorId =
@@ -163,7 +164,7 @@ object MessageProducer {
                            props.protocolVersion,
                            props.mainRank,
                            props.configuration.deployConfig.maxBlockSizeBytes,
-                           props.configuration.deployConfig.maxBlockCost,
+                           lowerLimit(props.configuration.deployConfig.maxBlockCost, maxBlockCost),
                            upgrades
                          )
 
@@ -347,4 +348,8 @@ object MessageProducer {
                .takeUntil(_.keyBlockHash == keyBlock.eraId)
                .toList
     } yield eras.reverse
+
+  /** Find the lower limit of values where 0 means unlimited. */
+  def lowerLimit(default: Long, limit: Long): Long =
+    List(default, limit).filterNot(_ == 0).minimumOption.getOrElse(default)
 }

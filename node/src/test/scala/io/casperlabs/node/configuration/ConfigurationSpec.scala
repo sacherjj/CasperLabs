@@ -140,7 +140,8 @@ class ConfigurationSpec
       autoProposeBallotInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccInterval = FiniteDuration(1, TimeUnit.SECONDS),
       autoProposeAccCount = 1,
-      minTtl = FiniteDuration(1, TimeUnit.HOURS)
+      minTtl = FiniteDuration(1, TimeUnit.HOURS),
+      maxBlockCost = 0L
     )
     val highway = Configuration.Highway(
       enabled = false,

@@ -295,6 +295,9 @@ auto-propose-acc-count = 10
 # Minimum TTL value of a deploy
 min-ttl = "1hour"
 
+# Override the value in the chainspec with a lower value; 0 means use whatever is in the chainspec.
+max-block-cost = 0
+
 # Highway parameters that we can freely choose or tweak; the rest is in the Genesis chain spec.
 [highway]
 

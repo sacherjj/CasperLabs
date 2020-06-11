@@ -537,6 +537,11 @@ private[configuration] final case class Options private (
     )
 
     @scallop
+    val casperMaxBlockCost = gen[Long](
+      "Override the value in the chainspec with a lower value; 0 means use whatever is in the chainspec."
+    )
+
+    @scallop
     val blockstorageCacheMaxSizeBytes =
       gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
 
