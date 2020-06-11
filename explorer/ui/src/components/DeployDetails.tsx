@@ -5,7 +5,13 @@ import { DeployContainer } from '../containers/DeployContainer';
 import DataTable from './DataTable';
 import { DeployInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
 import Pages from './Pages';
-import { RefreshableComponent, Icon, shortHash, FailIcon, SuccessIcon } from './Utils';
+import {
+  RefreshableComponent,
+  Icon,
+  shortHash,
+  FailIcon,
+  SuccessIcon
+} from './Utils';
 import ObservableValueMap from '../lib/ObservableValueMap';
 import { Balance, FinalityIcon } from './BlockDetails';
 import { decodeBase16, encodeBase16 } from 'casperlabs-sdk';
@@ -108,10 +114,7 @@ const ResultsTable = observer(
         rows={props.deploy && props.deploy.getProcessingResultsList()}
         renderRow={(proc, i) => {
           const id = encodeBase16(
-            proc
-              .getBlockInfo()!
-              .getSummary()!
-              .getBlockHash_asU8()
+            proc.getBlockInfo()!.getSummary()!.getBlockHash_asU8()
           );
           return (
             <tr key={i}>
@@ -126,11 +129,7 @@ const ResultsTable = observer(
                 <Balance balance={props.balances.get(id)} />
               </td>
               <td className="text-center">
-                {proc.getIsError() ? (
-                  <FailIcon/>
-                ) : (
-                  <SuccessIcon/>
-                  )}
+                {proc.getIsError() ? <FailIcon /> : <SuccessIcon />}
               </td>
               <td>{proc.getErrorMessage()}</td>
             </tr>
@@ -149,7 +148,10 @@ const deployAttrs: (deploy: DeployInfo) => Array<[string, any]> = (
   const header = deploy.getDeploy()!.getHeader()!;
   return [
     ['Deploy Hash', id],
-    ['Account Public Key', encodeBase16(header.getAccountPublicKey_asU8())],
+    [
+      'Account Public Key Hash',
+      encodeBase16(header.getAccountPublicKeyHash_asU8())
+    ],
     ['Timestamp', new Date(header.getTimestamp()).toISOString()],
     ['Gas Price', header.getGasPrice().toLocaleString()]
   ];

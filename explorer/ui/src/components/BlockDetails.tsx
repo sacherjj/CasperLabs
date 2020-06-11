@@ -139,10 +139,7 @@ const DeploysTable = observer(
         renderRow={(deploy, i) => {
           const id = encodeBase16(deploy.getDeploy()!.getDeployHash_asU8());
           const accountId = encodeBase16(
-            deploy
-              .getDeploy()!
-              .getHeader()!
-              .getAccountPublicKey_asU8()
+            deploy.getDeploy()!.getHeader()!.getAccountPublicKeyHash_asU8()
           );
           return (
             <tr key={i}>
@@ -157,11 +154,7 @@ const DeploysTable = observer(
                 <Balance balance={props.balances.get(accountId)} />
               </td>
               <td className="text-center">
-                {deploy.getIsError() ? (
-                  <FailIcon/>
-                ) : (
-                    <SuccessIcon/>
-                  )}
+                {deploy.getIsError() ? <FailIcon /> : <SuccessIcon />}
               </td>
               <td>{deploy.getErrorMessage()}</td>
             </tr>
@@ -177,14 +170,16 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
 ) => {
   const id = encodeBase16(block.getSummary()!.getBlockHash_asU8());
   const header = block.getSummary()!.getHeader()!;
-  const validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
+  const validatorId = encodeBase16(header.getValidatorPublicKeyHash_asU8());
   const stats = block.getStatus()!.getStats()!;
   return [
     ['Block Hash', id],
-    ['Key Block Hash',
+    [
+      'Key Block Hash',
       <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
         {shortHash(header.getKeyBlockHash_asU8())}
-      </Link>],
+      </Link>
+    ],
     ['j-Rank', header.getJRank()],
     ['m-Rank', header.getMainRank()],
     ['Round ID', header.getRoundId()],
@@ -200,7 +195,8 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
           .getState()!
           .getBondsList()
           .find(
-            x => encodeBase16(x.getValidatorPublicKey_asU8()) === validatorId
+            x =>
+              encodeBase16(x.getValidatorPublicKeyHash_asU8()) === validatorId
           );
         // Genesis doesn't have a validator.
         return (
@@ -216,10 +212,7 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     ['Deploy Cost Total', stats.getDeployCostTotal().toLocaleString()],
     ['Deploy Gas Price Average', stats.getDeployGasPriceAvg().toLocaleString()],
     ['Block Size (bytes)', stats.getBlockSizeBytes().toLocaleString()],
-    [
-      'Finality',
-      <FinalityIcon block={block} />
-    ],
+    ['Finality', <FinalityIcon block={block} />],
     [
       'Parents',
       <ul>
@@ -233,13 +226,16 @@ const blockAttrs: (block: BlockInfo) => Array<[string, any]> = (
     [
       'Children',
       <ul>
-        {block.getStatus()!.getChildHashesList_asU8().map((x, idx) => (
-          <li key={idx}>
-            <BlockLink blockHash={x} />
-          </li>
-        ))}
+        {block
+          .getStatus()!
+          .getChildHashesList_asU8()
+          .map((x, idx) => (
+            <li key={idx}>
+              <BlockLink blockHash={x} />
+            </li>
+          ))}
       </ul>
-    ],
+    ]
   ];
 };
 
@@ -259,32 +255,43 @@ export const Balance = observer(
 
 export const BlockType = (props: { header: Block.Header }) => {
   let typ = props.header.getMessageType();
-  let lbl = typ === Block.MessageType.BLOCK ? "Block" : typ === Block.MessageType.BALLOT ? "Ballot" : "n/a"
+  let lbl =
+    typ === Block.MessageType.BLOCK
+      ? 'Block'
+      : typ === Block.MessageType.BALLOT
+      ? 'Ballot'
+      : 'n/a';
   return <span>{lbl}</span>;
-}
+};
 
 export const BlockRole = (props: { header: Block.Header }) => {
-  let role = props.header.getMessageRole()
+  let role = props.header.getMessageRole();
   let lbl =
-    role === Block.MessageRole.PROPOSAL ? "Proposal" :
-      role === Block.MessageRole.CONFIRMATION ? "Confirmation" :
-        role === Block.MessageRole.WITNESS ? "Witness" :
-          "n/a";
+    role === Block.MessageRole.PROPOSAL
+      ? 'Proposal'
+      : role === Block.MessageRole.CONFIRMATION
+      ? 'Confirmation'
+      : role === Block.MessageRole.WITNESS
+      ? 'Witness'
+      : 'n/a';
   return <span>{lbl}</span>;
-}
+};
 
 export const FinalityIcon = (props: { block: BlockInfo }) => {
-  if (props.block.getSummary()?.getHeader()!.getMessageType() === Block.MessageType.BALLOT)
+  if (
+    props.block.getSummary()?.getHeader()!.getMessageType() ===
+    Block.MessageType.BALLOT
+  )
     return null;
 
   let finality = props.block.getStatus()!.getFinality();
   if (finality === BlockInfo.Status.Finality.FINALIZED) {
-    return <SuccessIcon/>
+    return <SuccessIcon />;
   } else if (finality === BlockInfo.Status.Finality.ORPHANED)
-    return <FailIcon/>
+    return <FailIcon />;
   else {
-    return <Icon name="clock" />
+    return <Icon name="clock" />;
   }
-}
+};
 
 export default BlockDetails;

@@ -51,11 +51,11 @@ export default class AccountSelectorContainer {
   @computed
   get check() {
     if (!this.inputValue) {
-      return 'Account Public Key cannot be empty.';
+      return 'Account Public Key Hash cannot be empty.';
     }
 
     if (this.inputValue.length < 64) {
-      return 'Account Public Key has to be 64 characters long.';
+      return 'Account Public Key Hash has to be 64 characters long.';
     }
 
     try {
