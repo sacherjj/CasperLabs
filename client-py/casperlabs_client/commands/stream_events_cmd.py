@@ -71,6 +71,7 @@ def _add_to_list(maybe_value) -> List:
 @guarded_command
 def method(casperlabs_client: CasperLabsClient, args: Dict):
     kwargs = dict(
+        # TODO: This should be account_hashes?
         account_public_keys=_add_to_list(args.get("account_public_key")),
         deploy_hashes=_add_to_list(args.get("deploy_hash")),
     )

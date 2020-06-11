@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from casperlabs_client import CasperLabsClient
-from casperlabs_client.arg_types import directory_for_write
+from casperlabs_client.commands.common_options import (
+    ALGORITHM_OPTION,
+    DIRECTORY_FOR_WRITE_OPTION,
+)
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "keygen"
@@ -14,15 +17,7 @@ Generated files:
    account-hash-hex     # Hash of public key for use on the system as hex text
    account-private.pem  # ed25519 private key
    account-public.pem   # ed25519 public key"""
-OPTIONS = [
-    [
-        ("directory",),
-        dict(
-            type=directory_for_write,
-            help="Output directory for keys. Should already exists.",
-        ),
-    ]
-]
+OPTIONS = (DIRECTORY_FOR_WRITE_OPTION, ALGORITHM_OPTION)
 
 
 @guarded_command

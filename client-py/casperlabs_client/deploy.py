@@ -1,25 +1,23 @@
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Union
 
-from . import consensus_pb2 as consensus, consts
+from . import consensus_pb2 as consensus, consts, key_pairs
 import time
 
 from casperlabs_client import crypto
 from .contract import PaymentCode, SessionCode
+from .key_pairs import ED25519Key, EthereumKey
 
 
-def sign_deploy(deploy, public_key, private_key_file):
-    # See if this is hex encoded
-    try:
-        public_key = bytes.fromhex(public_key)
-    except TypeError:
-        pass
-
+def sign_deploy(deploy, key_pair):
+    signature_bytes = key_pair.sign(deploy.deploy_hash)
+    signature = consensus.Signature(
+        sig_algorithm=key_pair.algorithm, sig=signature_bytes
+    )
     deploy.approvals.extend(
         [
             consensus.Approval(
-                approver_public_key=public_key,
-                signature=crypto.signature(private_key_file, deploy.deploy_hash),
+                approver_public_key=key_pair.public_key, signature=signature
             )
         ]
     )
@@ -34,8 +32,7 @@ class DeployData:
     ttl_millis: int = 0
     dependencies: list = None
     chain_name: str = None
-    public_key: str = None
-    private_key: str = None
+    key_pair: Union[ED25519Key, EthereumKey] = None
 
     @staticmethod
     def from_args(args: Dict) -> "DeployData":
@@ -56,10 +53,24 @@ class DeployData:
         dependencies_hex = args.get("dependencies") or []
         dependencies = [bytes.fromhex(d) for d in dependencies_hex]
         chain_name = args.get("chain_name", "")
-        private_key = args.get("private_key")
-        public_key = args.get("public_key")
-        if not public_key and private_key:
-            public_key = crypto.private_to_public_key(private_key)
+        algorithm = args.get("algorithm")
+        private_key_pem_path = args.get("private_key")
+        public_key_pem_path = args.get("public_key")
+        if private_key_pem_path or public_key_pem_path:
+            key_pair = key_pairs.key_pair_object(
+                algorithm=algorithm,
+                private_key_pem_path=private_key_pem_path,
+                public_key_pem_path=public_key_pem_path,
+            )
+        else:
+            key_pair = None
+
+        if not from_addr:
+            if not key_pair:
+                raise ValueError(
+                    "Must provide `from` or a key to calculate account hash."
+                )
+            from_addr = key_pair.account_hash
 
         deploy = DeployData(
             from_addr=from_addr,
@@ -68,9 +79,9 @@ class DeployData:
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
-            public_key=public_key,
-            private_key=private_key,
+            key_pair=key_pair,
         )
+
         if len(deploy.from_addr) != consts.ACCOUNT_HASH_LENGTH:
             raise Exception(
                 "--from must be 32 bytes encoded as 64 characters long hexadecimal"

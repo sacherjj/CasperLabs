@@ -78,5 +78,5 @@ def test_ed25519_account_hash():
     public_key = b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'n\xcb\xfc\x18.\xf4\x1b\xd8"
     key_pair = ED25519Key(public_key=public_key)
     expected_account_hash = b"P6\xb4\x94\x8f\x82`\x947\xbe\xbc>4\xac\x81\x83y\xfc\x1fYZ\xd7\xf3A7\xee>jUOw\xb7"
-    account_hash = key_pair.account_hash()
+    account_hash = key_pair.account_hash
     assert account_hash == expected_account_hash, "account_hash does not equal expected"

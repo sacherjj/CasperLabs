@@ -10,6 +10,8 @@ from typing import List, Union
 # to get keys and signatures in hex when printed
 import google.protobuf.text_format
 
+from .consts import ED25519_KEY_ALGORITHM
+
 CEscape = google.protobuf.text_format.text_encoding.CEscape
 
 
@@ -31,7 +33,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
 
-from . import io, reformat, common, vdag, abi
+from . import io, reformat, common, vdag, abi, key_pairs
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
 from .contract import bundled_contract_path
@@ -180,6 +182,7 @@ class CasperLabsClient:
         ttl_millis: int = 0,
         dependencies: list = None,
         chain_name: str = None,
+        algorithm: str = ED25519_KEY_ALGORITHM,
     ):
         """
         Create a protobuf deploy object.
@@ -210,6 +213,7 @@ class CasperLabsClient:
                                must be executed before this deploy.
         :param chain_name:     Name of the chain to optionally restrict the
                                deploy from being accidentally included anywhere else.
+        :param algorithm:      Algorithm used for generating keys, defaults to ed25519
         :return:               deploy object
         """
         deploy_data = DeployData.from_args(
@@ -231,27 +235,41 @@ class CasperLabsClient:
                 ttl_millis=ttl_millis,
                 dependencies=dependencies,
                 chain_name=chain_name,
+                algorithm=algorithm,
             )
         )
         return deploy_data.make_protobuf()
 
     @api
-    def sign_deploy(self, public_key, private_key_file, deploy=None, deploy_file=None):
+    def sign_deploy(
+        self,
+        private_key_pem_file: Union[str, Path] = None,
+        algorithm: str = ED25519_KEY_ALGORITHM,
+        key_pair=None,
+        deploy: bytes = None,
+        deploy_file: Union[str, Path] = None,
+    ):
         """
         Sign a deploy with the given keys.  Source of deploy may be deploy object or file containing deploy.
 
-        :param public_key:          Public key to use for signing
-        :param private_key_file:    File containing Private key
-        :param deploy:              Deploy as object
-        :param deploy_file:         File containing deploy
+        :param private_key_pem_file:  File containing Private key
+        :param algorithm:             Algorithm used for key pair, see consts.SUPPORTED_KEY_ALGORITHMS
+        :param key_pair:              KeyPair object as alternative to pem file and algorithm
+        :param deploy:                Deploy as object
+        :param deploy_file:           File containing deploy
         :return: signed deploy object
         """
-        # TODO: Why do we require public key, instead of just deriving from private?
         if deploy is None:
             if deploy_file is None:
-                raise ValueError("Must have either deploy or deploy_file")
+                raise ValueError("Must have either `deploy` or `deploy_file`")
             deploy = io.read_deploy_file(deploy_file)
-        return sign_deploy(deploy, public_key, private_key_file)
+        if not (private_key_pem_file or key_pair):
+            raise ValueError("Must have either `private_key_pem_file` or `key_pair`")
+        if not key_pair:
+            key_pair = key_pairs.key_pair_object(
+                algorithm, private_key_pem_path=private_key_pem_file
+            )
+        return sign_deploy(deploy, key_pair)
 
     @api
     def deploy(
@@ -273,6 +291,7 @@ class CasperLabsClient:
         ttl_millis: int = 0,
         dependencies=None,
         chain_name: str = None,
+        algorithm: str = ED25519_KEY_ALGORITHM,
     ) -> str:
         """
         Deploy a smart contract source file to Casper on an existing running node.
@@ -305,6 +324,7 @@ class CasperLabsClient:
                                must be executed before this deploy.
         :param chain_name:     Name of the chain to optionally restrict the
                                deploy from being accidentally included anywhere else.
+        :param algorithm:      Algorithm used for
         :return:               deploy hash in base16 format
         """
 
@@ -328,15 +348,14 @@ class CasperLabsClient:
                 dependencies=dependencies,
                 chain_name=chain_name,
                 private_key=private_key,
+                algorithm=algorithm,
             )
         )
 
         deploy_proto = deploy_data.make_protobuf()
 
         signed_deploy = self.sign_deploy(
-            deploy=deploy_proto,
-            public_key=deploy_data.public_key,
-            private_key_file=deploy_data.private_key,
+            deploy=deploy_proto, key_pair=deploy_data.key_pair
         )
         self.send_deploy(signed_deploy)
         return signed_deploy.deploy_hash.hex()
@@ -626,32 +645,34 @@ class CasperLabsClient:
         return self.query_state(blockHash, key, path, keyType)
 
     @api
-    def keygen(self, directory: str) -> None:
+    def keygen(
+        self,
+        directory: str,
+        algorithm: str = ED25519_KEY_ALGORITHM,
+        filename_prefix: str = consts.DEFAULT_KEY_FILENAME_PREFIX,
+    ) -> None:
         """ Generates account keys into existing directory.
             Existing files in directory will be overwritten
 
-        :param directory:       # existing output directory
+        :param directory:       existing output directory
+        :param algorithm:       Algorithm to generate keys. Default is ed25519.
+        :param filename_prefix: Prefix to use for file, default is 'account'
 
         Generated files:
-           account-hash         # Hash of public key to use in the system as base 64
-           account-hash-hex     # Hash of public ket to use in the system as hex
-           account-private.pem  # ed25519 private key
-           account-public.pem   # ed25519 public key"""
+           {filename_prefix}-hash         # Hash of public key to use in the system as hex
+           {filename_prefix}-private.pem  # private key
+           {filename_prefix}-public.pem   # public key"""
 
         directory = Path(directory).resolve()
-        private_path = directory / consts.ACCOUNT_PRIVATE_KEY_FILENAME
-        public_path = directory / consts.ACCOUNT_PUBLIC_KEY_FILENAME
-        hash_path = directory / consts.ACCOUNT_HASH_FILENAME
-        hash_hex_path = directory / consts.ACCOUNT_HASH_HEX_FILENAME
+        key_pair_obj = key_pairs.class_from_algorithm(algorithm)
+        key_pair = key_pair_obj.generate()
+        key_pair.save_pem_files(directory, filename_prefix)
 
-        (private_pem, public_pem, public_bytes) = crypto.generate_keys()
-        io.write_binary_file(private_path, private_pem)
-        io.write_binary_file(public_path, public_pem)
-        account_hash = self.account_hash(
-            consts.ED25519_KEY_ALGORITHM, public_key_path=public_path
+        account_hash = key_pair.account_hash
+        hash_path = (
+            directory / f"{filename_prefix}{consts.ACCOUNT_HASH_FILENAME_SUFFIX}"
         )
-        io.write_file(hash_path, reformat.encode_base64(account_hash))
-        io.write_file(hash_hex_path, account_hash.hex())
+        io.write_file(hash_path, account_hash.hex())
 
     @api
     def balance(self, address: str, block_hash: str):
@@ -949,21 +970,17 @@ class CasperLabsClient:
 
     @api
     def account_hash(
-        self, algorithm: str, public_key: bytes = None, public_key_path: str = None
+        self, algorithm: str, public_key: bytes = None, public_key_pem_path: str = None
     ) -> bytes:
         """ Create account hash based on algorithm and public key or public_key_path
 
-        :param algorithm:       Algorithm used for key generation. See consts.SUPPORTED_KEY_ALGORITHMS
-        :param public_key:      Public Key as bytes
-        :param public_key_path: File path to public_key pem file
+        :param algorithm:           Algorithm used for key generation. See consts.SUPPORTED_KEY_ALGORITHMS
+        :param public_key:          Public Key as bytes
+        :param public_key_pem_path: File path to public_key pem file
         """
-        if algorithm not in consts.SUPPORTED_KEY_ALGORITHMS:
-            raise ValueError(
-                f"algorithm must be one of {consts.SUPPORTED_KEY_ALGORITHMS}."
-            )
-        if len(list(filter(None, [public_key, public_key_path]))) != 1:
-            raise ValueError("Must have either 'public_key' or 'public_key_path'")
-        if public_key_path:
-            public_key = io.read_pem_key(public_key_path)
-
-        return crypto.blake2b_hash(algorithm.encode("UTF-8") + b"0x00" + public_key)
+        key_pair = key_pairs.key_pair_object(
+            algorithm=algorithm,
+            public_key=public_key,
+            public_key_pem_path=public_key_pem_path,
+        )
+        return key_pair.account_hash

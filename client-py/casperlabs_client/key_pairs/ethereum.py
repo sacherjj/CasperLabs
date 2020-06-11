@@ -30,9 +30,7 @@ class EthereumKey(KeyPair):
         if self._private_key_pem is None:
             if self._private_key is None:
                 raise ValueError("Must have either _private_key or _private_key_pem.")
-            private_key_object = ecdsa.SigningKey.from_string(
-                self._private_key
-            )  # is from_bytes
+            private_key_object = ecdsa.SigningKey.from_string(self._private_key)
             self._private_key_pem = private_key_object.to_pem()
         return self._private_key_pem
 
@@ -42,33 +40,31 @@ class EthereumKey(KeyPair):
             if self._private_key_pem is None:
                 raise ValueError("Must have either _private_key or _private_key_pem.")
             private_key_object = ecdsa.SigningKey.from_pem(self._private_key_pem)
-            self._private_key = private_key_object.to_string()  # is to_bytes
+            self._private_key = private_key_object.to_string()
         return self._private_key
 
     @property
     def public_key_pem(self):
         if self._public_key_pem is None:
-            public_key_object = ecdsa.VerifyingKey.from_string(
-                self.public_key
-            )  # is from_bytes
+            public_key_object = ecdsa.VerifyingKey.from_string(self.public_key)
             self._public_key_pem = public_key_object.to_pem()
         return self._public_key_pem
 
     @property
     def public_key(self):
         if self._public_key is None:
-            private_key_object = ecdsa.SigningKey.from_string(
-                self.private_key
-            )  # is from_bytes
-            self._public_key = (
-                private_key_object.verifying_key.to_string()
-            )  # is to_bytes
+            if self.private_key:
+                private_key_object = ecdsa.SigningKey.from_string(self.private_key)
+                self._public_key = private_key_object.verifying_key.to_string()
+            elif self._public_key_pem:
+                public_key_object = ecdsa.VerifyingKey.from_pem(self._public_key_pem)
+                self._public_key = public_key_object.to_string()
+            else:
+                raise ValueError("No values given to derive public key")
         return self._public_key
 
     def sign(self, data: bytes) -> bytes:
-        private_key_object = ecdsa.SigningKey.from_string(
-            self.public_key
-        )  # is from_bytes
+        private_key_object = ecdsa.SigningKey.from_string(self.private_key)
         return private_key_object.sign(data)
 
     @staticmethod
@@ -87,6 +83,16 @@ class EthereumKey(KeyPair):
         """ Creates EthereumKey object from private key file in pem format """
         private_key_pem = read_binary_file(private_key_pem_path)
         return EthereumKey(private_key_pem=private_key_pem)
+
+    @staticmethod
+    def from_public_key_path(public_key_pem_path: Union[str, Path]) -> "KeyPair":
+        """
+        Creates EthereumKey object from public key file in pem format.
+
+        Note: Functionality requiring Private Key will not be possible.  Use only if no private key pem is available.
+        """
+        public_key_pem = read_binary_file(public_key_pem_path)
+        return EthereumKey(public_key_pem=public_key_pem)
 
     @staticmethod
     def from_private_key(private_key: bytes) -> "KeyPair":

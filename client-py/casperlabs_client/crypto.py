@@ -15,7 +15,6 @@ from cryptography.x509.oid import NameOID
 from Crypto.Hash import keccak
 from pyblake2 import blake2b
 import ed25519
-from . import consensus_pb2 as consensus
 from .io import read_pem_key
 
 
@@ -102,13 +101,6 @@ def blake2b_hash(data: bytes) -> bytes:
     h = blake2b(digest_size=32)
     h.update(data)
     return h.digest()
-
-
-def signature(private_key, data: bytes):
-    return private_key and consensus.Signature(
-        sig_algorithm="ed25519",
-        sig=ed25519.SigningKey(read_pem_key(private_key)).sign(data),
-    )
 
 
 def private_to_public_key(private_key_path) -> bytes:

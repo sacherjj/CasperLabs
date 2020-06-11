@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Union
 from pathlib import Path
 
-from casperlabs_client import crypto
+from casperlabs_client import crypto, consts
 from casperlabs_client.io import write_binary_file
 
 
@@ -17,6 +17,8 @@ class KeyPair(ABC):
         public_key=None,
         algorithm: str = None,
     ):
+        if not any((private_key, private_key_pem, public_key, public_key_pem)):
+            raise ValueError("No public or private key information provided.")
         self._private_key_pem = private_key_pem
         self._private_key = private_key
         self._public_key_pem = public_key_pem
@@ -49,7 +51,9 @@ class KeyPair(ABC):
         pass
 
     def save_pem_files(
-        self, save_directory: Union[str, Path], filename_prefix: str = "account-"
+        self,
+        save_directory: Union[str, Path],
+        filename_prefix: str = consts.DEFAULT_KEY_FILENAME_PREFIX,
     ) -> None:
         """
         Save key pairs out as public and private pem files.
@@ -57,15 +61,26 @@ class KeyPair(ABC):
         :param save_directory:   str or Path to directory for saving pem files.
         :param filename_prefix:  prefix of filename to be used for save.
         """
-        private_path = Path(save_directory) / f"{filename_prefix}private.pem"
+        private_path = (
+            Path(save_directory)
+            / f"{filename_prefix}{consts.ACCOUNT_PRIVATE_KEY_FILENAME_SUFFIX}"
+        )
         write_binary_file(private_path, self.private_key_pem)
 
-        public_path = Path(save_directory) / f"{filename_prefix}public.pem"
+        public_path = (
+            Path(save_directory)
+            / f"{filename_prefix}{consts.ACCOUNT_PUBLIC_KEY_FILENAME_SUFFIX}"
+        )
         write_binary_file(public_path, self.public_key_pem)
 
     @staticmethod
     @abstractmethod
     def from_private_key_path(private_key_pem_path: Union[str, Path]) -> "KeyPair":
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def from_public_key_path(public_key_pem_path: Union[str, Path]) -> "KeyPair":
         pass
 
     @abstractmethod
@@ -82,6 +97,7 @@ class KeyPair(ABC):
             if not line.startswith(b"-----"):
                 return line
 
+    @property
     def account_hash(self) -> bytes:
         """ Generate hash of public key and key algorithm for use as primary identifier in the system """
         return crypto.blake2b_hash(

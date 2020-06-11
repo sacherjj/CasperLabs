@@ -68,23 +68,47 @@ class ED25519Key(KeyPair):
     def public_key_pem(self) -> bytes:
         """ Contents of public_key pem file. """
         if self._public_key_pem is None:
-            public_key = ed25519.Ed25519PublicKey.from_public_bytes(self.public_key)
-            self._public_key_pem = public_key.public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            )
+            if self._public_key:
+                public_key = ed25519.Ed25519PublicKey.from_public_bytes(
+                    self._public_key
+                )
+                self._public_key_pem = public_key.public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                )
+            elif self.private_key:
+                private_key_object = ed25519.Ed25519PrivateKey.from_private_bytes(
+                    self.private_key
+                )
+                self._public_key_pem = private_key_object.public_key().public_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+                )
+            else:
+                raise ValueError(
+                    "must have _private_key, _private_key_pem, _public_key, or _public_key_pem"
+                )
         return self._public_key_pem
 
     @property
     def public_key(self) -> bytes:
         """ Public key as bytes """
         if self._public_key is None:
-            private_key = ed25519.Ed25519PrivateKey.from_private_bytes(self.private_key)
-            public_key = private_key.public_key()
-            self._public_key = public_key.public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw,
-            )
+            if self._public_key_pem:
+                self._public_key = self._parse_pem_data(self._public_key_pem)
+            elif self.private_key:
+                private_key = ed25519.Ed25519PrivateKey.from_private_bytes(
+                    self.private_key
+                )
+                public_key = private_key.public_key()
+                self._public_key = public_key.public_bytes(
+                    encoding=serialization.Encoding.Raw,
+                    format=serialization.PublicFormat.Raw,
+                )
+            else:
+                raise ValueError(
+                    "must have _private_key, _private_key_pem, _public_key, or _public_key_pem"
+                )
         return self._public_key
 
     def sign(self, data: bytes) -> bytes:
@@ -93,8 +117,14 @@ class ED25519Key(KeyPair):
     @staticmethod
     def from_private_key_path(private_key_pem_path: Union[str, Path]) -> "KeyPair":
         """ Returns a ED25519Key object loaded from a private_key_pem file"""
-        private_pem = read_binary_file(private_key_pem_path)
-        return ED25519Key(private_key_pem=private_pem)
+        private_key_pem = read_binary_file(private_key_pem_path)
+        return ED25519Key(private_key_pem=private_key_pem)
+
+    @staticmethod
+    def from_public_key_path(public_key_pem_path: Union[str, Path]) -> "KeyPair":
+        """ Returns a ED25519Key object loaded from a private_key_pem file"""
+        public_key_pem = read_binary_file(public_key_pem_path)
+        return ED25519Key(public_key_pem=public_key_pem)
 
     @staticmethod
     def generate():
