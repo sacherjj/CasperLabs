@@ -178,7 +178,8 @@ export class AuthContainer {
     if (form instanceof ImportAccountFormData && form.clean()) {
       await this.addAccount({
         name: form.name.$,
-        publicKeyBase64: form.publicKeyBase64.$
+        publicKeyBase64: form.publicKeyBase64.$,
+        sigAlgorithm: 'ed25519'
       });
       return true;
     } else {
