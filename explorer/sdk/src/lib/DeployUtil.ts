@@ -52,9 +52,14 @@ export function makeDeploy(
   if (type === ContractType.WASM) {
     sessionCode.setWasm(session);
   } else if (type === ContractType.Hash) {
-    sessionCode.setHash(session);
-  }else{
-    sessionCode.setName(session as string);
+    const storedContract = new Deploy.Code.StoredContract();
+    storedContract.setContractHash(session);
+    sessionCode.setStoredContract(storedContract);
+  } else {
+    const storedContract = new Deploy.Code.StoredContract();
+    storedContract.setContractHash(session);
+    storedContract.setName(session as string);
+    sessionCode.setStoredContract(storedContract);
   }
   sessionCode.setArgsList(args);
   if (paymentWasm === null) {

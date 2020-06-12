@@ -19,8 +19,8 @@ message Contract {
             string name = 1;
         }
 
-        message Session {}
-        message Contract {}
+        message SessionType {}
+        message ContractType {}
 
         message Groups {
             repeated Group groups = 1;
@@ -37,8 +37,8 @@ message Contract {
 
 
         oneof entry_point_type {
-            Session session = 6;
-            Contract contract = 7;
+            SessionType session = 6;
+            ContractType contract = 7;
         }
     }
 
