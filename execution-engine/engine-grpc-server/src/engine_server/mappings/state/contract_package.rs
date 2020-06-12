@@ -108,9 +108,11 @@ impl From<EntryPoint> for state::Contract_EntryPoint {
         }
 
         match entry_point_type {
-            EntryPointType::Session => res.set_session(state::Contract_EntryPoint_Session::new()),
+            EntryPointType::Session => {
+                res.set_session(state::Contract_EntryPoint_SessionType::new())
+            }
             EntryPointType::Contract => {
-                res.set_contract(state::Contract_EntryPoint_Contract::new())
+                res.set_contract(state::Contract_EntryPoint_ContractType::new())
             }
         }
         res

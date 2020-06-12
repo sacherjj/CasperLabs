@@ -136,9 +136,11 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
 
   def buildString(entryPointType: Contract.EntryPoint.EntryPointType): String =
     entryPointType match {
-      case Contract.EntryPoint.EntryPointType.Session(Contract.EntryPoint.Session())   => "Session"
-      case Contract.EntryPoint.EntryPointType.Contract(Contract.EntryPoint.Contract()) => "Contract"
-      case Contract.EntryPoint.EntryPointType.Empty                                    => "Empty"
+      case Contract.EntryPoint.EntryPointType.Session(Contract.EntryPoint.SessionType()) =>
+        "Session"
+      case Contract.EntryPoint.EntryPointType.Contract(Contract.EntryPoint.ContractType()) =>
+        "Contract"
+      case Contract.EntryPoint.EntryPointType.Empty => "Empty"
     }
 
   def buildString(arg: Contract.EntryPoint.Arg): String =
