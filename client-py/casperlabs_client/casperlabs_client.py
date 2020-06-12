@@ -664,7 +664,7 @@ class CasperLabsClient:
            {filename_prefix}-public.pem   # public key"""
 
         directory = Path(directory).resolve()
-        key_holder_obj = key_holders.class_from_algorithm(algorithm)
+        key_holder_generator = key_holders.class_from_algorithm(algorithm)
         key_holder = key_holder_obj.generate()
         key_holder.save_pem_files(directory, filename_prefix)
 
