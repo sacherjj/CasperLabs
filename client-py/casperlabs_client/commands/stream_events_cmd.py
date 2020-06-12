@@ -18,7 +18,7 @@ OPTIONS = [
     [("--deploy-finalized",), dict(action="store_true", help="Deploy finalized")],
     [("--deploy-orphaned",), dict(action="store_true", help="Deploy orphaned")],
     [
-        ("-k", "--account-key-hash"),
+        ("-k", "--account-hash"),
         dict(
             action="append",
             help="Filter by (possibly multiple) account public key hash(es)",
@@ -72,7 +72,7 @@ def _add_to_list(maybe_value) -> List:
 @guarded_command
 def method(casperlabs_client: CasperLabsClient, args: Dict):
     kwargs = dict(
-        account_public_key_hashes=_add_to_list(args.get("account_key_hash")),
+        account_public_key_hashes=_add_to_list(args.get("account_hash")),
         deploy_hashes=_add_to_list(args.get("deploy_hash")),
     )
     for key in (

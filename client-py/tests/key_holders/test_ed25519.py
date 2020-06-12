@@ -1,24 +1,47 @@
+import pytest
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.exceptions import InvalidSignature
+
 from casperlabs_client.key_holders import ED25519Key
 
 
-def test_generate_ed25519():
-    PRIVATE_KEY_LENGTH = 64
-    PUBLIC_KEY_LENGTH = 60
+def test_ed25519_generate():
+    PRIVATE_KEY_BYTES_LENGTH = 32
+    PUBLIC_KEY_BYTES_LENGTH = 32
+    PRIVATE_KEY_BASE64_LENGTH = 64
+    PUBLIC_KEY_BASE64_LENGTH = 60
 
     key_holder = ED25519Key.generate()
+
+    assert len(key_holder.private_key) == PRIVATE_KEY_BYTES_LENGTH
+    assert len(key_holder.public_key) == PUBLIC_KEY_BYTES_LENGTH
+
     private_parts = key_holder.private_key_pem.split(b"-----")
     assert private_parts[1] == b"BEGIN PRIVATE KEY"
     assert (
-        len(private_parts[2]) == PRIVATE_KEY_LENGTH + 2
+        len(private_parts[2]) == PRIVATE_KEY_BASE64_LENGTH + 2
     )  # Two line feeds at begin and end
     assert private_parts[3] == b"END PRIVATE KEY"
 
     public_parts = key_holder.public_key_pem.split(b"-----")
     assert public_parts[1] == b"BEGIN PUBLIC KEY"
     assert (
-        len(public_parts[2]) == PUBLIC_KEY_LENGTH + 2
+        len(public_parts[2]) == PUBLIC_KEY_BASE64_LENGTH + 2
     )  # Two line feeds at begin and end
     assert public_parts[3] == b"END PUBLIC KEY"
+
+
+def test_ed25519_sign():
+    key_holder = ED25519Key.generate()
+    data = b"0123456789"
+    signature = key_holder.sign(data)
+    public_key = ed25519.Ed25519PublicKey.from_public_bytes(key_holder.public_key)
+
+    # verify raised exception when bad.
+    with pytest.raises(InvalidSignature):
+        public_key.verify(signature, data + b"1")
+    # return of None with no exception when good.
+    assert public_key.verify(signature, data) is None
 
 
 def test_parse_pem_data_line_ed25519_private_key():
@@ -38,10 +61,7 @@ def test_parse_pem_data_line_ed25519_public_key():
         b"MCowBQYDK2VwAyEAwaURJT / kvOOr42Y3 / ScQQt3+DpgVPW0nbsv8GC70G9g=\n"
         b"-----END PUBLIC KEY-----\n"
     )
-    expected = (
-        b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'"
-        b"n\xcb\xfc\x18.\xf4\x1b\xd8"
-    )
+    expected = b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'n\xcb\xfc\x18.\xf4\x1b\xd8"
     result = ED25519Key._parse_pem_data(pem_data)
     assert result == expected
 
@@ -77,6 +97,6 @@ def test_ed25519_round_trip_private_key_pem():
 def test_ed25519_account_hash():
     public_key = b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'n\xcb\xfc\x18.\xf4\x1b\xd8"
     key_holder = ED25519Key(public_key=public_key)
-    expected_account_hash = b"P6\xb4\x94\x8f\x82`\x947\xbe\xbc>4\xac\x81\x83y\xfc\x1fYZ\xd7\xf3A7\xee>jUOw\xb7"
+    expected_account_hash = b"#\x0e\xf8\xd9kyV6\x1f\x12\x05\xfbJ\xb5[4\x96\xf3\xe0\xc8L\x80\xafpT\xbb\x92A=m\xdc\x95"
     account_hash = key_holder.account_hash
     assert account_hash == expected_account_hash, "account_hash does not equal expected"

@@ -5,11 +5,7 @@ from .key_holder import KeyHolder  # noqa:F401
 from .ed25519 import ED25519Key
 from .secp256k1 import SECP256K1Key
 
-from ..consts import (
-    ED25519_KEY_ALGORITHM,
-    SECP256K1_KEY_ALGORITHM,
-    SUPPORTED_KEY_ALGORITHMS,
-)
+from ..consts import ED25519_KEY_ALGORITHM, SECP256K1_KEY_ALGORITHM
 
 
 def class_from_algorithm(algorithm: str):
@@ -21,7 +17,7 @@ def class_from_algorithm(algorithm: str):
     try:
         return class_map[algorithm]
     except KeyError:
-        ValueError(f"algorithm should be in ({SUPPORTED_KEY_ALGORITHMS})")
+        ValueError(f"algorithm should be in ({class_map.keys()})")
 
 
 def key_holder_object(

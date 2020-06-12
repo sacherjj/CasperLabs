@@ -33,7 +33,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
 
-from . import io, reformat, common, vdag, abi, key_holders
+from . import io, common, vdag, abi, key_holders
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
 from .contract import bundled_contract_path
@@ -896,31 +896,24 @@ class CasperLabsClient:
         if not directory.exists():
             raise ValueError(f"Destination directory: {directory} does not exists.")
 
-        validator_private_path = directory / consts.VALIDATOR_PRIVATE_KEY_FILENAME
-        validator_public_path = directory / consts.VALIDATOR_PUBLIC_KEY_FILENAME
-        validator_id_path = directory / consts.VALIDATOR_ID_FILENAME
-        validator_id_hex_path = directory / consts.VALIDATOR_ID_HEX_FILENAME
         node_private_path = directory / consts.NODE_PRIVATE_KEY_FILENAME
         node_cert_path = directory / consts.NODE_CERTIFICATE_FILENAME
         node_id_path = directory / consts.NODE_ID_FILENAME
 
-        (
-            validator_private_pem,
-            validator_public_pem,
-            validator_public_bytes,
-        ) = crypto.generate_keys()
+        key_pair = key_holders.ED25519Key.generate()
+        key_pair.save_pem_files(directory, consts.VALIDATOR_KEY_FILENAME_PREFIX)
+        account_hash_path = (
+            directory
+            / f"{consts.VALIDATOR_KEY_FILENAME_PREFIX}{consts.ACCOUNT_HASH_FILENAME_SUFFIX}"
+        )
+        io.write_file(account_hash_path, key_pair.account_hash.hex())
 
-        io.write_binary_file(validator_private_path, validator_private_pem)
-        io.write_binary_file(validator_public_path, validator_public_pem)
-        io.write_file(validator_id_path, reformat.encode_base64(validator_public_bytes))
-        io.write_file(validator_id_hex_path, validator_public_bytes.hex())
-
-        private_key, public_key = crypto.generate_key_holder()
-        node_cert, key_pem = crypto.generate_certificates(private_key, public_key)
+        private_key, public_key = crypto.generate_secp256r1_key_pair()
+        node_cert, key_pem = crypto.generate_node_certificates(private_key, public_key)
 
         io.write_binary_file(node_private_path, key_pem)
         io.write_binary_file(node_cert_path, node_cert)
-        io.write_file(node_id_path, crypto.public_address(public_key))
+        io.write_file(node_id_path, crypto.node_public_address(public_key))
 
     @api
     def wait_for_deploy_processed(

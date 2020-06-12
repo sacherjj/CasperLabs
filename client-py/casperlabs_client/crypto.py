@@ -8,14 +8,11 @@ import ssl
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric import ed25519 as cryptography_ed25519
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.x509.oid import NameOID
 from Crypto.Hash import keccak
 from pyblake2 import blake2b
-import ed25519
-from .io import read_pem_key
 
 
 def extract_common_name(certificate_file: str) -> str:
@@ -23,34 +20,14 @@ def extract_common_name(certificate_file: str) -> str:
     return [t[0][1] for t in cert_dict["subject"] if t[0][0] == "commonName"][0]
 
 
-def generate_keys():
-    private_key = cryptography_ed25519.Ed25519PrivateKey.generate()
-    public_key = private_key.public_key()
-
-    private_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-
-    public_pem = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    public_bytes = public_key.public_bytes(
-        encoding=serialization.Encoding.Raw, format=serialization.PublicFormat.Raw
-    )
-    return private_pem, public_pem, public_bytes
-
-
-def generate_key_holder():
+def generate_secp256r1_key_pair():
     curve = ec.SECP256R1()
     private_key = ec.generate_private_key(curve, default_backend())
     public_key = private_key.public_key()
     return private_key, public_key
 
 
-def public_address(public_key):
+def node_public_address(public_key):
     numbers = public_key.public_numbers()
     x, y = numbers.x, numbers.y
 
@@ -65,10 +42,12 @@ def public_address(public_key):
     return r[12 * 2 :]
 
 
-def generate_certificates(private_key, public_key):
+def generate_node_certificates(private_key, public_key):
     today = datetime.datetime.today()
     one_day = datetime.timedelta(1, 0, 0)
-    address = public_address(public_key)  # .map(Base16.to_protobuf).getOrElse("local")
+    address = node_public_address(
+        public_key
+    )  # .map(Base16.to_protobuf).getOrElse("local")
     owner = f"CN={address}"
 
     builder = x509.CertificateBuilder()
@@ -101,11 +80,3 @@ def blake2b_hash(data: bytes) -> bytes:
     h = blake2b(digest_size=32)
     h.update(data)
     return h.digest()
-
-
-def private_to_public_key(private_key_path) -> bytes:
-    return (
-        ed25519.SigningKey(read_pem_key(private_key_path))
-        .get_verifying_key()
-        .to_bytes()
-    )

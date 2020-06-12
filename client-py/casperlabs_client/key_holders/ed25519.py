@@ -40,7 +40,7 @@ class ED25519Key(KeyHolder):
 
     @property
     def private_key_pem(self) -> bytes:
-        """ Contents of private_key pem file. """
+        """ Returns or generates private key pem data from other internal fields """
         if self._private_key_pem is None:
             if self._private_key is None:
                 raise ValueError("Must have either _private_key or _private_key_pem.")
@@ -56,7 +56,7 @@ class ED25519Key(KeyHolder):
 
     @property
     def private_key(self) -> bytes:
-        """ Private key as bytes """
+        """ Returns or generates private key bytes from other internal fields """
         if self._private_key is None:
             if self._private_key_pem is None:
                 raise ValueError("Must have either _private_key or _private_key_pem.")
@@ -66,7 +66,7 @@ class ED25519Key(KeyHolder):
 
     @property
     def public_key_pem(self) -> bytes:
-        """ Contents of public_key pem file. """
+        """ Returns or generates public key pem data from other internal fields """
         if self._public_key_pem is None:
             if self._public_key:
                 public_key = ed25519.Ed25519PublicKey.from_public_bytes(
@@ -92,7 +92,7 @@ class ED25519Key(KeyHolder):
 
     @property
     def public_key(self) -> bytes:
-        """ Public key as bytes """
+        """ Returns or generates public key bytes from other internal fields """
         if self._public_key is None:
             if self._public_key_pem:
                 self._public_key = self._parse_pem_data(self._public_key_pem)
@@ -131,7 +131,7 @@ class ED25519Key(KeyHolder):
         """
         Generates a new key pair and returns as ED25519 object.
 
-        :returns ED25519 object
+        :returns Ed25519Key object
         """
         private_key = ed25519.Ed25519PrivateKey.generate()
 
