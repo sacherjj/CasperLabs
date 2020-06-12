@@ -1,10 +1,11 @@
-FROM alpine as build
+FROM ubuntu:18.04 as build
 
-RUN apk add --no-cache git make g++; \
+RUN apt update && \
+    apt install -y git make g++; \
     cd /tmp; \
     git clone https://github.com/maandree/libkeccak.git; \
     git clone https://github.com/maandree/sha3sum.git; \
-    cd /tmp/libkeccak; git checkout 1.2; make install; ldconfig; \
+    cd /tmp/libkeccak; git checkout 1.2; make install; ldconfig;  \
     cd /tmp/sha3sum; make;
 
 RUN cd /tmp; \
@@ -13,15 +14,20 @@ RUN cd /tmp; \
 
 
 
-FROM alpine
+FROM ubuntu:18.04
 
-RUN apk add --no-cache openssl && mkdir -p -- "/usr/local/include"
+RUN apt update && apt install -y openssl libgomp1 xxd bsdmainutils && mkdir -p -- "/usr/local/include"
 
+# https://github.com/openssl/openssl/issues/7754
+RUN sed -i s/RANDFILE/#RANDFILE/ /etc/ssl/openssl.cnf
+
+# Based on libkeccak `make install`
 COPY --from=build /tmp/libkeccak/libkeccak.so /usr/local/lib/libkeccak.so.1.2
 RUN ln -sf -- "/usr/local/lib/libkeccak.so.1.2" "/usr/local/lib/libkeccak.so.1" && ln -sf -- "/usr/local/lib/libkeccak.so.1.2" "/usr/local/lib/libkeccak.so"
 COPY --from=build /tmp/libkeccak/libkeccak.a /usr/local/lib/libkeccak.a
 COPY --from=build /tmp/libkeccak/libkeccak.h /usr/local/include
 COPY --from=build /tmp/libkeccak/libkeccak-legacy.h /usr/local/include
+RUN ldconfig
 
 COPY --from=build /tmp/sha3sum/keccak-256sum /usr/local/bin
 

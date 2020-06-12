@@ -18,7 +18,8 @@ import io.casperlabs.casper.util.{BondingUtil, ProtoUtil}
 import io.casperlabs.catscontrib.TaskContrib.TaskOps
 import io.casperlabs.crypto.Keys
 import io.casperlabs.crypto.codec.Base16
-import io.casperlabs.crypto.signatures.SignatureAlgorithm.Ed25519
+import io.casperlabs.crypto.signatures.SignatureAlgorithm
+import io.casperlabs.crypto.signatures.SignatureAlgorithm.{Ed25519, Secp256k1, Secp256r1}
 import io.casperlabs.ipc
 import io.casperlabs.mempool.DeployBuffer
 import io.casperlabs.metrics.Metrics
@@ -35,8 +36,6 @@ import org.scalatest.{Assertion, FlatSpec, Inspectors, Matchers}
 
 import scala.concurrent.duration._
 import scala.collection.immutable
-import io.casperlabs.crypto.signatures.SignatureAlgorithm
-import io.casperlabs.crypto.signatures.SignatureAlgorithm.Secp256k1
 
 /** Run tests using the GossipService and co. */
 class GossipServiceCasperTest extends HashSetCasperTest with GossipServiceCasperTestNodeFactory
@@ -93,9 +92,10 @@ abstract class HashSetCasperTest
     makeValidatorIdentity(Ed25519)
 
   private val (validatorKeys, validators) = {
-    val validatorIds = (1 to 4) map (_ % 2) map {
+    val validatorIds = (1 to 4) map (_ % 3) map {
       case 0 => Ed25519
       case 1 => Secp256k1
+      case 2 => Secp256r1
     } map (makeValidatorIdentity)
 
     validatorIds -> validatorIds.map(_.publicKeyHashBS)
