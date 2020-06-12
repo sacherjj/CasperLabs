@@ -4,22 +4,28 @@ import java.nio.file.Path
 
 import cats._
 import cats.effect._
+import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl._
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
-import io.casperlabs.node.configuration.Configuration
+import io.casperlabs.catscontrib.Catscontrib._
 import io.casperlabs.comm._
 import io.casperlabs.comm.discovery._
 import io.casperlabs.comm.rp.Connect._
 import io.casperlabs.comm.rp._
 import io.casperlabs.metrics.Metrics
+import io.casperlabs.node.configuration.Configuration
 import io.casperlabs.shared._
 import monix.eval._
 import monix.execution._
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import org.apache.commons.io.FileUtils
+import org.apache.commons.io.filefilter.WildcardFileFilter
+import org.apache.commons.io.filefilter.IOFileFilter
 
 package object effects {
   import com.zaxxer.hikari.HikariConfig
@@ -150,5 +156,39 @@ package object effects {
       writeXa <- mkTransactor(writeXaConfig, writeThreads)
       readXa  <- mkTransactor(readXaConfig, readThreads)
     } yield (writeXa, readXa)
+  }
+
+  def periodicStorageSizeMetrics[F[_]: Concurrent: Timer: Metrics](
+      conf: Configuration,
+      updatePeriod: FiniteDuration = 15.seconds
+  ): Resource[F, F[Unit]] = {
+    implicit val metricsSource = Metrics.BaseSource / "storage"
+    val serverDataDir          = conf.server.dataDir.toFile
+    // The node configuration doesn't know where the global state is,
+    // but by default it's .mdb files under a subdirectory of the data dir.
+    // NOTE: Doesn't work with docker, separate containers.
+    val maybeGlobalStateDir =
+      Option(conf.server.dataDir.resolve("global_state")).map(_.toFile).filter(_.exists)
+
+    val sqlFileFilter: IOFileFilter = new WildcardFileFilter("sqlite*")
+    val sqlDirFilter: IOFileFilter  = null
+
+    val getSizes = Sync[F].delay {
+      val dataDirSize        = FileUtils.sizeOfDirectory(serverDataDir)
+      val sqliteFiles        = FileUtils.listFiles(serverDataDir, sqlFileFilter, sqlDirFilter)
+      val sqliteSize         = sqliteFiles.asScala.map(_.length).sum
+      val globalStateDirSize = maybeGlobalStateDir.fold(0L)(FileUtils.sizeOfDirectory)
+      (dataDirSize, sqliteSize, globalStateDirSize)
+    }
+
+    val update = for {
+      (dirS, sqlS, gsS) <- getSizes
+      _                 <- Metrics[F].setGauge("data-dir-size-bytes", dirS)
+      _                 <- Metrics[F].setGauge("sqlite-size-bytes", sqlS)
+      _                 <- Metrics[F].setGauge("global-state-size-bytes", gsS)
+      _                 <- Timer[F].sleep(updatePeriod)
+    } yield ()
+
+    update.forever.background
   }
 }

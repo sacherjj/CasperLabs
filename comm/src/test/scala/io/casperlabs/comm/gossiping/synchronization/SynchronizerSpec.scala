@@ -521,7 +521,8 @@ object SynchronizerSpec {
         minBlockCountToCheckWidth = minBlockCountToCheckWidth,
         maxBondingRate = maxBondingRate,
         maxDepthAncestorsRequest = maxDepthAncestorsRequest,
-        disableValidations = false
+        disableValidations = false,
+        maxParallel = Int.MaxValue
       ).flatMap { synchronizer =>
           test(synchronizer, TestVariables(requestsCounter, requestsGauge, knownHashes))
         }

@@ -293,10 +293,10 @@ class GrpcGossipServiceSpec
     implicit val propCheckConfig         = PropertyCheckConfiguration(minSuccessful = 1)
     implicit override val patienceConfig = PatienceConfig(15.seconds, 500.millis)
     implicit override val consensusConfig = ConsensusConfig(
-      maxSessionCodeBytes = 2500 * 1024,
-      minSessionCodeBytes = 1500 * 1024,
-      maxPaymentCodeBytes = 900 * 1024,
-      minPaymentCodeBytes = 800 * 1024
+      maxSessionCodeBytes = 200 * 1024,
+      minSessionCodeBytes = 100 * 1024,
+      maxPaymentCodeBytes = 50 * 1024,
+      minPaymentCodeBytes = 10 * 1024
     )
 
     override def rpcName: String = "getBlocksChunked"

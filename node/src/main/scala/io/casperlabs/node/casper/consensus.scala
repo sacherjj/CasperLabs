@@ -339,12 +339,18 @@ object Highway {
                      isSynced = isSyncedRef.get
                    )
 
+      validateSemaphore <- Resource.liftF(
+                            Semaphore[F](conf.server.validateMaxParallelBlocks.value.toLong)
+                          )
+
       consensusEff = new Consensus[F] {
         override def validateSummary(summary: BlockSummary): F[Unit] =
           Validation[F].blockSummary(summary, chainName)
 
         override def validateAndAddBlock(block: Block): F[Unit] =
-          supervisor.validateAndAddBlock(block).whenA(block != genesis)
+          validateSemaphore
+            .withPermit(supervisor.validateAndAddBlock(block))
+            .whenA(block != genesis)
 
         override def onGenesisApproved(genesisBlockHash: ByteString): F[Unit] =
           emitGenesis(genesisBlockHash) >>

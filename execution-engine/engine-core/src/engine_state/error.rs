@@ -85,12 +85,6 @@ impl From<mint::Error> for Error {
     }
 }
 
-impl From<!> for Error {
-    fn from(error: !) -> Self {
-        match error {}
-    }
-}
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct RootNotFound(Blake2bHash);
 

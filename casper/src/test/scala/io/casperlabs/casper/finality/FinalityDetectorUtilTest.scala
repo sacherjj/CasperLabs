@@ -180,7 +180,7 @@ class FinalityDetectorUtilTest
 
   it should "find orphans across eras" in withCombinedStorage() { implicit storage =>
     // The switch block doesn't have B in its justification, but later
-    // when another block is finalized in the child era, C should be
+    // when another block is finalized in the child era, B should be
     // marked as an orphan.
     //
     // G = A = | S

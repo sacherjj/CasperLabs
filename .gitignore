@@ -64,6 +64,7 @@ node/src/main/resources/**/*.wasm
 client/src/main/resources/*.wasm
 explorer/contracts/**/*.wasm
 integration-testing/**/*.wasm
+client-py/**/*.wasm
 
 .make
 # temporary generated sbt file with automatic build reloading configuration,
