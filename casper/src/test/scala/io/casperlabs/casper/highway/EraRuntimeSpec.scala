@@ -4,6 +4,7 @@ import cats.{Applicative, Id, Show}
 import cats.syntax.show._
 import cats.syntax.option._
 import cats.syntax.applicative._
+import cats.syntax.flatMap._
 import cats.effect.{Clock, Sync}
 import cats.effect.concurrent.{Ref, Semaphore}
 import com.google.protobuf.ByteString
@@ -32,11 +33,13 @@ import org.scalactic.source
 import org.scalactic.Prettifier
 import org.scalatest.prop.GeneratorDrivenPropertyChecks.{forAll => forAllGen}
 import org.scalacheck._
-
+import scala.annotation.tailrec
 import scala.concurrent.duration._
 import java.time.temporal.ChronoUnit
 
 import io.casperlabs.casper.highway.HighwayEvent.HandledLambdaMessage
+import io.casperlabs.storage.dag.AncestorsStorage
+import io.casperlabs.storage.dag.DagLookup
 
 class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUtils {
   import EraRuntimeSpec._
@@ -166,6 +169,34 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
     new MockMessageProducer[Id](validator)
   }
 
+  implicit def defaultAncestorStorage(implicit ds: DagStorage[Id]): AncestorsStorage[Id] =
+    new AncestorsStorage[Id] with DagLookup[Id] {
+      override implicit val MT: MonadThrowable[Id] = syncId
+
+      override def findAncestor(block: BlockHash, distance: Long): Id[Option[BlockHash]] =
+        lookupUnsafe(block).flatMap(loop(_, distance))
+
+      override def lookup(blockHash: BlockHash): Id[Option[Message]] =
+        ds.getRepresentation.flatMap(_.lookup(blockHash))
+
+      override def contains(blockHash: BlockHash): Id[Boolean] =
+        ds.getRepresentation.flatMap(_.contains(blockHash))
+
+      @tailrec private def loop(
+          msg: Message,
+          distance: Long
+      ): Option[BlockHash] =
+        if (distance == 0) Some(msg.messageHash)
+        else {
+          lookup(msg.parentBlock) match {
+            case Some(parent) =>
+              loop(parent, distance - 1)
+            case None =>
+              None
+          }
+        }
+    }
+
   val messageProducerWithPendingDeploys: String => BlockDagStorage[Id] => MessageProducer[Id] = {
     validator => implicit bds =>
       new MockMessageProducer[Id](validator) {
@@ -198,7 +229,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC)
+    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC, defaultAncestorStorage)
 
   /** Create a runtime given an era that's supposedly the child era of another one;
     * otherwise we should be using `genesisEraRuntime` instead. For the same reason
@@ -230,7 +261,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       roundExponent,
       isSyncedRef.get,
       leaderSequencer
-    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC)
+    )(syncId, makeSemaphoreId, C, M, L, DS, ES, FS, FC, defaultAncestorStorage)
 
   // Make it easier to share common dependencies.
   // TODO (NODE-1199): Use HighwayFixture instead for all tests.
@@ -639,7 +670,7 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
 
           "only cite the lambda message and validators own latest message" in {
             var forkChoiceFun: MockForkChoice.ForkChoiceFun =
-              (_, _) => sys.error("Fork choice unassigned.")
+              (_, _) => ForkChoice.Result(genesis, Set.empty)
 
             implicit val ds = defaultBlockDagStorage
             implicit val fc = MockForkChoice[Id](genesis, Some(forkChoiceFun(_, _)))
@@ -924,20 +955,43 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
           }
 
           "randomize the omega delay" in {
-            val ticks: List[Long] = List
-              .fill(10) {
-                runtime.handleAgenda(Agenda.StartRound(roundId)).value.collect {
-                  case Agenda.DelayedAction(tick, _: Agenda.CreateOmegaMessage) =>
-                    tick
-                }
+            implicit val clock = TestClock.adjustable[Id](now)
+
+            val runtime = genesisEraRuntime(
+              "Alice".some,
+              leaderSequencer = mockSequencer("Alice"),
+              roundExponent = exponent
+            )
+
+            val omegaDelays: List[Long] = List
+              .range(0L, 10L)
+              .map { i =>
+                val instant = conf.genesisEraStart plus (roundLength * i)
+                val roundId = conf.toTicks(instant)
+
+                // Omega is based on time, not just the round.
+                clock.set(conf.toInstant(roundId))
+
+                val omegaTick =
+                  runtime
+                    .handleAgenda(Agenda.StartRound(roundId))
+                    .value
+                    .collectFirst {
+                      case Agenda.DelayedAction(tick, _: Agenda.CreateOmegaMessage) =>
+                        tick
+                    }
+                    .get
+
+                omegaTick - roundId
               }
-              .flatten
 
-            ticks.toSet.size should be > 1
+            omegaDelays.toSet.size should be > 1
 
-            forAll(ticks) { tick =>
-              tick should be >= (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeStart).toLong
-              tick should be < (roundId + (nextRoundId - roundId) * conf.omegaMessageTimeEnd).toLong
+            val ticksPerRound = Ticks.roundLength(exponent)
+
+            forAll(omegaDelays) { ticks =>
+              ticks shouldBe >=((ticksPerRound * conf.omegaMessageTimeStart).toLong)
+              ticks shouldBe <=((ticksPerRound * conf.omegaMessageTimeEnd).toLong)
             }
           }
         }
@@ -1397,6 +1451,27 @@ class EraRuntimeSpec extends WordSpec with Matchers with Inspectors with TickUti
       EraRuntime.isSameRoundAs(a)(d) shouldBe false
     }
   }
+
+  "omegaOffset" should {
+    "go from 0.0 to 1.0" in {
+      val expected = List(
+        "Alice"   -> 0.0,
+        "Bob"     -> 0.33,
+        "Charlie" -> 0.66,
+        "Dave"    -> 1.0
+      )
+      val names = expected.unzip._1
+
+      Inspectors.forAll(expected) {
+        case (name, offset) =>
+          EraRuntime.omegaOffset(names, name) shouldBe offset +- 0.01
+      }
+    }
+
+    "return 0.5 for single item" in {
+      EraRuntime.omegaOffset(List("Alice"), "Alice") shouldBe 0.5
+    }
+  }
 }
 
 object EraRuntimeSpec {
@@ -1425,8 +1500,12 @@ object EraRuntimeSpec {
     messages.map(m => m.validatorId -> m.messageHash).toMap
 
   def mockSequencer(validator: String) = new LeaderSequencer {
-    def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
+    def leaderFunction[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
       ((_: Ticks) => validatorKey(validator)).pure[F]
+
+    def omegaFunction[F[_]: MonadThrowable](era: Era): F[OmegaFunction] =
+      // It was completely random before, so we can use the real randomizer.
+      LeaderSequencer.omegaFunction[F](era)
   }
 
   def insert[F[_]: Monad, A <: Message](

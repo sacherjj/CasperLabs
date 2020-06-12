@@ -14,6 +14,9 @@ import io.casperlabs.shared.{Log, LogSource}
 import scala.concurrent.duration.FiniteDuration
 import scala.io.Source
 import scala.util.{Failure, Success, Try}
+import eu.timepit.refined._
+import eu.timepit.refined.api.Refined
+import eu.timepit.refined.numeric._
 
 final case class CasperConf(
     validatorPublicKey: Option[String],
@@ -30,7 +33,8 @@ final case class CasperConf(
     autoProposeBallotInterval: FiniteDuration,
     autoProposeAccInterval: FiniteDuration,
     autoProposeAccCount: Int,
-    minTtl: FiniteDuration
+    minTtl: FiniteDuration,
+    maxBlockCost: Long Refined NonNegative
 ) extends SubConfig
 
 object CasperConf {

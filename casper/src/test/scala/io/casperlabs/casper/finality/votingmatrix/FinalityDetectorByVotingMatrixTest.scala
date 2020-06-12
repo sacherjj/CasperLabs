@@ -2,13 +2,14 @@ package io.casperlabs.casper.finality.votingmatrix
 
 import cats.data.StateT
 import cats.effect.Sync
+import cats.effect.concurrent.Ref
 import cats.implicits._
 import cats.mtl.FunctorRaise
 import com.github.ghik.silencer.silent
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
-import io.casperlabs.casper.consensus.Block.MessageType
+import io.casperlabs.casper.consensus.Block.{MessageRole, MessageType}
 import io.casperlabs.casper.consensus.info.Event.Value.{BlockAdded, NewFinalizedBlock}
 import io.casperlabs.casper.equivocations.EquivocationDetector
 import io.casperlabs.casper.finality.CommitteeWithConsensusValue
@@ -117,6 +118,118 @@ class FinalityDetectorByVotingMatrixTest
                      )
       _ = c3 shouldBe Seq(CommitteeWithConsensusValue(Set(v1, v2), 20, a1.blockHash))
     } yield ()
+  }
+
+  it should "finalize as many blocks as possible in a round even with omega blocks (TNET-36)" in withCombinedStorage() {
+    implicit storage =>
+      val vA    = generateValidator("A")
+      val vB    = generateValidator("B")
+      val vC    = generateValidator("C")
+      val vD    = generateValidator("D")
+      val bonds = List(vA, vB, vC, vD).map(Bond(_, 10))
+
+      def makeCreator(genesis: Block, lfbRef: Ref[Task, Block])(
+          implicit m: FinalityDetectorVotingMatrix[Task]
+      ) =
+        (
+            validator: ByteString,
+            messageType: MessageType,
+            messageRole: MessageRole,
+            parent: Block,
+            justifications: Map[Validator, Block]
+        ) =>
+          for {
+            lfb <- lfbRef.get
+            (block, _) <- createBlockAndUpdateFinalityDetector[Task](
+                           parentsHashList = Seq(parent.blockHash),
+                           keyBlockHash = genesis.blockHash,
+                           validator,
+                           bonds,
+                           lfb = lfb,
+                           messageType = messageType,
+                           messageRole = messageRole,
+                           justifications = justifications.mapValues(_.blockHash),
+                           check = false
+                         )
+          } yield block
+
+      val BLOC = MessageType.BLOCK
+      val BALL = MessageType.BALLOT
+      val CONF = MessageRole.CONFIRMATION
+      val PROP = MessageRole.PROPOSAL
+      val WITN = MessageRole.WITNESS
+
+      /* The DAG looks like:
+       *
+       * A5 ---------
+       *             \
+       *               d4
+       *             /
+       *          c4
+       *        /
+       *     b4
+       *   /
+       * a4 ----------
+       * |  \    \    \
+       * |   b3   c3   d3
+       * |  /    /    /
+       * A3 ---------
+       *   \------
+       *    \     \
+       *     |     \
+       *     |      \
+       *     b2      \
+       *   /    \     \
+       * a2       C2   d2
+       * |  \   /  |   |
+       * |   b1   c1   d1
+       * |  /    /    /
+       * A1 ---------
+       *  \
+       *   G
+       */
+
+      for {
+        genesis <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        dag     <- storage.getRepresentation
+        implicit0(detector: FinalityDetectorVotingMatrix[Task]) <- mkVotingMatrix(
+                                                                    dag,
+                                                                    genesis.blockHash
+                                                                  )
+        lfbRef <- Ref.of[Task, Block](genesis)
+        create = makeCreator(genesis, lfbRef)
+
+        a1 <- create(vA, BLOC, PROP, genesis, Map.empty)
+        b1 <- create(vB, BALL, CONF, a1, Map(vA -> a1))
+        c1 <- create(vC, BALL, CONF, a1, Map(vA -> a1))
+        d1 <- create(vD, BALL, CONF, a1, Map(vA -> a1))
+        a2 <- create(vA, BALL, WITN, a1, Map(vA -> a1, vB -> b1))
+        c2 <- create(vC, BLOC, WITN, a1, Map(vA -> a1, vB -> b1, vC -> c1))
+        d2 <- create(vD, BALL, WITN, a1, Map(vA -> a1, vD -> d1))
+        b2 <- create(vB, BALL, WITN, c2, Map(vA -> a2, vB -> b1, vC -> c2))
+        a3 <- create(vA, BLOC, PROP, c2, Map(vA -> a2, vB -> b2, vC -> c2, vD -> d2))
+
+        f1 <- detector.checkFinality(dag)
+        _  = f1 should have size 1
+        _  = f1.head.consensusValue shouldBe a1.blockHash
+        _  = f1.head.validator shouldBe Set(vA, vB, vC)
+        _  <- lfbRef.set(a1)
+
+        b3 <- create(vB, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2))
+        c3 <- create(vC, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2))
+        d3 <- create(vD, BALL, CONF, a3, Map(vA -> a3, vB -> b2, vC -> c2, vD -> d2))
+        a4 <- create(vA, BALL, WITN, a3, Map(vA -> a3, vB -> b3, vC -> c3, vD -> d3))
+        b4 <- create(vB, BALL, WITN, a3, Map(vA -> a4, vB -> b3, vC -> c3, vD -> d3))
+        c4 <- create(vC, BALL, WITN, a3, Map(vA -> a4, vB -> b4, vC -> c3, vD -> d3))
+        d4 <- create(vD, BALL, WITN, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d3))
+        a5 <- create(vA, BLOC, PROP, a3, Map(vA -> a4, vB -> b4, vC -> c4, vD -> d4))
+
+        f2 <- detector.checkFinality(dag)
+        _  = f2.map(_.consensusValue) shouldBe List(c2.blockHash, a3.blockHash)
+        _  = f2.last.validator shouldBe Set(vA, vB, vC, vD)
+        _  <- lfbRef.set(a3)
+
+      } yield ()
   }
 
   it should "detect finality as appropriate" in withCombinedStorage() { implicit storage =>
@@ -838,7 +951,9 @@ class FinalityDetectorByVotingMatrixTest
       justifications: collection.Map[Validator, BlockHash] = HashMap.empty[Validator, BlockHash],
       postStateHash: ByteString = ByteString.copyFromUtf8(scala.util.Random.nextString(64)),
       messageType: Block.MessageType = Block.MessageType.BLOCK,
-      lfb: Block
+      messageRole: Block.MessageRole = Block.MessageRole.UNDEFINED,
+      lfb: Block,
+      check: Boolean = true
   ): F[(Block, Seq[CommitteeWithConsensusValue])] =
     for {
       block <- createMessage[F](
@@ -853,13 +968,10 @@ class FinalityDetectorByVotingMatrixTest
       dag     <- DagStorage[F].getRepresentation
       message <- Sync[F].fromTry(Message.fromBlock(block))
       // EquivocationDetector works before adding block to DAG
-      _ <- Sync[F].attempt(
-            EquivocationDetector
-              .checkEquivocation(dag, message, isHighway = false)
-          )
-      _                 <- BlockStorage[F].put(block.blockHash, block, Map.empty)
-      msg               <- Sync[F].fromTry(Message.fromBlock(block))
-      _                 <- FinalityDetectorVotingMatrix[F].addMessage(dag, msg, lfb.blockHash)
-      finalizedBlockOpt <- FinalityDetectorVotingMatrix[F].checkFinality(dag)
+      _ <- EquivocationDetector.checkEquivocation(dag, message, isHighway = false).attempt
+      _ <- BlockStorage[F].put(block.blockHash, block, Map.empty)
+      _ <- FinalityDetectorVotingMatrix[F].addMessage(dag, message, lfb.blockHash)
+      finalizedBlockOpt <- if (check) FinalityDetectorVotingMatrix[F].checkFinality(dag)
+                          else Nil.pure[F]
     } yield block -> finalizedBlockOpt
 }

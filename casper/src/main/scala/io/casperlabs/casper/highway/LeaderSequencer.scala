@@ -11,19 +11,28 @@ import java.security.SecureRandom
 import java.nio.{ByteBuffer, ByteOrder}
 
 trait LeaderSequencer {
-  def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction]
+  def leaderFunction[F[_]: MonadThrowable](era: Era): F[LeaderFunction]
+  def omegaFunction[F[_]: MonadThrowable](era: Era): F[OmegaFunction]
 }
 
 object LeaderSequencer extends LeaderSequencer {
 
-  override def apply[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
+  override def leaderFunction[F[_]: MonadThrowable](era: Era): F[LeaderFunction] =
+    withBonds[F, LeaderFunction](era)(leaderFunction(_, _))
+
+  override def omegaFunction[F[_]: MonadThrowable](era: Era): F[OmegaFunction] =
+    withBonds[F, OmegaFunction](era)(omegaFunction(_, _))
+
+  private def withBonds[F[_]: MonadThrowable, T](
+      era: Era
+  )(f: (Array[Byte], NonEmptyList[Bond]) => T): F[T] =
     MonadThrowable[F].fromOption(
       NonEmptyList
         .fromList {
           era.bonds.filterNot(x => x.getStake.value.isEmpty || x.getStake.value == "0").toList
         }
         .map { bonds =>
-          apply(era.bookingBlockHash.toByteArray, bonds)
+          f(era.bookingBlockHash.toByteArray, bonds)
         },
       new IllegalStateException("There must be some bonded validators in the era!")
     )
@@ -49,7 +58,7 @@ object LeaderSequencer extends LeaderSequencer {
 
   /** Make a function that assigns a leader to each round, deterministically,
     * with a relative frequency based on their weight. */
-  def apply(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): LeaderFunction = {
+  def leaderFunction(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): LeaderFunction = {
     // Make a list of (validator, from, to) triplets.
     type ValidatorRange = (PublicKeyBS, BigInt, BigInt)
 
@@ -88,14 +97,7 @@ object LeaderSequencer extends LeaderSequencer {
     }
 
     (tick: Ticks) => {
-      // On Linux SecureRandom uses NativePRNG, and ignores the seed.
-      // Re-seeding also doesn't reset the seed, just augments it, so a new instance is required.
-      // https://stackoverflow.com/questions/50107982/rhe-7-not-respecting-java-secure-random-seed
-      // NODE-1095: Find a more secure, cross platform algorithm.
-      val random = SecureRandom.getInstance("SHA1PRNG", "SUN")
-      // Ticks need to be deterministic, so each time we have to reset the seed.
-      val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
-      random.setSeed(tickSeed)
+      val random = getRandom(leaderSeed, tick)
       // Pick a number between [0, 1) and use it to find a validator.
       // NODE-1096: If possible generate a random BigInt directly, without involving a Double.
       val r = BigDecimal.valueOf(random.nextDouble())
@@ -106,10 +108,45 @@ object LeaderSequencer extends LeaderSequencer {
     }
   }
 
+  /** Make a function that assigns an order to all the validators within a round, deterministically. */
+  def omegaFunction(leaderSeed: Array[Byte], bonds: NonEmptyList[Bond]): OmegaFunction = {
+    val validators = bonds.map(b => PublicKey(b.validatorPublicKey))
+    (tick: Ticks) => {
+      val random = getRandom(leaderSeed, tick)
+      val varray = validators.toIterable.toArray
+      shuffle(varray, random)
+    }
+  }
+
+  private def getRandom(leaderSeed: Array[Byte], tick: Ticks): SecureRandom = {
+    // On Linux SecureRandom uses NativePRNG, and ignores the seed.
+    // Re-seeding also doesn't reset the seed, just augments it, so a new instance is required.
+    // https://stackoverflow.com/questions/50107982/rhe-7-not-respecting-java-secure-random-seed
+    // NODE-1095: Find a more secure, cross platform algorithm.
+    val random = SecureRandom.getInstance("SHA1PRNG", "SUN")
+    // Ticks need to be deterministic, so each time we have to reset the seed.
+    val tickSeed = leaderSeed ++ longToBytesLittleEndian(tick)
+    random.setSeed(tickSeed)
+    random
+  }
+
   private def longToBytesLittleEndian(i: Long): Array[Byte] =
     ByteBuffer
       .allocate(8)
       .order(ByteOrder.LITTLE_ENDIAN)
       .putLong(i)
       .array
+
+  /** Shuffles an array in place using the Knuth algorithm.
+    * https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+    * */
+  private def shuffle[T](arr: Array[T], rand: SecureRandom): Array[T] = {
+    for (i <- arr.size - 1 to 1 by -1) {
+      val r = rand.nextInt(i + 1)
+      val t = arr(i)
+      arr(i) = arr(r)
+      arr(r) = t
+    }
+    arr
+  }
 }

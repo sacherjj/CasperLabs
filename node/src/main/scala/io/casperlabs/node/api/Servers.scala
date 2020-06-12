@@ -91,7 +91,7 @@ object Servers {
       shutdownTimeout: FiniteDuration,
       ingressScheduler: Scheduler,
       maybeSslContext: Option[SslContext],
-      isReadOnlyNode: Boolean
+      isDeployEnabled: Boolean
   )(implicit logId: Log[Id], metricsId: Metrics[Id]): Resource[F, Unit] = {
     implicit val s = ingressScheduler
     GrpcServer(
@@ -103,7 +103,7 @@ object Servers {
             DiagnosticsGrpcMonix.bindService(_, ingressScheduler)
           },
         (_: Scheduler) =>
-          GrpcCasperService(isReadOnlyNode) map {
+          GrpcCasperService(isDeployEnabled) map {
             CasperGrpcMonix.bindService(_, ingressScheduler)
           }
       ),

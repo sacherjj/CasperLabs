@@ -22,6 +22,7 @@ import monix.tail.Iterant
 
 import scala.collection.mutable.PriorityQueue
 import scala.util.control.NonFatal
+import io.casperlabs.comm.gossiping.downloadmanager.DownloadManager
 
 /** Server side implementation talking to the rest of the node such as casper, storage, download manager. */
 class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
@@ -37,11 +38,21 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
 ) extends GossipService[F] {
   import GossipServiceServer._
 
-  case class NewBlocksInfo(
-      blockHash: ByteString,
+  case class NewItemInfo[T](
+      identifier: T,
       isScheduled: Boolean,
       isDownloaded: Boolean
   )
+  object NewItemInfo {
+    def fromDownloadManager(
+        dm: DownloadManager[F]
+    )(identifier: dm.Identifier): F[NewItemInfo[dm.Identifier]] =
+      for {
+        isScheduled <- dm.isScheduled(identifier)
+        isDownloaded <- if (isScheduled) false.pure[F]
+                       else dm.wasDownloaded(identifier)
+      } yield NewItemInfo(identifier, isScheduled, isDownloaded)
+  }
 
   //TODO: Rate limit here as well?
   def newDeploys(request: NewDeploysRequest): F[NewDeploysResponse] =
@@ -49,20 +60,25 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     // reply about those that we are going to download and relay them,
     // then schedule the downloads.
     request.deployHashes.distinct.toList
-      .filterA { deployHash =>
-        backend.hasDeploy(deployHash).map(!_)
+      .traverse { deployHash =>
+        NewItemInfo.fromDownloadManager(deployDownloadManager)(deployHash)
       }
-      .flatMap { newDeployHashes =>
-        if (newDeployHashes.isEmpty) {
+      .map(_.filterNot(_.isDownloaded))
+      .flatMap { newDeploys =>
+        if (newDeploys.isEmpty) {
           NewDeploysResponse(isNew = false).pure[F]
         } else {
+          val (scheduled, unscheduled) = newDeploys.partition(_.isScheduled)
           for {
             remoteService <- connector(request.getSender)
+
+            // Run actions in the background asynchronously.
             // TODO: Defend against malicious nodes similar to Synchronizer
-            // Runs in background asynchronously
+
+            // Schedule new deploys.
             _ <- (remoteService
                   .streamDeploySummaries(
-                    StreamDeploySummariesRequest(newDeployHashes)
+                    StreamDeploySummariesRequest(unscheduled.map(_.identifier))
                   )
                   .toListL >>= { deploySummaries =>
                   deploySummaries
@@ -72,6 +88,18 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
                           .scheduleDownload(deploySummary, request.getSender, relay = true)
                     )
                 }).forkAndLog.whenA(deployGossipEnabled)
+
+            // Add alternative sources for repeated notifications.
+            _ <- (
+                  scheduled
+                    .map(_.identifier)
+                    .toList
+                    .traverse { deployHash =>
+                      deployDownloadManager.addSource(deployHash, request.getSender)
+                    }
+                  )
+                  .forkAndLog
+                  .whenA(deployGossipEnabled)
           } yield NewDeploysResponse(isNew = true)
         }
       }
@@ -116,10 +144,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
   ): F[T] =
     request.blockHashes.distinct.toList
       .traverse { blockHash =>
-        for {
-          isScheduled  <- blockDownloadManager.isScheduled(blockHash)
-          isDownloaded <- if (isScheduled) false.pure[F] else backend.hasBlock(blockHash)
-        } yield NewBlocksInfo(blockHash, isScheduled, isDownloaded)
+        NewItemInfo.fromDownloadManager(blockDownloadManager)(blockHash)
       }
       .map(_.filterNot(_.isDownloaded))
       .flatMap { newBlocks =>
@@ -140,7 +165,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     * asynchronously in the background. */
   private def sync(
       source: Node,
-      newBlocks: Set[NewBlocksInfo],
+      newBlocks: Set[NewItemInfo[ByteString]],
       skipRelaying: Boolean
   ): F[Either[SyncError, Vector[WaitHandle[F]]]] = {
     def logSyncError(syncError: SyncError) = {
@@ -152,17 +177,17 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
     val trySync: F[Either[SyncError, Vector[WaitHandle[F]]]] = for {
       _ <- Log[F].debug(
             s"Received notification about ${newBlocks.size} new block(s) from ${source.show -> "peer"}: ${newBlocks
-              .map(_.blockHash)
+              .map(_.identifier)
               .map(Utils.hex)
               .mkString(", ") -> "blocks"}"
           )
 
-      newBlockHashes           = newBlocks.map(_.blockHash)
+      newBlockHashes           = newBlocks.map(_.identifier)
       (scheduled, unscheduled) = newBlocks.partition(_.isScheduled)
 
       // Add the source as alternatives for already scheduled items.
       oldWaiters <- scheduled
-                     .map(_.blockHash)
+                     .map(_.identifier)
                      .toVector
                      .traverse(blockDownloadManager.addSource(_, source))
 
@@ -170,7 +195,7 @@ class GossipServiceServer[F[_]: Concurrent: Parallel: Log: Metrics](
       errorOrDag <- if (unscheduled.nonEmpty)
                      synchronizer.syncDag(
                        source = source,
-                       targetBlockHashes = unscheduled.map(_.blockHash)
+                       targetBlockHashes = unscheduled.map(_.identifier)
                      )
                    else Vector.empty[BlockSummary].asRight[Synchronizer.SyncError].pure[F]
 
@@ -380,8 +405,6 @@ object GossipServiceServer {
   /** Interface to storage and consensus. */
   trait Backend[F[_]] {
     def getDeploySummary(deployHash: ByteString): F[Option[DeploySummary]]
-    def hasBlock(blockHash: ByteString): F[Boolean]
-    def hasDeploy(deployHash: ByteString): F[Boolean]
     def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]
     def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean): F[Option[Block]]
     def getDeploys(deployHashes: Set[ByteString]): Iterant[F, Deploy]
