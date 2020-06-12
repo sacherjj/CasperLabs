@@ -161,7 +161,7 @@ class BlockDetails extends React.Component<
     let header = summary.getHeader()!;
     let id = encodeBase16(summary.getBlockHash_asU8());
     let idB64 = summary.getBlockHash_asB64();
-    let validatorId = encodeBase16(header.getValidatorPublicKey_asU8());
+    let validatorId = encodeBase16(header.getValidatorPublicKeyHash_asU8());
     let attrs: Array<[string, any]> = [
       ['Block Hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
       [

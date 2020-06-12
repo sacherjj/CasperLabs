@@ -33,7 +33,6 @@ export class BlockContainer {
   init(blockHash: ByteArray) {
     this.blockHash = blockHash;
     this.block = null;
-    this.neighborhood = null;
     this.deploys = null;
     this.balances.clear();
   }
