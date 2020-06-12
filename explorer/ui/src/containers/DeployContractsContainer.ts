@@ -73,6 +73,8 @@ type FormDeployArguments = FormState<FormDeployArgument[]>;
 export type DeployConfiguration = {
   contractType: FieldState<DeployUtil.ContractType | null>,
   contractHash: FieldState<string>,
+  contractName: FieldState<string>,
+  entryPoint: FieldState<string>,
   paymentAmount: FieldState<number>,
   fromAddress: FieldState<string>
 }
@@ -106,22 +108,30 @@ export class DeployContractsContainer {
       numberGreaterThan(0),
       validateInt
     ),
-    fromAddress: new FieldState<string>('')
+    fromAddress: new FieldState<string>(''),
+    contractName: new FieldState<string>('') ,
+    entryPoint: new FieldState<string>('call'),
   }).compose().validators(deployConfiguration => {
     if (deployConfiguration.contractType.$ === DeployUtil.ContractType.Hash) {
       let value = deployConfiguration.contractHash.value;
-      let v = validateBase16(value) || valueRequired(value);
+      let v = validateBase16(value) || valueRequired(value) || valueRequired(deployConfiguration.entryPoint.value);
       if (v !== false) {
         deployConfiguration.contractHash.setError(v);
       }
       return v;
-    } else {
+    } else if (deployConfiguration.contractType.$ === DeployUtil.ContractType.WASM) {
       // WASM
       if (!this.selectedFile) {
         const msg = 'Upload WASM file firstly';
         alert(msg);
         return msg;
       }
+    } else if (deployConfiguration.contractType.$ === DeployUtil.ContractType.Name){
+      let v = valueRequired(deployConfiguration.contractName.value) || valueRequired(deployConfiguration.entryPoint.value);
+      if (v !== false) {
+        deployConfiguration.contractHash.setError(v);
+      }
+      return v;
     }
     return false;
   });
@@ -281,20 +291,26 @@ export class DeployContractsContainer {
       const config = deployConfigurationForm.value;
       const args = deployArguments.value;
       let type: DeployUtil.ContractType;
-      let session: ByteArray;
-      if (config.contractType.value === DeployUtil.ContractType.Hash) {
-        type = DeployUtil.ContractType.Hash;
-        session = decodeBase16(config.contractHash.value);
-      } else {
-        type = DeployUtil.ContractType.WASM;
-        session = this.selectedFileContent!;
-      }
+      let session: ByteArray | string;
+
       let argsProto = args.map((arg: FormState<DeployArgument>) => {
         return this.buildArgument(arg);
       });
-      const paymentAmount = config.paymentAmount.value;
+      const paymentAmount = JSBI.BigInt(config.paymentAmount.value);
 
-      return DeployUtil.makeDeploy(argsProto, type, session, null, JSBI.BigInt(paymentAmount), publicKey);
+      if (config.contractType.value === DeployUtil.ContractType.WASM) {
+        session = this.selectedFileContent!;
+        return DeployUtil.makeDeploy(argsProto, DeployUtil.ContractType.WASM, session, null, paymentAmount, publicKey);
+      } else if (config.contractType.value === DeployUtil.ContractType.Hash){
+        session = decodeBase16(config.contractHash.value);
+        const entryPoint = config.entryPoint.value;
+        return DeployUtil.makeDeploy(argsProto, DeployUtil.ContractType.Hash, session, null, paymentAmount, publicKey, [], entryPoint);
+      } else if (config.contractType.value === DeployUtil.ContractType.Name){
+        session = config.contractName.value;
+        const entryPoint = config.entryPoint.value;
+        return DeployUtil.makeDeploy(argsProto, DeployUtil.ContractType.Name, session, null, paymentAmount, publicKey, [], entryPoint);
+      }
+      return Promise.resolve(null);
     }
   }
 
