@@ -230,7 +230,6 @@ export class DeployContractsContainer {
     }
   }
 
-
   @action.bound
   async openSignModal() {
     let v1 = await this.deployConfiguration.validate();
