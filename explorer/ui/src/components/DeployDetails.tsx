@@ -114,7 +114,10 @@ const ResultsTable = observer(
         rows={props.deploy && props.deploy.getProcessingResultsList()}
         renderRow={(proc, i) => {
           const id = encodeBase16(
-            proc.getBlockInfo()!.getSummary()!.getBlockHash_asU8()
+            proc
+              .getBlockInfo()!
+              .getSummary()!
+              .getBlockHash_asU8()
           );
           return (
             <tr key={i}>
@@ -129,7 +132,11 @@ const ResultsTable = observer(
                 <Balance balance={props.balances.get(id)} />
               </td>
               <td className="text-center">
-                {proc.getIsError() ? <FailIcon /> : <SuccessIcon />}
+                {proc.getIsError() ? (
+                  <FailIcon/>
+                ) : (
+                  <SuccessIcon/>
+                  )}
               </td>
               <td>{proc.getErrorMessage()}</td>
             </tr>

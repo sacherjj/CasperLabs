@@ -77,47 +77,47 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
       // Help IDE infer that the type of accountForm is ImportAccountFormData
       let importAccountForm = accountForm;
       modalAccountForm = (
-        <Modal
-          id="import-account"
-          title="Import Account Public Key"
-          submitLabel="Save"
-          onSubmit={() => this.props.auth.importAccount()}
-          onClose={() => {
-            this.props.auth.accountForm = null;
-          }}
-          error={importAccountForm.error}
-        >
-          <Form>
-            <FileSelect
-              id="id-file-select"
-              label={importAccountForm.fileName || 'Choose Public Key File'}
-              handleFileSelect={e => {
-                importAccountForm.handleFileSelect(e);
-              }}
-            />
-            <TextField
-              id="id-account-name"
-              label="Name"
-              fieldState={importAccountForm.name}
-              placeholder="Human readable alias"
-            />
-            <TextField
-              id="id-public-key-hash-base16"
-              label="Public Key Hash (Base16)"
-              fieldState={encodeBase16(
-                publicKeyHashForEd25519(importAccountForm.publicKeyBase64.value)
-              )}
-              readonly={true}
-            />
-            <TextField
-              id="id-public-key-base16"
-              label="Public Key (Base16)"
-              fieldState={base64to16(importAccountForm.publicKeyBase64.value)}
-              readonly={true}
-            />
-          </Form>
-        </Modal>
-      );
+          <Modal
+            id="import-account"
+            title="Import Account Public Key"
+            submitLabel="Save"
+            onSubmit={() => this.props.auth.importAccount()}
+            onClose={() => {
+              this.props.auth.accountForm = null;
+            }}
+            error={importAccountForm.error}
+          >
+            <Form>
+              <FileSelect
+                id="id-file-select"
+                label={importAccountForm.fileName || 'Choose Public Key File'}
+                handleFileSelect={e => {
+                  importAccountForm.handleFileSelect(e);
+                }}
+              />
+              <TextField
+                id="id-account-name"
+                label="Name"
+                fieldState={importAccountForm.name}
+                placeholder="Human readable alias"
+              />
+              <TextField
+                id="id-public-key-hash-base16"
+                label="Public Key Hash (Base16)"
+                fieldState={encodeBase16(
+                  publicKeyHashForEd25519(importAccountForm.publicKeyBase64.value)
+                )}
+                readonly={true}
+              />
+              <TextField
+                id="id-public-key-base64"
+                label="Public Key (Base64)"
+                fieldState={importAccountForm.publicKeyBase64}
+                readonly={true}
+              />
+            </Form>
+          </Modal>
+        );
     }
     return (
       <div>

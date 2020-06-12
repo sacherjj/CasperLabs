@@ -1,6 +1,10 @@
 import React from 'react';
 import { observer } from 'mobx-react';
-import { LinkButton, ListInline, shortHash } from './Utils';
+import {
+  LinkButton,
+  ListInline,
+  shortHash
+} from './Utils';
 import { BlockDAG } from './BlockDAG';
 import DataTable from './DataTable';
 import { BlockInfo } from 'casperlabs-grpc/io/casperlabs/casper/consensus/info_pb';
@@ -34,10 +38,7 @@ class _Explorer extends React.Component<Props, {}> {
   }
 
   componentWillReceiveProps(nextProps: Props) {
-    if (
-      this.props.depth === nextProps.depth &&
-      this.props.maxRank === nextProps.maxRank
-    ) {
+    if (this.props.depth === nextProps.depth && this.props.maxRank === nextProps.maxRank) {
       return;
     }
     this.refreshWithDepthAndMaxRank(nextProps.maxRank, nextProps.depth);
@@ -79,10 +80,7 @@ class _Explorer extends React.Component<Props, {}> {
                     urlWithRankAndDepth={Pages.explorerWithMaxRankAndDepth}
                   />
                   {dag.hasBlocks && (
-                    <span>
-                      Select a block to see its details. Press Ctrl before
-                      zooming to enable horizontal only zoom mode.
-                    </span>
+                    <span>Select a block to see its details. Press Ctrl before zooming to enable horizontal only zoom mode.</span>
                   )}
                   {dag.selectedBlock && (
                     <ToggleButton
@@ -152,7 +150,7 @@ class BlockDetails extends React.Component<
     onSelect: (blockHash: string) => void;
   },
   {}
-> {
+  > {
   ref: HTMLElement | null = null;
 
   render() {
@@ -162,76 +160,80 @@ class BlockDetails extends React.Component<
     let id = encodeBase16(summary.getBlockHash_asU8());
     let idB64 = summary.getBlockHash_asB64();
     let validatorId = encodeBase16(header.getValidatorPublicKeyHash_asU8());
-    let attrs: Array<[string, any]> = [
-      ['Block Hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
+    let attrs: Array<[string, any]> =
       [
-        'Key Block Hash',
-        <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
-          {shortHash(header.getKeyBlockHash_asU8())}
-        </Link>
-      ],
-      ['j-Rank', header.getJRank()],
-      ['m-Rank', header.getMainRank()],
-      ['Round ID', header.getRoundId()],
-      ['Type', <BlockType header={header} />],
-      ['Role', <BlockRole header={header} />],
-      ['Timestamp', new Date(header.getTimestamp()).toISOString()],
-      ['Deploy Count', header.getDeployCount()],
-      ['Validator', shortHash(validatorId)],
-      ['Validator Block Number', header.getValidatorBlockSeqNum()],
-      [
-        'Validator Stake',
-        (() => {
-          let validatorBond = header
-            .getState()!
-            .getBondsList()
-            .find(
-              x =>
-                encodeBase16(x.getValidatorPublicKeyHash_asU8()) === validatorId
+        ['Block Hash', <Link to={Pages.block(id)}>{shortHash(id)}</Link>],
+        ['Key Block Hash',
+          <Link to={Pages.block(encodeBase16(header.getKeyBlockHash_asU8()))}>
+            {shortHash(header.getKeyBlockHash_asU8())}
+          </Link>],
+        ['j-Rank', header.getJRank()],
+        ['m-Rank', header.getMainRank()],
+        ['Round ID', header.getRoundId()],
+        ['Type', <BlockType header={header} />],
+        ['Role', <BlockRole header={header} />],
+        ['Timestamp', new Date(header.getTimestamp()).toISOString()],
+        ['Deploy Count', header.getDeployCount()],
+        ['Validator', shortHash(validatorId)],
+        ['Validator Block Number', header.getValidatorBlockSeqNum()],
+        [
+          'Validator Stake',
+          (() => {
+            let validatorBond = header
+              .getState()!
+              .getBondsList()
+              .find(
+                x =>
+                  encodeBase16(x.getValidatorPublicKeyHash_asU8()) === validatorId
+              );
+            // Genesis doesn't have a validator.
+            return (
+              (validatorBond &&
+                validatorBond.getStake() &&
+                Number(
+                  validatorBond.getStake()!.getValue()
+                ).toLocaleString()) ||
+              null
             );
-          // Genesis doesn't have a validator.
-          return (
-            (validatorBond &&
-              validatorBond.getStake() &&
-              Number(validatorBond.getStake()!.getValue()).toLocaleString()) ||
-            null
-          );
-        })()
-      ],
-      ['Finality', <FinalityIcon block={block} />],
-      [
-        'Parents',
-        <ul>
-          {header.getParentHashesList_asU8().map((x, idx) => (
-            <li key={idx}>
-              <BlockLink blockHash={x} onClick={this.props.onSelect} />
-            </li>
-          ))}
-        </ul>
-      ],
-      [
-        'Children',
-        <ul>
-          {this.props.blocks
-            .filter(
-              b =>
-                b
-                  .getSummary()!
-                  .getHeader()!
-                  .getParentHashesList_asB64()
-                  .findIndex(p => p === idB64) > -1
-            )
-            .map((b, idx) => (
+          })()
+        ],
+        [
+          'Finality',
+          <FinalityIcon block={block} />
+        ],
+        [
+          'Parents',
+          <ul>
+            {header.getParentHashesList_asU8().map((x, idx) => (
               <li key={idx}>
-                <BlockLink
-                  blockHash={b.getSummary()!.getBlockHash_asU8()}
-                  onClick={this.props.onSelect}
-                />
+                <BlockLink blockHash={x} onClick={this.props.onSelect} />
               </li>
             ))}
-        </ul>
-      ]
-    ];
+          </ul>
+        ],
+        [
+          'Children',
+          <ul>
+            {this.props.blocks
+              .filter(
+                b =>
+                  b
+                    .getSummary()!
+                    .getHeader()!
+                    .getParentHashesList_asB64()
+                    .findIndex(p => p === idB64) > -1
+              )
+              .map((b, idx) => (
+                <li key={idx}>
+                  <BlockLink
+                    blockHash={b.getSummary()!.getBlockHash_asU8()}
+                    onClick={this.props.onSelect}
+                  />
+                </li>
+              ))}
+          </ul>
+        ],
+      ];
     return (
       <div
         ref={x => {
