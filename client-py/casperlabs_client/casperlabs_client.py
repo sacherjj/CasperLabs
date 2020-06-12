@@ -33,7 +33,7 @@ import sys
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
 
-from . import io, reformat, common, vdag, abi, key_pairs
+from . import io, reformat, common, vdag, abi, key_holders
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
 from .contract import bundled_contract_path
@@ -245,7 +245,7 @@ class CasperLabsClient:
         self,
         private_key_pem_file: Union[str, Path] = None,
         algorithm: str = ED25519_KEY_ALGORITHM,
-        key_pair=None,
+        key_holder=None,
         deploy: bytes = None,
         deploy_file: Union[str, Path] = None,
     ):
@@ -254,7 +254,7 @@ class CasperLabsClient:
 
         :param private_key_pem_file:  File containing Private key
         :param algorithm:             Algorithm used for key pair, see consts.SUPPORTED_KEY_ALGORITHMS
-        :param key_pair:              KeyPair object as alternative to pem file and algorithm
+        :param key_holder:            KeyHolder object as alternative to pem file and algorithm
         :param deploy:                Deploy as object
         :param deploy_file:           File containing deploy
         :return: signed deploy object
@@ -263,13 +263,13 @@ class CasperLabsClient:
             if deploy_file is None:
                 raise ValueError("Must have either `deploy` or `deploy_file`")
             deploy = io.read_deploy_file(deploy_file)
-        if not (private_key_pem_file or key_pair):
-            raise ValueError("Must have either `private_key_pem_file` or `key_pair`")
-        if not key_pair:
-            key_pair = key_pairs.key_pair_object(
+        if not (private_key_pem_file or key_holder):
+            raise ValueError("Must have either `private_key_pem_file` or `key_holder`")
+        if not key_holder:
+            key_holder = key_holders.key_holder_object(
                 algorithm, private_key_pem_path=private_key_pem_file
             )
-        return sign_deploy(deploy, key_pair)
+        return sign_deploy(deploy, key_holder)
 
     @api
     def deploy(
@@ -355,7 +355,7 @@ class CasperLabsClient:
         deploy_proto = deploy_data.make_protobuf()
 
         signed_deploy = self.sign_deploy(
-            deploy=deploy_proto, key_pair=deploy_data.key_pair
+            deploy=deploy_proto, key_holder=deploy_data.key_holder
         )
         self.send_deploy(signed_deploy)
         return signed_deploy.deploy_hash.hex()
@@ -664,11 +664,11 @@ class CasperLabsClient:
            {filename_prefix}-public.pem   # public key"""
 
         directory = Path(directory).resolve()
-        key_pair_obj = key_pairs.class_from_algorithm(algorithm)
-        key_pair = key_pair_obj.generate()
-        key_pair.save_pem_files(directory, filename_prefix)
+        key_holder_obj = key_holders.class_from_algorithm(algorithm)
+        key_holder = key_holder_obj.generate()
+        key_holder.save_pem_files(directory, filename_prefix)
 
-        account_hash = key_pair.account_hash
+        account_hash = key_holder.account_hash
         hash_path = (
             directory / f"{filename_prefix}{consts.ACCOUNT_HASH_FILENAME_SUFFIX}"
         )
@@ -806,7 +806,7 @@ class CasperLabsClient:
         deploy_processed: bool = False,
         deploy_finalized: bool = False,
         deploy_orphaned: bool = False,
-        account_public_keys=None,
+        account_public_key_hashes=None,
         deploy_hashes=None,
         min_event_id: int = 0,
         max_event_id: int = 0,
@@ -844,14 +844,16 @@ class CasperLabsClient:
             deploy_finalized = True
             deploy_orphaned = True
 
-        if account_public_keys is None:
-            account_public_keys = []
+        if account_public_key_hashes is None:
+            account_public_key_hashes = []
         if deploy_hashes is None:
             deploy_hashes = []
 
         deploy_filter = (
             casper.StreamEventsRequest.DeployFilter(
-                account_public_keys=[bytes.fromhex(pk) for pk in account_public_keys],
+                account_public_key_hashes=[
+                    bytes.fromhex(pk) for pk in account_public_key_hashes
+                ],
                 deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes],
             ),
         )
@@ -913,7 +915,7 @@ class CasperLabsClient:
         io.write_file(validator_id_path, reformat.encode_base64(validator_public_bytes))
         io.write_file(validator_id_hex_path, validator_public_bytes.hex())
 
-        private_key, public_key = crypto.generate_key_pair()
+        private_key, public_key = crypto.generate_key_holder()
         node_cert, key_pem = crypto.generate_certificates(private_key, public_key)
 
         io.write_binary_file(node_private_path, key_pem)
@@ -978,9 +980,9 @@ class CasperLabsClient:
         :param public_key:          Public Key as bytes
         :param public_key_pem_path: File path to public_key pem file
         """
-        key_pair = key_pairs.key_pair_object(
+        key_holder = key_holders.key_holder_object(
             algorithm=algorithm,
             public_key=public_key,
             public_key_pem_path=public_key_pem_path,
         )
-        return key_pair.account_hash
+        return key_holder.account_hash

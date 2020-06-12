@@ -43,7 +43,7 @@ def generate_keys():
     return private_pem, public_pem, public_bytes
 
 
-def generate_key_pair():
+def generate_key_holder():
     curve = ec.SECP256R1()
     private_key = ec.generate_private_key(curve, default_backend())
     public_key = private_key.public_key()

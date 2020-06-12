@@ -6,8 +6,8 @@ from casperlabs_client import crypto, consts
 from casperlabs_client.io import write_binary_file
 
 
-class KeyPair(ABC):
-    """ Abstract class for loading, generating and handling public/private key pairs """
+class KeyHolder(ABC):
+    """ Abstract class for loading, generating and handling public/private key holders """
 
     def __init__(
         self,
@@ -75,12 +75,12 @@ class KeyPair(ABC):
 
     @staticmethod
     @abstractmethod
-    def from_private_key_path(private_key_pem_path: Union[str, Path]) -> "KeyPair":
+    def from_private_key_path(private_key_pem_path: Union[str, Path]) -> "KeyHolder":
         pass
 
     @staticmethod
     @abstractmethod
-    def from_public_key_path(public_key_pem_path: Union[str, Path]) -> "KeyPair":
+    def from_public_key_path(public_key_pem_path: Union[str, Path]) -> "KeyHolder":
         pass
 
     @abstractmethod

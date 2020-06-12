@@ -1,19 +1,19 @@
-from casperlabs_client.key_pairs import ED25519Key
+from casperlabs_client.key_holders import ED25519Key
 
 
 def test_generate_ed25519():
     PRIVATE_KEY_LENGTH = 64
     PUBLIC_KEY_LENGTH = 60
 
-    key_pair = ED25519Key.generate()
-    private_parts = key_pair.private_key_pem.split(b"-----")
+    key_holder = ED25519Key.generate()
+    private_parts = key_holder.private_key_pem.split(b"-----")
     assert private_parts[1] == b"BEGIN PRIVATE KEY"
     assert (
         len(private_parts[2]) == PRIVATE_KEY_LENGTH + 2
     )  # Two line feeds at begin and end
     assert private_parts[3] == b"END PRIVATE KEY"
 
-    public_parts = key_pair.public_key_pem.split(b"-----")
+    public_parts = key_holder.public_key_pem.split(b"-----")
     assert public_parts[1] == b"BEGIN PUBLIC KEY"
     assert (
         len(public_parts[2]) == PUBLIC_KEY_LENGTH + 2
@@ -76,7 +76,7 @@ def test_ed25519_round_trip_private_key_pem():
 
 def test_ed25519_account_hash():
     public_key = b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'n\xcb\xfc\x18.\xf4\x1b\xd8"
-    key_pair = ED25519Key(public_key=public_key)
+    key_holder = ED25519Key(public_key=public_key)
     expected_account_hash = b"P6\xb4\x94\x8f\x82`\x947\xbe\xbc>4\xac\x81\x83y\xfc\x1fYZ\xd7\xf3A7\xee>jUOw\xb7"
-    account_hash = key_pair.account_hash
+    account_hash = key_holder.account_hash
     assert account_hash == expected_account_hash, "account_hash does not equal expected"

@@ -2,13 +2,13 @@ from typing import Union
 from pathlib import Path
 
 import ecdsa
-from casperlabs_client.consts import SECP256K1_ETHEREUM_KEY_ALGORITHM
+from casperlabs_client.consts import SECP256K1_KEY_ALGORITHM
 from casperlabs_client.io import read_binary_file
-from .key_pair import KeyPair
+from .key_holder import KeyHolder
 
 
-class EthereumKey(KeyPair):
-    """ Class for loading, generating and handling public/private key pairs using secp256k1 algorithm """
+class SECP256K1Key(KeyHolder):
+    """ Class for loading, generating and handling public/private keys using secp256k1 algorithm """
 
     def __init__(
         self,
@@ -22,7 +22,7 @@ class EthereumKey(KeyPair):
             private_key,
             public_key_pem,
             public_key,
-            SECP256K1_ETHEREUM_KEY_ALGORITHM,
+            SECP256K1_KEY_ALGORITHM,
         )
 
     @property
@@ -76,26 +76,26 @@ class EthereumKey(KeyPair):
         """
         private_key_object = ecdsa.SigningKey.generate()
         private_key = private_key_object.to_string()  # to_bytes
-        return EthereumKey(private_key=private_key)
+        return SECP256K1Key(private_key=private_key)
 
     @staticmethod
-    def from_private_key_path(private_key_pem_path: Union[str, Path]) -> "KeyPair":
+    def from_private_key_path(private_key_pem_path: Union[str, Path]) -> "KeyHolder":
         """ Creates EthereumKey object from private key file in pem format """
         private_key_pem = read_binary_file(private_key_pem_path)
-        return EthereumKey(private_key_pem=private_key_pem)
+        return SECP256K1Key(private_key_pem=private_key_pem)
 
     @staticmethod
-    def from_public_key_path(public_key_pem_path: Union[str, Path]) -> "KeyPair":
+    def from_public_key_path(public_key_pem_path: Union[str, Path]) -> "KeyHolder":
         """
         Creates EthereumKey object from public key file in pem format.
 
         Note: Functionality requiring Private Key will not be possible.  Use only if no private key pem is available.
         """
         public_key_pem = read_binary_file(public_key_pem_path)
-        return EthereumKey(public_key_pem=public_key_pem)
+        return SECP256K1Key(public_key_pem=public_key_pem)
 
     @staticmethod
-    def from_private_key(private_key: bytes) -> "KeyPair":
+    def from_private_key(private_key: bytes) -> "KeyHolder":
         """ Creates EthereumKey object from private key in bytes """
         ecdsa.SigningKey.from_string(private_key)
-        return EthereumKey(private_key=private_key)
+        return SECP256K1Key(private_key=private_key)

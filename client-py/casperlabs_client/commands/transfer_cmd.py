@@ -34,7 +34,7 @@ OPTIONS = (
             dict(
                 required=True,
                 type=str,
-                help="base64 or base16 representation of target account's public key",
+                help="base64 or base16 representation of target account's public key hash",
             ),
         ],
         FROM_OPTION,

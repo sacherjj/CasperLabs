@@ -1,23 +1,23 @@
 from dataclasses import dataclass
 from typing import Dict, Union
 
-from . import consensus_pb2 as consensus, consts, key_pairs
+from . import consensus_pb2 as consensus, consts, key_holders
 import time
 
 from casperlabs_client import crypto
 from .contract import PaymentCode, SessionCode
-from .key_pairs import ED25519Key, EthereumKey
+from .key_holders import ED25519Key, SECP256K1Key
 
 
-def sign_deploy(deploy, key_pair):
-    signature_bytes = key_pair.sign(deploy.deploy_hash)
+def sign_deploy(deploy, key_holder):
+    signature_bytes = key_holder.sign(deploy.deploy_hash)
     signature = consensus.Signature(
-        sig_algorithm=key_pair.algorithm, sig=signature_bytes
+        sig_algorithm=key_holder.algorithm, sig=signature_bytes
     )
     deploy.approvals.extend(
         [
             consensus.Approval(
-                approver_public_key=key_pair.public_key, signature=signature
+                approver_public_key=key_holder.public_key, signature=signature
             )
         ]
     )
@@ -32,7 +32,7 @@ class DeployData:
     ttl_millis: int = 0
     dependencies: list = None
     chain_name: str = None
-    key_pair: Union[ED25519Key, EthereumKey] = None
+    key_holder: Union[ED25519Key, SECP256K1Key] = None
 
     @staticmethod
     def from_args(args: Dict) -> "DeployData":
@@ -57,20 +57,20 @@ class DeployData:
         private_key_pem_path = args.get("private_key")
         public_key_pem_path = args.get("public_key")
         if private_key_pem_path or public_key_pem_path:
-            key_pair = key_pairs.key_pair_object(
+            key_holder = key_holders.key_holder_object(
                 algorithm=algorithm,
                 private_key_pem_path=private_key_pem_path,
                 public_key_pem_path=public_key_pem_path,
             )
         else:
-            key_pair = None
+            key_holder = None
 
         if not from_addr:
-            if not key_pair:
+            if not key_holder:
                 raise ValueError(
                     "Must provide `from` or a key to calculate account hash."
                 )
-            from_addr = key_pair.account_hash
+            from_addr = key_holder.account_hash
 
         deploy = DeployData(
             from_addr=from_addr,
@@ -79,7 +79,7 @@ class DeployData:
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
-            key_pair=key_pair,
+            key_holder=key_holder,
         )
 
         if len(deploy.from_addr) != consts.ACCOUNT_HASH_LENGTH:
