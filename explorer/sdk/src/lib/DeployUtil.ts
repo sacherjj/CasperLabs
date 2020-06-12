@@ -28,7 +28,9 @@ export const makeDeploy = (
   if (type === ContractType.WASM) {
     sessionCode.setWasm(session);
   } else {
-    sessionCode.setHash(session);
+    const storedContract = new Deploy.Code.StoredContract();
+    storedContract.setContractHash(session);
+    sessionCode.setStoredContract(storedContract);
   }
   sessionCode.setArgsList(args);
   if (paymentWasm === null) {
