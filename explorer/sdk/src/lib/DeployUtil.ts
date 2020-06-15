@@ -11,24 +11,50 @@ import { protoHash } from './Contracts';
 
 export enum ContractType {
   WASM = 'WASM',
-  Hash = 'Hash'
+  Hash = 'Hash',
+  Name = 'Name'
 }
 
-// If EE receives a deploy with no payment bytes,
-// then it will use host-side functionality equivalent to running the standard payment contract
-export const makeDeploy = (
+// The following two methods definition guarantee that session is a string iff its contract type is ContractType.Name
+// See https://stackoverflow.com/questions/39700093/variable-return-types-based-on-string-literal-type-argument for detail
+export function makeDeploy(
   args: Deploy.Arg[],
-  type: ContractType,
+  type: ContractType.Hash | ContractType.WASM,
   session: ByteArray,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray
-): Deploy => {
+  accountPublicKey: ByteArray,
+  dependencies?: Uint8Array[]
+): Deploy;
+
+export function makeDeploy(
+  args: Deploy.Arg[],
+  type: ContractType.Name,
+  sessionName: string,
+  paymentWasm: ByteArray | null,
+  paymentAmount: bigint | JSBI,
+  accountPublicKey: ByteArray,
+  dependencies?: Uint8Array[]
+): Deploy;
+
+// If EE receives a deploy with no payment bytes,
+// then it will use host-side functionality equivalent to running the standard payment contract
+export function makeDeploy(
+  args: Deploy.Arg[],
+  type: ContractType,
+  session: ByteArray | string,
+  paymentWasm: ByteArray | null,
+  paymentAmount: bigint | JSBI,
+  accountPublicKey: ByteArray,
+  dependencies: Uint8Array[] = []
+): Deploy {
   const sessionCode = new Deploy.Code();
   if (type === ContractType.WASM) {
     sessionCode.setWasm(session);
-  } else {
+  } else if (type === ContractType.Hash) {
     sessionCode.setHash(session);
+  }else{
+    sessionCode.setName(session as string);
   }
   sessionCode.setArgsList(args);
   if (paymentWasm === null) {
@@ -48,6 +74,7 @@ export const makeDeploy = (
   header.setBodyHash(protoHash(body));
   // we will remove gasPrice eventually
   header.setGasPrice(1);
+  header.setDependenciesList(dependencies);
 
   const deploy = new Deploy();
   deploy.setBody(body);

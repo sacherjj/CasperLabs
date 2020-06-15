@@ -367,6 +367,20 @@ class MessageProducerSpec extends FlatSpec with Matchers with Inspectors with Hi
             _ <- erasUntil(eF) shouldBeF List(eC.keyBlockHash, eE.keyBlockHash, eF.keyBlockHash)
           } yield ()
       }
+  }
 
+  behavior of "lowerLimit"
+
+  it should "return the limit if the default is 0" in {
+    MessageProducer.lowerLimit(0, 10) shouldBe 10
+  }
+  it should "return the default if the limit is 0" in {
+    MessageProducer.lowerLimit(10, 0) shouldBe 10
+  }
+  it should "return the default if it's lower" in {
+    MessageProducer.lowerLimit(5, 10) shouldBe 5
+  }
+  it should "return the limit if it's lower" in {
+    MessageProducer.lowerLimit(10, 5) shouldBe 5
   }
 }

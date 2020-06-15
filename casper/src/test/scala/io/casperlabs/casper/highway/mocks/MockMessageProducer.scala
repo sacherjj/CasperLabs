@@ -16,6 +16,7 @@ import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.models.Message
 import scala.util.control.NonFatal
 import io.casperlabs.shared.ByteStringPrettyPrinter._
+import io.casperlabs.shared.Log
 
 class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
     val validatorId: Keys.PublicKeyHashBS
@@ -76,6 +77,12 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
           .withMessageType(Block.MessageType.BALLOT)
           .withMessageRole(messageRole)
           .withValidatorPublicKeyHash(validatorId)
+          .withMainRank(target.mainRank + 1)
+          .withJRank(
+            (target.jRank +: justifications.values.flatten.map(_.jRank).toList)
+              .map(_.asInstanceOf[Long])
+              .max + 1
+          )
           .withParentHashes(List(target.messageHash))
           .withJustifications(
             for {
@@ -112,6 +119,12 @@ class MockMessageProducer[F[_]: Sync: BlockStorageWriter: DagStorage](
             .Header()
             .withMessageRole(messageRole)
             .withValidatorPublicKeyHash(validatorId)
+            .withMainRank(mainParent.mainRank + 1)
+            .withJRank(
+              (mainParent.jRank +: justifications.values.flatten.map(_.jRank).toList)
+                .map(_.asInstanceOf[Long])
+                .max + 1
+            )
             .withParentHashes(List(mainParent.messageHash))
             .withJustifications(
               for {

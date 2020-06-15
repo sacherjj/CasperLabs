@@ -40,8 +40,11 @@ export default class CasperService {
   constructor(
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
-    private url: string
-  ) {}
+    private url: string,
+    private transport: grpc.TransportFactory = (options) => grpc.CrossBrowserHttpTransport({ withCredentials: false })(options),
+  ) {
+
+  }
 
   public deploy(deploy: Deploy) {
     return new Promise<void>((resolve, reject) => {
@@ -50,6 +53,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.Deploy, {
         host: this.url,
+        transport: this.transport,
         request: deployRequest,
 
         onEnd: (res) => {
@@ -70,6 +74,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetDeployInfo, {
         host: this.url,
+        transport: this.transport,
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
@@ -97,6 +102,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.ListDeployInfos, {
         host: this.url,
+        transport: this.transport,
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
@@ -124,6 +130,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetBlockInfo, {
         host: this.url,
+        transport: this.transport,
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
@@ -146,6 +153,7 @@ export default class CasperService {
 
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
+        transport: this.transport,
         request,
         onMessage: msg => {
           blocks.push(msg as BlockInfo);
@@ -170,6 +178,7 @@ export default class CasperService {
 
       grpc.invoke(GrpcCasperService.StreamBlockDeploys, {
         host: this.url,
+        transport: this.transport,
         request,
         onMessage: msg => {
           deploys.push(msg as Block.ProcessedDeploy);
@@ -196,6 +205,7 @@ export default class CasperService {
 
       grpc.invoke(GrpcCasperService.StreamBlockInfos, {
         host: this.url,
+        transport: this.transport,
         request,
         onMessage: msg => {
           if (!resolved) {
@@ -220,6 +230,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetBlockState, {
         host: this.url,
+        transport: this.transport,
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
@@ -240,6 +251,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.BatchGetBlockState, {
         host: this.url,
+        transport: this.transport,
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
@@ -315,6 +327,7 @@ export default class CasperService {
 
       grpc.unary(GrpcCasperService.GetLastFinalizedBlockInfo, {
         host: this.url,
+        transport: this.transport,
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
@@ -330,7 +343,8 @@ export default class CasperService {
   subscribeEvents(subscribeTopics: SubscribeTopics): Observable<Event> {
     return new Observable(obs => {
       const client = grpc.client(GrpcCasperService.StreamEvents, {
-        host: this.url
+        host: this.url,
+        transport: this.transport
       });
       client.onMessage((msg: Event) => {
         obs.next(msg);

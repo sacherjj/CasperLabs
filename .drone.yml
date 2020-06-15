@@ -163,6 +163,7 @@ steps:
     - pull_request
     changeset:
       includes:
+      - "**/engine-core/**"
       - "**/contract-as/**"
       - "**/contracts-as/**"
 
@@ -409,6 +410,27 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
+  depends_on:
+  - rust-compile-test-bors
+  - sbt-test-docker-bors
+
+- name: run-casperlabs-updater-dry-bors
+  commands:
+  - "cd ci/casperlabs-updater"
+  - "cargo run --release -- --dry-run"
+  image: "casperlabs/buildenv:latest"
+  when:
+    branch:
+    - staging
+    - trying
+    changeset:
+      includes:
+      - "**/.drone.yml"
+      - "**/**.rs"
+      - "**/**.proto"
+      - "**/Cargo.lock"
+      - "**/Cargo.toml"
+      - "**/ci/casperlabs-updater/**"
   depends_on:
   - rust-compile-test-bors
   - sbt-test-docker-bors
@@ -953,6 +975,51 @@ steps:
     - refs/tags/v*
   depends_on:
     - package-ee-tag
+
+- name: build-docker-tag
+  image: "casperlabs/buildenv:latest"
+  commands:
+  - "export DOCKER_LATEST_TAG=${DRONE_TAG}"
+  - "make docker-build/node"
+  - "make docker-build/client"
+  - "make docker-build/execution-engine"
+  - "make docker-build/key-generator"
+  - "make docker-build/explorer"
+  - "make docker-build/grpcwebproxy"
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+    - package-ee-tag
+
+- name: publish-docker-tag
+  image: "casperlabs/buildenv:latest"
+  failure: "ignore"
+  environment:
+    DOCKER_PASSWORD:
+      from_secret: docker_password
+    DOCKER_USERNAME:
+      from_secret: docker_username
+  volumes:
+  - name: docker_sock
+    path: "/var/run/docker.sock"
+  commands:
+  - |
+      echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
+      docker push casperlabs/node:"${DRONE_TAG}"
+      docker push casperlabs/client:"${DRONE_TAG}"
+      docker push casperlabs/execution-engine:"${DRONE_TAG}"
+      docker push casperlabs/key-generator:"${DRONE_TAG}"
+      docker push casperlabs/explorer:"${DRONE_TAG}"
+      docker push casperlabs/grpcwebproxy:"${DRONE_TAG}"
+  when:
+    ref:
+    - refs/tags/v*
+  depends_on:
+    - build-docker-tag
 
 - name: mac-ee-tarball-tag
   image: appleboy/drone-ssh:1.5.5
