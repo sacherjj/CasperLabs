@@ -296,9 +296,6 @@ object CLValueInstance {
     case (Key(cltype.Key.Account(x)), Key(cltype.Key.Account(y))) => ByteArray32.lt(x, y)
     case (Key(cltype.Key.URef(x)), Key(cltype.Key.URef(y)))       => cltype.URef.lt(x, y)
 
-    case (Key(cltype.Key.Local(seed1, hash1)), Key(cltype.Key.Local(seed2, hash2))) =>
-      ByteArray32.lt(seed1, seed2) || (seed1 == seed2 && ByteArray32.lt(hash1, hash2))
-
     // TODO: complete ordering implementation
     case _ => throw new Exception("Ordering not implemented for recursive CLValueInstances")
   }

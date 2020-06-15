@@ -15,8 +15,6 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
     case Key.Value.Uref(Key.URef(id, accessRights)) =>
       s"URef(${buildString(id)}, ${buildString(accessRights)})"
     case Key.Value.Hash(Key.Hash(hash)) => s"Hash(${buildString(hash)})"
-    case Key.Value.Local(Key.Local(hash)) =>
-      s"Local(${buildString(hash)})"
   }
 
   def buildString(t: Transform): String = t.transformInstance match {

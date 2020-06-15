@@ -111,10 +111,6 @@ object DeployRuntime {
       )
     )
 
-  // This is true for any array but I didn't want to go as far as writing type classes.
-  private def serializeArray(ba: Array[Byte]): Array[Byte] =
-    ba
-
   def unbond[F[_]: Sync: DeployService](
       maybeAmount: Option[Long],
       deployConfig: DeployConfig,
@@ -177,15 +173,8 @@ object DeployRuntime {
       json: Boolean
   ): F[Unit] =
     gracefulExit({
-      val key = if (keyVariant == "local") {
-        val parts          = keyValue.split(":")
-        val seed           = parts(0)
-        val rest           = parts(1)
-        val abiEncodedRest = Base16.encode(serializeArray(Base16.decode(rest)))
-        s"$seed:$abiEncodedRest"
-      } else keyValue
       DeployService[F]
-        .queryState(blockHash, keyVariant, key, path)
+        .queryState(blockHash, keyVariant, keyValue, path)
         .map(_.map(Printer.print(_, bytesStandard, json)))
     })
 
@@ -197,27 +186,16 @@ object DeployRuntime {
               .raiseError(new IllegalStateException(s"Expected Account type value under $address."))
               .whenA(!value.value.isAccount)
         account = value.getAccount
-        mintPublic <- Sync[F].fromOption(
-                       account.namedKeys.find(_.name == "mint").flatMap(_.key),
-                       new IllegalStateException(
-                         "Account's known_urefs map did not contain Mint contract address."
-                       )
-                     )
         localKeyValue = {
-          val mintPublicHex = Base16.encode(mintPublic.getUref.uref.toByteArray) // Assuming that `mintPublic` is of `URef` type.
-          val purseAddrHex = {
-            val purseAddr    = account.getMainPurse.uref.toByteArray
-            val purseAddrSer = serializeArray(purseAddr)
-            Base16.encode(purseAddrSer)
-          }
-          s"$mintPublicHex:$purseAddrHex"
+          val purseAddrHex = Base16.encode(account.getMainPurse.uref.toByteArray)
+          s"$purseAddrHex"
         }
-        localQuery  <- DeployService[F].queryState(blockHash, "local", localKeyValue, "").rethrow
+        localQuery  <- DeployService[F].queryState(blockHash, "hash", localKeyValue, "").rethrow
         balanceURef = localQuery.getClValue.getValue.getKey.getUref
         urefQuery <- DeployService[F]
                       .queryState(
                         blockHash,
-                        "uref",
+                        "hash",
                         Base16.encode(balanceURef.uref.toByteArray),
                         ""
                       )

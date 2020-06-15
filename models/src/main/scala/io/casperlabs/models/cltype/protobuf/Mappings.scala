@@ -166,12 +166,6 @@ object Mappings {
         state.Key.Value.Uref(toProto(uref))
       )
 
-    case Key.Local(seed, hash) =>
-      val address: Array[Byte] = (seed.bytes ++ hash.bytes).toArray
-      state.Key(
-        state.Key.Value
-          .Local(state.Key.Local(ByteString.copyFrom(address)))
-      )
   }
 
   def toProto(version: SemVer): state.ProtocolVersion = state.ProtocolVersion(
@@ -353,17 +347,6 @@ object Mappings {
       toByteArray32(address).map(Key.Hash.apply)
 
     case state.Key.Value.Uref(uref) => fromProto(uref).map(Key.URef.apply)
-
-    case state.Key.Value.Local(state.Key.Local(address)) =>
-      if (address.size != 64) Left(Error.Expected64Bytes(address.size))
-      else {
-        val seedBytes = address.substring(0, 32)
-        val hashBytes = address.substring(32, 64)
-        for {
-          seed <- toByteArray32(seedBytes)
-          hash <- toByteArray32(hashBytes)
-        } yield Key.Local(seed, hash)
-      }
   }
 
   def fromProto(proto: state.CLType): Either[Error, CLType] =
