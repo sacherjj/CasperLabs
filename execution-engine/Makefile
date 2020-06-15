@@ -295,7 +295,7 @@ setup-nightly-rs: setup-rs
 
 .PHONY: setup-as
 setup-as: contract-as/package.json
-	cd contract-as && $(NPM) install
+	cd contract-as && $(NPM) ci
 
 .PHONY: setup
 setup: setup-rs setup-as

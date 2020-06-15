@@ -467,6 +467,12 @@ private[configuration] final case class Options private (
       )
 
     @scallop
+    val serverDownloadCacheExpiry =
+      gen[FiniteDuration](
+        "How long to remember having recently downloaded an item."
+      )
+
+    @scallop
     val serverRelayMaxParallelBlocks =
       gen[Int]("Maximum number of parallel block downloads allowed to peers.")
 
@@ -531,6 +537,11 @@ private[configuration] final case class Options private (
     )
 
     @scallop
+    val casperMaxBlockCost = gen[Long](
+      "Override the value in the chainspec with a lower value; 0 means use whatever is in the chainspec."
+    )
+
+    @scallop
     val blockstorageCacheMaxSizeBytes =
       gen[Long]("Maximum size of each of in-memory block/dag/justifications caches in bytes.")
 
@@ -546,6 +557,11 @@ private[configuration] final case class Options private (
     @scallop
     val blockstorageDeployStreamChunkSize = gen[Int](
       "How many records to pull from the DB in a chunk of a stream."
+    )
+
+    @scallop
+    val blockstorageDagStreamChunkSize = gen[Int](
+      "How many records or rank ranges to pull from the DB in a chunk of a stream."
     )
 
     @scallop

@@ -82,7 +82,8 @@ export class FaucetContainer {
       this.onFaucetStatusChange();
     }
     if (!anyNeededUpdate) {
-      window.clearTimeout(this.faucetStatusTimerId);
+      window.clearInterval(this.faucetStatusTimerId);
+      this.faucetStatusTimerId = 0;
     }
   }
 
