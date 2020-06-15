@@ -41,6 +41,7 @@ trait NoOpsBlockDownloadManager[F[_]] extends BlockDownloadManager[F] {
   ): F[WaitHandle[F]]                                                    = ???
   override def isScheduled(id: ByteString): F[Boolean]                   = ???
   override def addSource(id: ByteString, source: Node): F[WaitHandle[F]] = ???
+  override def wasDownloaded(id: ByteString): F[Boolean]                 = ???
 }
 
 trait NoOpsDeployDownloadManager[F[_]] extends DeployDownloadManager[F] {
@@ -51,6 +52,7 @@ trait NoOpsDeployDownloadManager[F[_]] extends DeployDownloadManager[F] {
   ): F[WaitHandle[F]]                                                    = ???
   override def isScheduled(id: ByteString): F[Boolean]                   = ???
   override def addSource(id: ByteString, source: Node): F[WaitHandle[F]] = ???
+  override def wasDownloaded(id: ByteString): F[Boolean]                 = ???
 }
 
 trait NoOpsGenesisApprover[F[_]] extends GenesisApprover[F] {
@@ -74,8 +76,6 @@ trait NoOpsSynchronizer[F[_]] extends Synchronizer[F] {
 
 trait NoOpsGossipServiceServerBackend[F[_]] extends GossipServiceServer.Backend[F] {
   override def getDeploySummary(deployHash: ByteString): F[Option[DeploySummary]] = ???
-  override def hasBlock(blockHash: ByteString): F[Boolean]                        = ???
-  override def hasDeploy(deployHash: ByteString): F[Boolean]                      = ???
   override def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]]    = ???
   override def getBlock(blockHash: ByteString, deploysBodiesExcluded: Boolean): F[Option[Block]] =
     ???

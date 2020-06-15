@@ -9,7 +9,6 @@ import io.casperlabs.models.Message.{JRank, MainRank}
 import io.casperlabs.models.{Message, Weight}
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.casper.validation.Validation
-import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 import scala.annotation.tailrec
 import scala.collection.mutable.{IndexedSeq => MutableSeq}
 
@@ -81,6 +80,7 @@ package object votingmatrix {
                           // A sequence of validators' weights.
                           weight = FinalityDetectorUtil
                             .fromMapToArray(validatorToIndex, weightMap.getOrElse(_, Zero))
+
                           committee = pruneLoop(
                             votingMatrix,
                             firstLevelZeroVotes,
@@ -211,33 +211,49 @@ package object votingmatrix {
 
   @tailrec
   private[votingmatrix] def pruneLoop(
+      // Matrix of the latest j-DAG level of messages that a validator in row i saw from a validator in column j.
       validatorsViews: MutableSeq[MutableSeq[Level]],
+      // Which candidate (if any) does each validator vote for and since which level.
       firstLevelZeroVotes: MutableSeq[Option[Vote]],
       candidateBlockHash: BlockHash,
+      // Which validators were (and are still) part of the committee that vote for this candidate.
       mask: MutableSeq[Boolean],
       q: Weight,
       weight: MutableSeq[Weight]
   ): Option[(MutableSeq[Boolean], Weight)] = {
+    // A level-1 summit with 2/3 quorum is just 2/3 of validators having seen each other vote for the candidate.
+    // Go through each validator in the matrix rows and see if they see a quorum of other validators vote for the candidate.
     val (newMask, prunedValidator, maxTotalWeight) = validatorsViews.zipWithIndex
-      .filter { case (_, rowIndex) => mask(rowIndex) }
+      .filter { case (_, voterIndex) => mask(voterIndex) }
       .foldLeft((mask, false, Zero)) {
-        case ((newMask, prunedValidator, maxTotalWeight), (row, rowIndex)) =>
-          val voteSum = row.zipWithIndex
-            .filter { case (_, columnIndex) => mask(columnIndex) }
-            .map {
-              case (latestDagLevelSeen, columnIndex) =>
-                firstLevelZeroVotes(columnIndex).fold(Zero) {
-                  case (consensusValue, dagLevelOf1stLevel0) =>
-                    if (consensusValue == candidateBlockHash && dagLevelOf1stLevel0 <= latestDagLevelSeen)
-                      weight(columnIndex)
-                    else Zero
-                }
-            }
-            .sum
+        case ((newMask, prunedValidator, maxTotalWeight), (row, voterIndex)) =>
+          // Does this validator see enough of the others so that it can add its support to the candidate?
+          // i.e. is this validator part of the committee?
+          val voteSum =
+            // Add up the weight of other validators who this validator sees voting for the candidate in its panorama.
+            row.zipWithIndex
+              .filter { case (_, witnessedIndex) => mask(witnessedIndex) }
+              .map {
+                case (witnessedHighestLevel, witnessedIndex) =>
+                  // See if the witnessed level includes the vote for the candidate.
+                  firstLevelZeroVotes(witnessedIndex) match {
+                    case Some((_, witnessedVoteLevel))
+                        if witnessedVoteLevel <= witnessedHighestLevel =>
+                      // The validator at `witnessedIndex` puts their weight behind the one at `voterIndex`
+                      weight(witnessedIndex)
+
+                    // The voter hasn't witnessed the vote.
+                    case _ => Zero
+                  }
+              }
+              .sum
+
+          // If this validator hasn't seen a qourum of others' votes, eliminate it from the committee,
+          // otherwise add its weight to the candidate support.
           if (voteSum < q) {
-            (newMask.updated(rowIndex, false), true, maxTotalWeight)
+            (newMask.updated(voterIndex, false), true, maxTotalWeight)
           } else {
-            (newMask, prunedValidator, maxTotalWeight + weight(rowIndex))
+            (newMask, prunedValidator, maxTotalWeight + weight(voterIndex))
           }
       }
     if (prunedValidator) {

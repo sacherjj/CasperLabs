@@ -76,7 +76,8 @@ trait BlockGenerator {
       postStateHash: ByteString = ByteString.EMPTY,
       chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
-      messageType: Block.MessageType = Block.MessageType.BLOCK
+      messageType: Block.MessageType = Block.MessageType.BLOCK,
+      messageRole: Block.MessageRole = Block.MessageRole.UNDEFINED
   ): F[Block] =
     createMessageNew[F](
       parentsHashList,
@@ -88,7 +89,8 @@ trait BlockGenerator {
       postStateHash,
       chainName,
       preStateHash,
-      messageType
+      messageType,
+      messageRole
     )
 
   def createMessageNew[F[_]: MonadThrowable: Time: DagStorage](
@@ -102,6 +104,7 @@ trait BlockGenerator {
       chainName: String = "casperlabs",
       preStateHash: ByteString = ByteString.EMPTY,
       messageType: Block.MessageType = Block.MessageType.BLOCK,
+      messageRole: Block.MessageRole = Block.MessageRole.UNDEFINED,
       maybeValidatorPrevBlockHash: Option[BlockHash] = None,
       maybeValidatorBlockSeqNum: Option[Int] = None
   ): F[Block] = {
@@ -188,6 +191,7 @@ trait BlockGenerator {
           keyBlockHash = keyBlockHash
         )
         .withMessageType(messageType)
+        .withMessageRole(messageRole)
       block = ProtoUtil.unsignedBlockProto(body, header)
     } yield block
   }

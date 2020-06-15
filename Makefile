@@ -335,7 +335,7 @@ build-explorer: \
 
 build-explorer-contracts: \
 	explorer/contracts/transfer_to_account_u512.wasm \
-	explorer/contracts/faucet.wasm
+	explorer/contracts/faucet_stored.wasm
 
 # Get the .proto files for REST annotations for Github. This is here for reference about what to get from where, the files are checked in.
 # There were alternatives, like adding a reference to a Maven project called `googleapis-commons-protos` but it had version conflicts.

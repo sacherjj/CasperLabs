@@ -542,7 +542,7 @@ class GrpcGossipServiceSpec
                     res.size shouldBe fetchers.size
                     // We may see some overlap between completion and the start of the next
                     // due to the fact that gRPC will do client side buffering too.
-                    parallelMax.get should be <= (maxParallelBlockDownloads * 2)
+                    parallelMax.get should be <= (maxParallelBlockDownloads * 3)
                     parallelMax.get should be >= maxParallelBlockDownloads
                   }
                 }
@@ -1210,13 +1210,15 @@ class GrpcGossipServiceSpec
                     }
                     override def isScheduled(id: ByteString)             = false.pure[Task]
                     override def addSource(id: ByteString, source: Node) = ().pure[Task].pure[Task]
+                    override def wasDownloaded(id: ByteString) =
+                      Task.now(allHashes.contains(id) && !unknownHashes.contains(id))
                   }
 
                   TestEnvironment(
                     testDataRef,
                     clientCert = Some(stubCert),
                     connector = connector,
-                    deployDownloadManager = downloadManager
+                    mkDeployDownloadManager = _ => downloadManager
                   ).use { stub =>
                     stub.newDeploys(req) map { res =>
                       res.isNew shouldBe true
@@ -1344,13 +1346,15 @@ class GrpcGossipServiceSpec
                     }
                     override def isScheduled(id: ByteString)             = false.pure[Task]
                     override def addSource(id: ByteString, source: Node) = ().pure[Task].pure[Task]
+                    override def wasDownloaded(id: ByteString) =
+                      Task.now(knownBlocks.exists(_.blockHash == id))
                   }
 
                   TestEnvironment(
                     testDataRef,
                     clientCert = Some(stubCert),
                     synchronizer = synchronizer,
-                    blockDownloadManager = downloadManager
+                    mkBlockDownloadManager = _ => downloadManager
                   ).use { stub =>
                     stub.newBlocks(req) map { res =>
                       val unknownHashes = unknownBlocks.map(_.blockHash)
@@ -1573,23 +1577,29 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
 
   object TestEnvironment {
     trait EmptyGossipService extends NoOpsGossipService[Task]
-    private val emptySynchronizer          = new NoOpsSynchronizer[Task]          {}
-    private val emptyDeployDownloadManager = new NoOpsDeployDownloadManager[Task] {}
-    private val emptyBlockDownloadManager = new NoOpsBlockDownloadManager[Task] {
-      override def isScheduled(id: ByteString): Task[Boolean] = false.pure[Task]
-    }
+    private val emptySynchronizer    = new NoOpsSynchronizer[Task]    {}
     private val emptyGenesisApprover = new NoOpsGenesisApprover[Task] {}
+
+    private def defaultDeployDownloadManager(testDataRef: AtomicReference[TestData]) =
+      new NoOpsDeployDownloadManager[Task] {
+        override def isScheduled(id: ByteString): Task[Boolean] =
+          false.pure[Task]
+        override def wasDownloaded(id: ByteString): Task[Boolean] =
+          Task.delay(testDataRef.get.deploys.contains(id))
+      }
+
+    private def defaultBlockDownloadManager(testDataRef: AtomicReference[TestData]) =
+      new NoOpsBlockDownloadManager[Task] {
+        override def isScheduled(id: ByteString): Task[Boolean] =
+          false.pure[Task]
+        override def wasDownloaded(id: ByteString): Task[Boolean] =
+          Task.delay(testDataRef.get.blocks.contains(id))
+      }
 
     private def defaultBackend(testDataRef: AtomicReference[TestData]) =
       new GossipServiceServer.Backend[Task] {
         def getDeploySummary(deployHash: ByteString): Task[Option[DeploySummary]] =
           Task.delay(testDataRef.get.deploySummaries.get(deployHash))
-
-        def hasDeploy(deployHash: ByteString): Task[Boolean] =
-          Task.delay(testDataRef.get.deploys.contains(deployHash))
-
-        def hasBlock(blockHash: ByteString) =
-          Task.delay(testDataRef.get.blocks.contains(blockHash))
 
         def getBlock(blockHash: ByteString, excludeDeployBodies: Boolean) =
           Task.delay(testDataRef.get.blocks.get(blockHash).map { block =>
@@ -1644,8 +1654,10 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
         blockChunkConsumerTimeout: FiniteDuration = 10.seconds,
         synchronizer: Synchronizer[Task] = emptySynchronizer,
         connector: GossipService.Connector[Task] = _ => ???,
-        deployDownloadManager: DeployDownloadManager[Task] = emptyDeployDownloadManager,
-        blockDownloadManager: BlockDownloadManager[Task] = emptyBlockDownloadManager,
+        mkDeployDownloadManager: AtomicReference[TestData] => DeployDownloadManager[Task] =
+          defaultDeployDownloadManager,
+        mkBlockDownloadManager: AtomicReference[TestData] => BlockDownloadManager[Task] =
+          defaultBlockDownloadManager,
         genesisApprover: GenesisApprover[Task] = emptyGenesisApprover,
         rateLimiter: RateLimiter[Task, ByteString] = RateLimiter.noOp,
         mkBackend: AtomicReference[TestData] => GossipServiceServer.Backend[Task] = defaultBackend
@@ -1668,8 +1680,8 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
               backend = mkBackend(testDataRef),
               synchronizer = synchronizer,
               connector = connector,
-              deployDownloadManager = deployDownloadManager,
-              blockDownloadManager = blockDownloadManager,
+              deployDownloadManager = mkDeployDownloadManager(testDataRef),
+              blockDownloadManager = mkBlockDownloadManager(testDataRef),
               genesisApprover = genesisApprover,
               maxChunkSize = DefaultMaxChunkSize,
               maxParallelBlockDownloads = maxParallelBlockDownloads,
