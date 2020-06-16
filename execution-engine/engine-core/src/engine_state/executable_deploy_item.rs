@@ -42,6 +42,9 @@ pub enum ExecutableDeployItem {
         // finds header by entry point name
         args: Vec<u8>,
     },
+    TransferToAccount {
+        args: Vec<u8>,
+    },
 }
 
 impl ExecutableDeployItem {
@@ -65,16 +68,14 @@ impl ExecutableDeployItem {
         }
     }
 
-    pub fn take_args(self) -> Result<RuntimeArgs, bytesrepr::Error> {
+    pub fn into_runtime_args(self) -> Result<RuntimeArgs, bytesrepr::Error> {
         match self {
             ExecutableDeployItem::ModuleBytes { args, .. }
             | ExecutableDeployItem::StoredContractByHash { args, .. }
-            | ExecutableDeployItem::StoredContractByName { args, .. } => {
-                let runtime_args: RuntimeArgs = bytesrepr::deserialize(args)?;
-                Ok(runtime_args)
-            }
-            ExecutableDeployItem::StoredVersionedContractByHash { args, .. }
-            | ExecutableDeployItem::StoredVersionedContractByName { args, .. } => {
+            | ExecutableDeployItem::StoredContractByName { args, .. }
+            | ExecutableDeployItem::StoredVersionedContractByHash { args, .. }
+            | ExecutableDeployItem::StoredVersionedContractByName { args, .. }
+            | ExecutableDeployItem::TransferToAccount { args } => {
                 let runtime_args: RuntimeArgs = bytesrepr::deserialize(args)?;
                 Ok(runtime_args)
             }
@@ -83,12 +84,11 @@ impl ExecutableDeployItem {
 
     pub fn entry_point_name(&self) -> &str {
         match self {
+            ExecutableDeployItem::ModuleBytes { .. }
+            | ExecutableDeployItem::TransferToAccount { .. } => DEFAULT_ENTRY_POINT_NAME,
             ExecutableDeployItem::StoredVersionedContractByName { entry_point, .. }
-            | ExecutableDeployItem::StoredVersionedContractByHash { entry_point, .. } => {
-                &entry_point
-            }
-            ExecutableDeployItem::ModuleBytes { .. } => DEFAULT_ENTRY_POINT_NAME,
-            ExecutableDeployItem::StoredContractByHash { entry_point, .. }
+            | ExecutableDeployItem::StoredVersionedContractByHash { entry_point, .. }
+            | ExecutableDeployItem::StoredContractByHash { entry_point, .. }
             | ExecutableDeployItem::StoredContractByName { entry_point, .. } => &entry_point,
         }
     }

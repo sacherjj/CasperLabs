@@ -66,7 +66,9 @@ use crate::{
         system_contract_cache::SystemContractCache,
         upgrade::{UpgradeConfig, UpgradeResult},
     },
-    execution::{self, AddressGenerator, AddressGeneratorBuilder, Executor},
+    execution::{
+        self, AddressGenerator, AddressGeneratorBuilder, DirectSystemContractCall, Executor,
+    },
     tracking_copy::{TrackingCopy, TrackingCopyExt},
     KnownKeys,
 };
@@ -223,7 +225,7 @@ where
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
             let protocol_data = ProtocolData::default();
 
-            executor.exec_system(
+            executor.exec_wasm_direct(
                 mint_installer_module,
                 ENTRY_POINT_NAME_INSTALL,
                 args,
@@ -275,7 +277,7 @@ where
             };
             let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
 
-            executor.exec_system(
+            executor.exec_wasm_direct(
                 proof_of_stake_installer_module,
                 ENTRY_POINT_NAME_INSTALL,
                 args,
@@ -329,7 +331,7 @@ where
             let tracking_copy = Rc::clone(&tracking_copy);
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-            executor.exec_system(
+            executor.exec_wasm_direct(
                 standard_payment_installer_module,
                 ENTRY_POINT_NAME_INSTALL,
                 args,
@@ -628,7 +630,7 @@ where
 
                 let executor = Executor::new(self.config);
 
-                let result: BTreeMap<ContractHash, ContractHash> = executor.exec_system(
+                let result: BTreeMap<ContractHash, ContractHash> = executor.exec_wasm_direct(
                     upgrade_installer_module,
                     UPGRADE_ENTRY_POINT_NAME,
                     args,
@@ -730,17 +732,27 @@ where
 
         for deploy_item in exec_request.take_deploys() {
             let result = match deploy_item {
-                Ok(deploy_item) => self.deploy(
-                    correlation_id,
-                    &executor,
-                    &preprocessor,
-                    exec_request.protocol_version,
-                    exec_request.parent_state_hash,
-                    BlockTime::new(exec_request.block_time),
-                    deploy_item,
-                ),
-                Err(exec_result) => Ok(exec_result), /* this will get pushed into the results vec
-                                                      * below */
+                Err(exec_result) => Ok(exec_result),
+                Ok(deploy_item) => match deploy_item.session {
+                    ExecutableDeployItem::TransferToAccount { .. } => self.transfer(
+                        correlation_id,
+                        &executor,
+                        &preprocessor,
+                        exec_request.protocol_version,
+                        exec_request.parent_state_hash,
+                        BlockTime::new(exec_request.block_time),
+                        deploy_item,
+                    ),
+                    _ => self.deploy(
+                        correlation_id,
+                        &executor,
+                        &preprocessor,
+                        exec_request.protocol_version,
+                        exec_request.parent_state_hash,
+                        BlockTime::new(exec_request.block_time),
+                        deploy_item,
+                    ),
+                },
             };
             match result {
                 Ok(result) => results.push(result),
@@ -833,6 +845,9 @@ where
 
                 (contract_package, contract, contract_package_key)
             }
+            ExecutableDeployItem::TransferToAccount { .. } => Err(
+                error::Error::InvalidDeployItemVariant(String::from("TransferToAccount")),
+            ),
         };
 
         let entry_point_name = deploy_item.entry_point_name();
@@ -896,8 +911,38 @@ where
         Ok(module)
     }
 
+    fn get_authorized_account(
+        &self,
+        correlation_id: CorrelationId,
+        account_public_key: PublicKey,
+        authorization_keys: &BTreeSet<PublicKey>,
+        tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
+    ) -> Result<Account, Error> {
+        let account: Account = match tracking_copy
+            .borrow_mut()
+            .get_account(correlation_id, account_public_key)
+        {
+            Ok(account) => account,
+            Err(_) => {
+                return Err(error::Error::Authorization);
+            }
+        };
+
+        // Authorize using provided authorization keys
+        if !account.can_authorize(authorization_keys) {
+            return Err(error::Error::Authorization);
+        }
+
+        // Check total key weight against deploy threshold
+        if !account.can_deploy_with(authorization_keys) {
+            return Err(execution::Error::DeploymentAuthorizationFailure.into());
+        }
+
+        Ok(account)
+    }
+
     #[allow(clippy::too_many_arguments)]
-    pub fn deploy(
+    pub fn transfer(
         &self,
         correlation_id: CorrelationId,
         executor: &Executor,
@@ -907,80 +952,6 @@ where
         blocktime: BlockTime,
         deploy_item: DeployItem,
     ) -> Result<ExecutionResult, RootNotFound> {
-        // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
-        let session = deploy_item.session;
-        let payment = deploy_item.payment;
-        let authorization_keys = deploy_item.authorization_keys;
-        let deploy_hash = deploy_item.deploy_hash;
-        let base_key = Key::Account(deploy_item.address);
-
-        // Create tracking copy (which functions as a deploy context)
-        // validation_spec_2: prestate_hash check
-        let tracking_copy = match self.tracking_copy(prestate_hash) {
-            Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
-            Ok(None) => return Err(RootNotFound::new(prestate_hash)),
-            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
-        };
-
-        // Get addr bytes from `address` (which is actually a Key)
-        // validation_spec_3: account validity
-        let account_addr = match base_key.into_account() {
-            Some(account_addr) => account_addr,
-            None => {
-                return Ok(ExecutionResult::precondition_failure(
-                    error::Error::Authorization,
-                ));
-            }
-        };
-
-        // Get account from tracking copy
-        // validation_spec_3: account validity
-        let account: Account = match tracking_copy
-            .borrow_mut()
-            .get_account(correlation_id, account_addr)
-        {
-            Ok(account) => account,
-            Err(_) => {
-                return Ok(ExecutionResult::precondition_failure(
-                    error::Error::Authorization,
-                ));
-            }
-        };
-
-        // Authorize using provided authorization keys
-        // validation_spec_3: account validity
-        if !account.can_authorize(&authorization_keys) {
-            return Ok(ExecutionResult::precondition_failure(
-                crate::engine_state::error::Error::Authorization,
-            ));
-        }
-
-        // Check total key weight against deploy threshold
-        // validation_spec_4: deploy validity
-        if !account.can_deploy_with(&authorization_keys) {
-            return Ok(ExecutionResult::precondition_failure(
-                // TODO?:this doesn't happen in execution any longer, should error variant be moved
-                execution::Error::DeploymentAuthorizationFailure.into(),
-            ));
-        }
-
-        // Create session code `A` from provided session bytes
-        // validation_spec_1: valid wasm bytes
-        let session_module = match self.get_module(
-            Rc::clone(&tracking_copy),
-            &session,
-            &account,
-            correlation_id,
-            preprocessor,
-            &protocol_version,
-        ) {
-            Ok(module) => module,
-            Err(error) => {
-                return Ok(ExecutionResult::precondition_failure(error));
-            }
-        };
-
-        // Obtain current protocol data for given version
         let protocol_data = match self.state.get_protocol_data(protocol_version) {
             Ok(Some(protocol_data)) => protocol_data,
             Ok(None) => {
@@ -994,7 +965,181 @@ where
             }
         };
 
-        let max_payment_cost: Motes = Motes::new(U512::from(MAX_PAYMENT));
+        let tracking_copy = match self.tracking_copy(prestate_hash) {
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
+            Ok(None) => return Err(RootNotFound::new(prestate_hash)),
+            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
+        };
+
+        let base_key = Key::Account(deploy_item.address);
+
+        let account_public_key = match base_key.into_account() {
+            Some(account_addr) => account_addr,
+            None => {
+                return Ok(ExecutionResult::precondition_failure(
+                    error::Error::Authorization,
+                ));
+            }
+        };
+
+        let authorization_keys = deploy_item.authorization_keys;
+
+        let account = match self.get_authorized_account(
+            correlation_id,
+            account_public_key,
+            &authorization_keys,
+            Rc::clone(&tracking_copy),
+        ) {
+            Ok(account) => account,
+            Err(e) => return Ok(ExecutionResult::precondition_failure(e)),
+        };
+
+        let mint_contract = match tracking_copy
+            .borrow_mut()
+            .get_contract(correlation_id, protocol_data.mint())
+        {
+            Ok(contract) => contract,
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(error.into()));
+            }
+        };
+
+        let direct_system_contract_call = DirectSystemContractCall::TransferToAccount;
+        let parity_module = {
+            let contract_wasm_hash = mint_contract.contract_wasm_hash();
+            let use_system_contracts = self.config.use_system_contracts();
+            match tracking_copy.borrow_mut().get_system_module(
+                correlation_id,
+                contract_wasm_hash,
+                use_system_contracts,
+                preprocessor,
+            ) {
+                Ok(module) => module,
+                Err(error) => {
+                    return Ok(ExecutionResult::precondition_failure(error.into()));
+                }
+            }
+        };
+        let runtime_args = {
+            let mut runtime_args = match deploy_item.session.into_runtime_args() {
+                Ok(runtime_args) => runtime_args,
+                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+            };
+
+            runtime_args.insert("source", account.main_purse());
+            runtime_args
+        };
+        let mut named_keys = mint_contract.named_keys().to_owned();
+        let base_key = Key::from(protocol_data.mint());
+        let deploy_hash = deploy_item.deploy_hash;
+        let gas_limit = Gas::new(U512::from(std::u64::MAX));
+        let phase = Phase::Session;
+        let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
+
+        Ok(executor.exec_system_contract(
+            direct_system_contract_call,
+            parity_module,
+            runtime_args,
+            &mut named_keys,
+            base_key,
+            &account,
+            authorization_keys,
+            blocktime,
+            deploy_hash,
+            gas_limit,
+            protocol_version,
+            correlation_id,
+            tracking_copy,
+            phase,
+            protocol_data,
+            system_contract_cache,
+        ))
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn deploy(
+        &self,
+        correlation_id: CorrelationId,
+        executor: &Executor,
+        preprocessor: &Preprocessor,
+        protocol_version: ProtocolVersion,
+        prestate_hash: Blake2bHash,
+        blocktime: BlockTime,
+        deploy_item: DeployItem,
+    ) -> Result<ExecutionResult, RootNotFound> {
+        // spec: https://casperlabs.atlassian.net/wiki/spaces/EN/pages/123404576/Payment+code+execution+specification
+
+        // Obtain current protocol data for given version
+        // do this first, as there is no reason to proceed if protocol version is invalid
+        let protocol_data = match self.state.get_protocol_data(protocol_version) {
+            Ok(Some(protocol_data)) => protocol_data,
+            Ok(None) => {
+                let error = Error::InvalidProtocolVersion(protocol_version);
+                return Ok(ExecutionResult::precondition_failure(error));
+            }
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(Error::Exec(
+                    error.into(),
+                )));
+            }
+        };
+
+        // Create tracking copy (which functions as a deploy context)
+        // validation_spec_2: prestate_hash check
+        // do this second; as there is no reason to proceed if the prestate hash is invalid
+        let tracking_copy = match self.tracking_copy(prestate_hash) {
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error)),
+            Ok(None) => return Err(RootNotFound::new(prestate_hash)),
+            Ok(Some(tracking_copy)) => Rc::new(RefCell::new(tracking_copy)),
+        };
+
+        let base_key = Key::Account(deploy_item.address);
+
+        // Get addr bytes from `address` (which is actually a Key)
+        // validation_spec_3: account validity
+        let account_public_key = match base_key.into_account() {
+            Some(account_addr) => account_addr,
+            None => {
+                return Ok(ExecutionResult::precondition_failure(
+                    error::Error::Authorization,
+                ));
+            }
+        };
+
+        let authorization_keys = deploy_item.authorization_keys;
+
+        // Get account from tracking copy
+        // validation_spec_3: account validity
+        let account = match self.get_authorized_account(
+            correlation_id,
+            account_public_key,
+            &authorization_keys,
+            Rc::clone(&tracking_copy),
+        ) {
+            Ok(account) => account,
+            Err(e) => return Ok(ExecutionResult::precondition_failure(e)),
+        };
+
+        let session = deploy_item.session;
+        let payment = deploy_item.payment;
+        let deploy_hash = deploy_item.deploy_hash;
+
+        // Create session code `A` from provided session bytes
+        // validation_spec_1: valid wasm bytes
+        // we do this upfront as there is no reason to continue if session logic is invalid
+        let session_module = match self.get_module(
+            Rc::clone(&tracking_copy),
+            &session,
+            &account,
+            correlation_id,
+            preprocessor,
+            &protocol_version,
+        ) {
+            Ok(module) => module,
+            Err(error) => {
+                return Ok(ExecutionResult::precondition_failure(error));
+            }
+        };
 
         // Get mint system contract details
         // payment_code_spec_6: system contract validity
@@ -1086,6 +1231,8 @@ where
             Ok(balance) => balance,
             Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
         };
+
+        let max_payment_cost: Motes = Motes::new(U512::from(MAX_PAYMENT));
 
         // Enforce minimum main purse balance validation
         // validation_spec_5: account main purse minimum balance
@@ -1200,7 +1347,7 @@ where
                 ),
             };
 
-            let payment_args = match payment.take_args() {
+            let payment_args = match payment.into_runtime_args() {
                 Ok(args) => args,
                 Err(e) => {
                     let exec_err: crate::execution::Error = e.into();
@@ -1361,8 +1508,8 @@ where
 
         let post_payment_tracking_copy = tracking_copy.borrow();
         let session_tracking_copy = Rc::new(RefCell::new(post_payment_tracking_copy.fork()));
-        // session_code_spec_2: execute session code
 
+        // session_code_spec_2: execute session code
         let (
             session_module,
             session_base_key,
@@ -1396,7 +1543,7 @@ where
             ),
         };
 
-        let session_args = match session.take_args() {
+        let session_args = match session.into_runtime_args() {
             Ok(args) => args,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
@@ -1460,7 +1607,7 @@ where
                 const ARG_ACCOUNT_KEY: &str = "account";
                 runtime_args! {
                     ARG_AMOUNT => finalize_cost_motes.value(),
-                    ARG_ACCOUNT_KEY => account_addr,
+                    ARG_ACCOUNT_KEY => account_public_key,
                 }
             };
 
@@ -1476,16 +1623,15 @@ where
 
             let mut proof_of_stake_keys = proof_of_stake_contract.named_keys().to_owned();
 
-            let base_key = Key::from(proof_of_stake_hash);
-
             let gas_limit = Gas::new(U512::from(std::u64::MAX));
             let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-            executor.exec_finalize(
+            executor.exec_system_contract(
+                DirectSystemContractCall::FinalizePayment,
                 proof_of_stake_module,
                 proof_of_stake_args,
                 &mut proof_of_stake_keys,
-                base_key,
+                Key::from(protocol_data.proof_of_stake()),
                 &system_account,
                 authorization_keys,
                 blocktime,

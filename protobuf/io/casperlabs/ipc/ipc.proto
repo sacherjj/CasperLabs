@@ -19,7 +19,7 @@ message StoredContractHash{
 }
 
 message StoredContractName{
-  // name of a stored contract associated with the executing account (uref or hash)
+  // name of a stored contract associated with the executing account
   string name = 1;
   bytes args = 2;   // ABI-encoded arguments
   string entry_point_name = 3; // optional entry point name (defaults to "call")
@@ -43,6 +43,10 @@ message StoredContractPackageHash {
     bytes args = 4; // ABI-encoded arguments
 }
 
+message TransferToAccount {
+    bytes args = 4; // ABI-encoded arguments
+}
+
 message DeployPayload {
   reserved 4; // StoredContractURef is no longer supported
   oneof payload {
@@ -50,7 +54,8 @@ message DeployPayload {
     StoredContractHash stored_contract_hash = 2;  
     StoredContractName stored_contract_name = 3;  
     StoredContractPackage stored_package_by_name = 5; 
-    StoredContractPackageHash stored_package_by_hash = 6; 
+    StoredContractPackageHash stored_package_by_hash = 6;
+    TransferToAccount transfer_to_account = 7;
   }
 }
 
