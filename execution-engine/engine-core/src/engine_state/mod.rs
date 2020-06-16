@@ -768,7 +768,7 @@ where
             }
             ExecutableDeployItem::StoredContractByHash { .. }
             | ExecutableDeployItem::StoredContractByName { .. } => {
-                let stored_contract_key = deploy_item.lookup_key_for_account(&account)?.unwrap();
+                let stored_contract_key = deploy_item.to_contract_hash_key(&account)?.unwrap();
 
                 let contract = tracking_copy
                     .borrow_mut()
@@ -790,7 +790,7 @@ where
             }
             ExecutableDeployItem::StoredVersionedContractByName { version, .. }
             | ExecutableDeployItem::StoredVersionedContractByHash { version, .. } => {
-                let contract_package_key = deploy_item.lookup_key_for_account(&account)?.unwrap();
+                let contract_package_key = deploy_item.to_contract_hash_key(&account)?.unwrap();
                 let contract_package_hash = contract_package_key.into_seed();
 
                 let contract_package = tracking_copy

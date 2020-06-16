@@ -45,7 +45,7 @@ pub enum ExecutableDeployItem {
 }
 
 impl ExecutableDeployItem {
-    pub(crate) fn lookup_key_for_account(
+    pub(crate) fn to_contract_hash_key(
         &self,
         account: &Account,
     ) -> Result<Option<Key>, error::Error> {
@@ -65,12 +65,6 @@ impl ExecutableDeployItem {
         }
     }
 
-    pub fn take_stored_contract_name(self) -> Option<String> {
-        match self {
-            ExecutableDeployItem::StoredContractByName { name, .. } => Some(name),
-            _ => None,
-        }
-    }
     pub fn take_args(self) -> Result<RuntimeArgs, bytesrepr::Error> {
         match self {
             ExecutableDeployItem::ModuleBytes { args, .. }
