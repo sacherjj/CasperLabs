@@ -23,8 +23,7 @@ const ARG_AMOUNT: &str = "amount";
 #[ignore]
 #[test]
 fn should_enforce_intended_execution_contexts() {
-    // This test runs a contract that's after every call extends the same key with
-    // more data
+    // This test runs a contract that extends the same key with more data after every call.
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_HEADERS,
@@ -113,13 +112,6 @@ fn should_enforce_intended_execution_contexts() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
-    let account = builder
-        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
-        .expect("should query account")
-        .as_account()
-        .cloned()
-        .expect("should be account");
-
     let _new_key = account
         .named_keys()
         .get(NEW_KEY)
@@ -129,8 +121,7 @@ fn should_enforce_intended_execution_contexts() {
 #[ignore]
 #[test]
 fn should_enforce_intended_execution_context_direct_by_name() {
-    // This test runs a contract that's after every call extends the same key with
-    // more data
+    // This test runs a contract that extends the same key with more data after every call.
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_HEADERS,
@@ -204,13 +195,6 @@ fn should_enforce_intended_execution_context_direct_by_name() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
-    let account = builder
-        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
-        .expect("should query account")
-        .as_account()
-        .cloned()
-        .expect("should be account");
-
     let _new_key = account
         .named_keys()
         .get(NEW_KEY)
@@ -220,8 +204,7 @@ fn should_enforce_intended_execution_context_direct_by_name() {
 #[ignore]
 #[test]
 fn should_enforce_intended_execution_context_direct_by_hash() {
-    // This test runs a contract that's after every call extends the same key with
-    // more data
+    // This test runs a contract that extends the same key with more data after every call.
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_HEADERS,
@@ -310,13 +293,6 @@ fn should_enforce_intended_execution_context_direct_by_hash() {
         .get(PACKAGE_ACCESS_KEY)
         .expect("should have package hash");
 
-    let account = builder
-        .query(None, Key::Account(DEFAULT_ACCOUNT_ADDR), &[])
-        .expect("should query account")
-        .as_account()
-        .cloned()
-        .expect("should be account");
-
     let _new_key = account
         .named_keys()
         .get(NEW_KEY)
@@ -326,8 +302,7 @@ fn should_enforce_intended_execution_context_direct_by_hash() {
 #[ignore]
 #[test]
 fn should_not_call_session_from_contract() {
-    // This test runs a contract that's after every call extends the same key with
-    // more data
+    // This test runs a contract that extends the same key with more data after every call.
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_HEADERS,
