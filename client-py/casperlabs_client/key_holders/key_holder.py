@@ -30,6 +30,9 @@ class KeyHolder(ABC):
         """ String representation of the key algorithm """
         return self._algorithm
 
+    # TODO: Move common key hydration logic into these properties and make methods for converting
+    # TODO: between key data formats that are implemented in the key algorithm classes.
+
     @property
     @abstractmethod
     def private_key_pem(self):
@@ -99,5 +102,12 @@ class KeyHolder(ABC):
 
     @property
     def account_hash(self) -> bytes:
-        """ Generate hash of public key and key algorithm for use as primary identifier in the system """
-        return crypto.blake2b_hash(self.algorithm.encode("UTF-8") + b"\x00" + self.public_key)
+        """ Generate hash of public key and key algorithm for use as primary identifier in the system as bytes """
+        return crypto.blake2b_hash(
+            self.algorithm.encode("UTF-8") + b"\x00" + self.public_key
+        )
+
+    @property
+    def account_hash_hex(self) -> str:
+        """ Generate hash of public key and key algorithm for use as primary identifier in the system as hex str """
+        return self.account_hash.hex()

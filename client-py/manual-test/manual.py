@@ -4,12 +4,36 @@ import os
 import pytest
 
 from casperlabs_client import CasperLabsClient
+from casperlabs_client.abi import ABI
 from casperlabs_client.key_holders import ED25519Key
-from casperlabs_client.commands import show_peers_cmd, visualize_dag_cmd, show_blocks_cmd, show_block_cmd
+from casperlabs_client.commands import (
+    show_peers_cmd,
+    visualize_dag_cmd,
+    show_blocks_cmd,
+    show_block_cmd,
+)
 from casperlabs_client.consts import SUPPORTED_KEY_ALGORITHMS
 
 
 THIS_DIRECTORY = Path(os.path.dirname(os.path.realpath(__file__)))
+WASM_DIRECTORY = (
+    THIS_DIRECTORY.parent.parent
+    / "execution-engine"
+    / "target"
+    / "wasm32-unknown-unknown"
+    / "release"
+)
+HACK_DOCKER_DIRECTORY = THIS_DIRECTORY.parent.parent / "hack" / "docker"
+ACCOUNTS_CSV = (
+    HACK_DOCKER_DIRECTORY / ".casperlabs" / "chainspec" / "genesis" / "accounts.csv"
+)
+NODE_0_PRIVATE_PEM_PATH = (
+    HACK_DOCKER_DIRECTORY
+    / ".casperlabs"
+    / "nodes"
+    / "nodes-0"
+    / "validator-private.pem"
+)
 
 
 @pytest.fixture()
@@ -29,15 +53,29 @@ def account_keys_directory():
 
 
 @pytest.fixture(scope="session")
-def hack_docker_directory():
-    return THIS_DIRECTORY.parent.parent / "hack" / "docker"
+def genesis_account_and_hash():
+    """ Returns tuple of data from genesis account using accounts.csv
+
+     :returns: (public_key_hex, public_key_pem_path, account_hash_hex)
+     """
+    with open(ACCOUNTS_CSV, "r") as f:
+        line = f.readline()
+        account_public_key_hex = line.split(",")[0]
+    key_holder = ED25519Key(public_key=bytes.fromhex(account_public_key_hex))
+    with tempfile.TemporaryDirectory("rb") as td:
+        key_path = Path(td) / "account-public.pem"
+        with open(key_path, "wb") as f:
+            f.write(key_holder.public_key_pem)
+        return account_public_key_hex, key_path, key_holder.account_hash_hex
 
 
 @pytest.fixture(scope="session")
-def hack_docker_account_hashes(hack_docker_directory):
+def hack_docker_account_hashes():
     accounts = []
     for file_num in range(3):
-        file_path = hack_docker_directory / "keys" / f"account-{file_num}" / "account-id-hex"
+        file_path = (
+            HACK_DOCKER_DIRECTORY / "keys" / f"account-{file_num}" / "account-id-hex"
+        )
         with open(file_path, "rb") as f:
             account_hash_bytes = f.read().strip()
             account_hash = account_hash_bytes.decode("UTF_8")
@@ -45,9 +83,9 @@ def hack_docker_account_hashes(hack_docker_directory):
     return accounts
 
 
-def test_account_hash(casperlabs_client, hack_docker_directory):
+def test_account_hash(casperlabs_client):
     """ Use account generated key and hash to test python hash """
-    account_path = hack_docker_directory / "keys" / "account-0"
+    account_path = HACK_DOCKER_DIRECTORY / "keys" / "account-0"
     key_holder = ED25519Key.from_public_key_path(account_path / "account-public.pem")
     with open(account_path / "account-id-hex", "rb") as f:
         account_hash_hex = f.read().strip().decode("UTF_8")
@@ -55,10 +93,36 @@ def test_account_hash(casperlabs_client, hack_docker_directory):
     assert account_hash_hex == expected_hash
 
 
-# def test_balance(casperlabs_client, hack_docker_accounts):
-#     block_hash = get_valid_block_hash_str(casperlabs_client)
-#     result = casperlabs_client.balance(hack_docker_accounts[0], block_hash)
-#     assert result == "bob"
+def test_balance(casperlabs_client, genesis_account_and_hash):
+    _, _, genesis_account_hash_hex = genesis_account_and_hash
+    block_hash = get_valid_block_hash_str(casperlabs_client)
+    result = casperlabs_client.balance(genesis_account_hash_hex, block_hash)
+    assert result > 0
+
+
+def test_deploy_for_faucet(casperlabs_client, account_keys_directory):
+    faucet_wasm_path = WASM_DIRECTORY / "faucet.wasm"
+    private_key_pem_path = account_keys_directory / "ED25519-private.pem"
+    key_holder = ED25519Key.from_private_key_path(private_key_pem_path)
+    session_args = ABI.args(
+        [
+            ABI.account("account", key_holder.account_hash_hex),
+            ABI.big_int("amount", 1000000),
+        ]
+    )
+    result = casperlabs_client.deploy(
+        private_key=private_key_pem_path,
+        session=faucet_wasm_path,
+        session_args=ABI.args_to_json(session_args),
+    )
+    print(result)
+
+
+def test_transfer(casperlabs_client, genesis_account_and_hash, account_keys_directory):
+    # genesis_public_key_hex, _, genesis_account_hash_hex = genesis_account_and_hash
+    # casperlabs_client.transfer()
+
+    pass
 
 
 def test_show_peers(casperlabs_client):

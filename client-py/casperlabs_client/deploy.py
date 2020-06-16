@@ -12,7 +12,7 @@ from .key_holders import ED25519Key, SECP256K1Key
 def sign_deploy(deploy, key_holder):
     signature_bytes = key_holder.sign(deploy.deploy_hash)
     signature = consensus.Signature(
-        sig_algorithm=key_holder.algorithm, sig=signature_bytes
+        sig_algorithm=key_holder.algorithm.lower(), sig=signature_bytes
     )
     deploy.approvals.extend(
         [
@@ -94,7 +94,7 @@ class DeployData:
         Create a protobuf deploy object. See deploy for description of parameters.
         """
         if len(self.from_addr) != 32:
-            raise Exception(f"from_addr must be 32 bytes")
+            raise Exception("from_addr must be 32 bytes")
 
         self.payment_code.validate()
         self.session_code.validate()

@@ -97,6 +97,6 @@ def test_ed25519_round_trip_private_key_pem():
 def test_ed25519_account_hash():
     public_key = b"\xc1\xa5\x11%?\xe4\xbc\xe3\xab\xe3f7\xfd'\x10B\xdd\xfe\x0e\x98\x15=m'n\xcb\xfc\x18.\xf4\x1b\xd8"
     key_holder = ED25519Key(public_key=public_key)
-    expected_account_hash = b'\t%\xa8\x12\x83\xd3\x8b\x00\x19\xd3\x8dN\x8b\x16U<\xab\xe2MQ\xd8yR\x02\xebBn\x15\xd5F`8'
+    expected_account_hash = b"\t%\xa8\x12\x83\xd3\x8b\x00\x19\xd3\x8dN\x8b\x16U<\xab\xe2MQ\xd8yR\x02\xebBn\x15\xd5F`8"
     account_hash = key_holder.account_hash
     assert account_hash == expected_account_hash, "account_hash does not equal expected"
