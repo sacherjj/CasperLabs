@@ -45,7 +45,7 @@ use types::{
     system_contract_type::PROOF_OF_STAKE,
     AccessRights, BlockTime, Contract, ContractHash, ContractPackage, ContractPackageHash,
     ContractVersionKey, EntryPoint, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
-    KEY_HASH_LENGTH, U512,
+    U512,
 };
 
 pub use self::{
@@ -757,98 +757,56 @@ where
         preprocessor: &Preprocessor,
         protocol_version: &ProtocolVersion,
     ) -> Result<GetModuleResult, error::Error> {
-        match deploy_item {
+        let (contract_package, contract, base_key) = match deploy_item {
             ExecutableDeployItem::ModuleBytes { module_bytes, .. } => {
                 let module = preprocessor.preprocess(&module_bytes)?;
-                Ok(GetModuleResult::Session {
+                return Ok(GetModuleResult::Session {
                     module,
                     contract_package: ContractPackage::default(),
                     entry_point: EntryPoint::default(),
-                })
+                });
             }
-            ExecutableDeployItem::StoredContractByHash {
-                hash, entry_point, ..
-            } => {
-                let hash_len = hash.len();
-                if hash_len != KEY_HASH_LENGTH {
-                    return Err(error::Error::InvalidHashLength {
-                        expected: KEY_HASH_LENGTH,
-                        actual: hash_len,
-                    });
-                }
-                let mut contract_hash = [0u8; KEY_HASH_LENGTH];
-                contract_hash.copy_from_slice(hash);
-                let module = self.get_module_from_contract_hash(
-                    tracking_copy,
-                    contract_hash,
-                    correlation_id,
-                    protocol_version,
-                )?;
-                Ok(GetModuleResult::Session {
-                    module,
-                    contract_package: ContractPackage::default(),
-                    entry_point: EntryPoint::default_with_name(entry_point),
-                })
-            }
-            ExecutableDeployItem::StoredContractByName {
-                name, entry_point, ..
-            } => {
-                let stored_contract_key = account.named_keys().get(name).ok_or_else(|| {
-                    error::Error::Exec(execution::Error::NamedKeyNotFound(name.to_string()))
-                })?;
+            ExecutableDeployItem::StoredContractByHash { .. }
+            | ExecutableDeployItem::StoredContractByName { .. } => {
+                let stored_contract_key = deploy_item.to_contract_hash_key(&account)?.unwrap();
 
-                println!(
-                    "get contract by name {} key {:?}",
-                    name, stored_contract_key
-                );
+                let contract = tracking_copy
+                    .borrow_mut()
+                    .get_contract(correlation_id, stored_contract_key.into_hash().unwrap())?;
 
-                if let Key::URef(_) = stored_contract_key {
-                    return Err(error::Error::InvalidKeyVariant(name.to_string()));
+                if !contract.is_compatible_protocol_version(*protocol_version) {
+                    let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
+                        expected: protocol_version.value().major,
+                        actual: contract.protocol_version().value().major,
+                    };
+                    return Err(error::Error::Exec(exec_error));
                 }
 
-                let contract_hash = stored_contract_key.into_seed();
+                let contract_package = tracking_copy
+                    .borrow_mut()
+                    .get_contract_package(correlation_id, contract.contract_package_hash())?;
 
-                let module = self.get_module_from_contract_hash(
-                    tracking_copy,
-                    contract_hash,
-                    correlation_id,
-                    protocol_version,
-                )?;
-                Ok(GetModuleResult::Session {
-                    module,
-                    contract_package: ContractPackage::default(),
-                    entry_point: EntryPoint::default_with_name(entry_point),
-                })
+                (contract_package, contract, stored_contract_key)
             }
-            ExecutableDeployItem::StoredVersionedContractByName {
-                name,
-                entry_point,
-                version,
-                ..
-            } => {
-                let contract_package_key = account.named_keys().get(name).ok_or_else(|| {
-                    error::Error::Exec(execution::Error::NamedKeyNotFound(name.to_string()))
-                })?;
-
+            ExecutableDeployItem::StoredVersionedContractByName { version, .. }
+            | ExecutableDeployItem::StoredVersionedContractByHash { version, .. } => {
+                let contract_package_key = deploy_item.to_contract_hash_key(&account)?.unwrap();
                 let contract_package_hash = contract_package_key.into_seed();
 
                 let contract_package = tracking_copy
                     .borrow_mut()
                     .get_contract_package(correlation_id, contract_package_hash)?;
 
-                let contract_version_key = match version {
-                    Some(version) => {
-                        ContractVersionKey::new(protocol_version.value().major, *version)
-                    }
-                    None => match contract_package.get_current_contract_version() {
-                        Some(v) => *v,
-                        None => {
-                            return Err(error::Error::Exec(
-                                execution::Error::NoActiveContractVersions(contract_package_hash),
-                            ))
-                        }
-                    },
-                };
+                let maybe_version_key =
+                    version.map(|ver| ContractVersionKey::new(protocol_version.value().major, ver));
+
+                let contract_version_key = maybe_version_key
+                    .or_else(|| contract_package.get_current_contract_version().cloned())
+                    .ok_or_else(|| {
+                        error::Error::Exec(execution::Error::NoActiveContractVersions(
+                            contract_package_hash,
+                        ))
+                    })?;
 
                 if !contract_package.is_contract_version_in_use(contract_version_key) {
                     return Err(error::Error::Exec(
@@ -868,102 +826,38 @@ where
                     .borrow_mut()
                     .get_contract(correlation_id, contract_hash)?;
 
-                let method_entry_point =
-                    contract.get_entry_point(entry_point).ok_or_else(|| {
-                        error::Error::Exec(execution::Error::NoSuchMethod(entry_point.to_owned()))
-                    })?;
-
-                let contract_wasm = tracking_copy
-                    .borrow_mut()
-                    .get_contract_wasm(correlation_id, contract.contract_wasm_hash())?;
-
-                let module = engine_wasm_prep::deserialize(contract_wasm.bytes())?;
-
-                match method_entry_point.entry_point_type() {
-                    EntryPointType::Session => Ok(GetModuleResult::Session {
-                        module,
-                        contract_package,
-                        entry_point: method_entry_point.to_owned(),
-                    }),
-                    EntryPointType::Contract => Ok(GetModuleResult::Contract {
-                        module,
-                        base_key: contract_hash.into(),
-                        contract: contract.to_owned(),
-                        contract_package,
-                        entry_point: method_entry_point.to_owned(),
-                    }),
-                }
+                (contract_package, contract, contract_package_key)
             }
-            ExecutableDeployItem::StoredVersionedContractByHash {
-                hash,
-                version,
+        };
+
+        let entry_point_name = deploy_item.entry_point_name();
+
+        let entry_point = contract
+            .get_entry_point(entry_point_name)
+            .cloned()
+            .ok_or_else(|| {
+                error::Error::Exec(execution::Error::NoSuchMethod(entry_point_name.to_owned()))
+            })?;
+
+        let contract_wasm = tracking_copy
+            .borrow_mut()
+            .get_contract_wasm(correlation_id, contract.contract_wasm_hash())?;
+
+        let module = engine_wasm_prep::deserialize(contract_wasm.bytes())?;
+
+        match entry_point.entry_point_type() {
+            EntryPointType::Session => Ok(GetModuleResult::Session {
+                module,
+                contract_package,
                 entry_point,
-                ..
-            } => {
-                let contract_package_hash = *hash;
-
-                let contract_package = tracking_copy
-                    .borrow_mut()
-                    .get_contract_package(correlation_id, contract_package_hash)?;
-
-                let contract_version_key = match version {
-                    Some(version) => {
-                        ContractVersionKey::new(protocol_version.value().major, *version)
-                    }
-                    None => match contract_package.get_current_contract_version() {
-                        Some(v) => *v,
-                        None => {
-                            return Err(error::Error::Exec(
-                                execution::Error::NoActiveContractVersions(contract_package_hash),
-                            ))
-                        }
-                    },
-                };
-
-                if !contract_package.is_contract_version_in_use(contract_version_key) {
-                    return Err(error::Error::Exec(
-                        execution::Error::InvalidContractVersion(contract_version_key),
-                    ));
-                }
-
-                let contract_hash = *contract_package
-                    .get_contract(contract_version_key)
-                    .ok_or_else(|| {
-                        error::Error::Exec(execution::Error::InvalidContractVersion(
-                            contract_version_key,
-                        ))
-                    })?;
-
-                let contract = tracking_copy
-                    .borrow_mut()
-                    .get_contract(correlation_id, contract_hash)?;
-
-                let method_entry_point =
-                    contract.get_entry_point(entry_point).ok_or_else(|| {
-                        error::Error::Exec(execution::Error::NoSuchMethod(entry_point.to_owned()))
-                    })?;
-
-                let contract_wasm = tracking_copy
-                    .borrow_mut()
-                    .get_contract_wasm(correlation_id, contract.contract_wasm_hash())?;
-
-                let module = engine_wasm_prep::deserialize(contract_wasm.bytes())?;
-
-                match method_entry_point.entry_point_type() {
-                    EntryPointType::Session => Ok(GetModuleResult::Session {
-                        module,
-                        contract_package,
-                        entry_point: method_entry_point.to_owned(),
-                    }),
-                    EntryPointType::Contract => Ok(GetModuleResult::Contract {
-                        module,
-                        base_key: contract_hash.into(),
-                        contract: contract.to_owned(),
-                        contract_package,
-                        entry_point: method_entry_point.to_owned(),
-                    }),
-                }
-            }
+            }),
+            EntryPointType::Contract => Ok(GetModuleResult::Contract {
+                module,
+                base_key,
+                contract,
+                contract_package,
+                entry_point,
+            }),
         }
     }
 
@@ -981,10 +875,6 @@ where
         // A contract may only call a stored contract that has the same protocol major version
         // number.
         if !contract.is_compatible_protocol_version(*protocol_version) {
-            println!(
-                "incompatible 1 {:?} hash:{:?} {:?}",
-                protocol_version, contract_hash, contract
-            );
             let exec_error = execution::Error::IncompatibleProtocolMajorVersion {
                 expected: protocol_version.value().major,
                 actual: contract.protocol_version().value().major,

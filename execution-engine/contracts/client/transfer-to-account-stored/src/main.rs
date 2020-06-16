@@ -33,7 +33,7 @@ fn store() -> ContractHash {
             ],
             CLType::URef,
             EntryPointAccess::Public,
-            EntryPointType::Contract,
+            EntryPointType::Session,
         );
 
         entry_points.add_entry_point(entry_point);
