@@ -275,7 +275,14 @@ object CLValueInstance {
     // This error is raised when serializing (as in the `toValue` method) a
     // `Map` with keys that cannot be sorted because no ordering is defined. Keys
     // must be sorted to ensure deterministic serialization.
-    case object UnorderedElements extends Error
+    case class UnorderedElements(message: java.lang.String) extends Error
+  }
+
+  private implicit class OrderingOps[T](x: T)(implicit ev: Ordering[T]) {
+    def <(y: T): Boolean = ev.lt(x, y)
+  }
+  private implicit class SeqOrderingOps[T](x: Seq[T])(implicit ev: Ordering[T]) {
+    def <(y: Seq[T]): Boolean = implicitly[Ordering[Iterable[T]]].lt(x.toIterable, y.toIterable)
   }
 
   implicit val order: Ordering[CLValueInstance] = Ordering.fromLessThan {
@@ -299,8 +306,58 @@ object CLValueInstance {
     case (Key(cltype.Key.Local(seed1, hash1)), Key(cltype.Key.Local(seed2, hash2))) =>
       ByteArray32.lt(seed1, seed2) || (seed1 == seed2 && ByteArray32.lt(hash1, hash2))
 
-    // TODO: complete ordering implementation
-    case _ => throw new Exception("Ordering not implemented for recursive CLValueInstances")
+    case (Option(_, tx), Option(_, ty)) if tx != ty =>
+      throw new IllegalArgumentException(s"Incompatible element types: Option($tx) != Option($ty)")
+
+    case (Option(x, _), Option(y, _)) =>
+      x < y
+
+    case (List(_, tx), List(_, ty)) if tx != ty =>
+      throw new IllegalArgumentException(s"Incompatible element types: List($tx) != List($ty)")
+
+    case (List(xs, _), List(ys, _)) =>
+      xs < ys
+
+    case (FixedList(_, tx, lx), FixedList(_, ty, ly)) if tx != ty || lx != ly =>
+      throw new IllegalArgumentException(
+        s"Incompatible element types: FixedList($tx, $lx) != FixedList($ty, $ly)"
+      )
+
+    case (FixedList(xs, _, _), FixedList(ys, _, _)) =>
+      xs < ys
+
+    case (Result(_, txO, txE), Result(_, tyO, tyE)) if txO != tyO || txE != tyE =>
+      throw new IllegalArgumentException(
+        s"Incompatible element types: Result($txO, $txE) != Result($tyO, $tyE)"
+      )
+
+    case (Result(x, _, _), Result(y, _, _)) =>
+      (x, y) match {
+        case (Left(_), Right(_))  => true
+        case (Right(_), Left(_))  => false
+        case (Left(x), Left(y))   => x < y
+        case (Right(x), Right(y)) => x < y
+      }
+
+    case (Map(_, txK, txV), Map(_, tyK, tyV)) if txK != tyK || txV != tyV =>
+      throw new IllegalArgumentException(
+        s"Incompatible element types: Map($txK, $txV) != Map($tyK, $tyV)"
+      )
+
+    case (Map(mx, _, _), Map(my, _, _)) =>
+      mx.toList.sorted < my.toList.sorted
+
+    case (Tuple1(x1), Tuple1(y1)) =>
+      x1 < y1
+
+    case (Tuple2(x1, x2), Tuple2(y1, y2)) =>
+      (x1, x2) < ((y1, y2))
+
+    case (Tuple3(x1, x2, x3), Tuple3(y1, y2, y3)) =>
+      (x1, x2, x3) < ((y1, y2, y3))
+
+    case _ =>
+      throw new IllegalArgumentException("Incompatible element types.")
   }
 
   private def lift[T <: CLValueInstance, E <: Error](
@@ -362,7 +419,7 @@ object CLValueInstance {
 
       case CLValueInstance.Map(values, _, _) :: tail =>
         Try(values.toList.sortBy(_._1)) match {
-          case Failure(_) => Left(Error.UnorderedElements)
+          case Failure(ex) => Left(Error.UnorderedElements(ex.getMessage))
 
           case Success(sortedPairs) =>
             val sortedElems = sortedPairs.flatMap { case (k, v) => immutable.List(k, v) }

@@ -18,7 +18,12 @@ import io.casperlabs.metrics.implicits._
 import io.casperlabs.metrics.Metrics
 import io.casperlabs.shared.Log
 import io.casperlabs.storage.BlockHash
-import io.casperlabs.storage.dag.{DagRepresentation, DagStorage, FinalityStorageReader}
+import io.casperlabs.storage.dag.{
+  AncestorsStorage,
+  DagRepresentation,
+  DagStorage,
+  FinalityStorageReader
+}
 import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.shared.SemaphoreMap
 
@@ -47,6 +52,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     conf: HighwayConf,
     val era: Era,
     leaderFunction: LeaderFunction,
+    omegaFunction: OmegaFunction,
     roundExponentRef: Ref[F, Int],
     maybeMessageProducer: Option[MessageProducer[F]],
     // Make sure only one message is created by us at any time to avoid an equivocation.
@@ -64,9 +70,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
     // messages build on blocks long gone and check a huge swathe of the DAG for merge
     // conflicts.
     isSynced: => F[Boolean],
-    dag: DagRepresentation[F],
-    // Random number generator used to pick the omega delay.
-    rng: Random = new Random()
+    dag: DagRepresentation[F]
 ) {
   import EraRuntime._, Agenda._
   import HighwayConf.VotingDuration
@@ -74,12 +78,15 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   implicit val metricsSource = HighwayMetricsSource / "EraRuntime"
 
   type HWL[A] = HighwayLog[F, A]
-  private val noop = HighwayLog.unit[F]
+  private val noop     = HighwayLog.unit[F]
+  private val noagenda = HighwayLog.liftF(Agenda.empty.pure[F])
 
   val startTick = Ticks(era.startTick)
   val endTick   = Ticks(era.endTick)
   val start     = conf.toInstant(startTick)
   val end       = conf.toInstant(endTick)
+
+  val isBonded = maybeMessageProducer.isDefined
 
   val bookingBoundaries =
     conf.criticalBoundaries(start, end, delayDuration = conf.bookingDuration)
@@ -491,11 +498,16 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
   }
 
   /** Pick a time during the round to send the omega message. */
-  private def chooseOmegaTick(roundStart: Ticks, roundEnd: Ticks): Ticks = {
-    val r = rng.nextDouble()
-    val o = conf.omegaMessageTimeStart + r * (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart)
-    val t = roundStart + o * (roundEnd - roundStart)
-    Ticks(t.toLong)
+  private def chooseOmegaTick(
+      validatorId: PublicKeyBS,
+      roundStart: Ticks,
+      roundEnd: Ticks
+  ): Ticks = {
+    val order  = omegaFunction(roundStart)
+    val offset = omegaOffset(order, validatorId)
+    val delay  = conf.omegaMessageTimeStart + (conf.omegaMessageTimeEnd - conf.omegaMessageTimeStart) * offset
+    val tick   = roundStart + (roundEnd - roundStart) * delay
+    Ticks(tick.toLong)
   }
 
   /** Preliminary check before the block is executed. Invalid blocks can be dropped. */
@@ -648,7 +660,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
         // Alternatively `StartRound` could just return a `CreateLambdaMessage`,
         // a `CreateOmegaMessage` and another `StartRound` to make them all
         // independently scheduleable.
-        def agenda =
+        def agenda(validatorId: PublicKeyBS) =
           for {
             now                           <- currentTick
             (currentRoundId, nextRoundId) <- roundBoundariesAt(now)
@@ -664,7 +676,7 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
               // Schedule the omega for whatever the current round is, don't bother
               // with the old one if the block production was so slow that it pushed
               // us into the next round already. We can still participate in this one.
-              val omegaTick = chooseOmegaTick(currentRoundId, nextRoundId)
+              val omegaTick = chooseOmegaTick(validatorId, currentRoundId, nextRoundId)
               Agenda(omegaTick -> Agenda.CreateOmegaMessage(currentRoundId))
             } else Agenda.empty
 
@@ -675,16 +687,15 @@ class EraRuntime[F[_]: Sync: Clock: Metrics: Log: EraStorage: FinalityStorageRea
             omega ++ next
           }
 
-        maybeMessageProducer
-          .filter(_.validatorId == leaderFunction(roundId))
-          .fold(noop) {
-            createLambdaMessage(_, roundId)
-          } >> HighwayLog.liftF(agenda)
+        maybeMessageProducer.fold(noagenda) { mp =>
+          createLambdaMessage(mp, roundId).whenA(mp.validatorId == leaderFunction(roundId)) >>
+            HighwayLog.liftF(agenda(mp.validatorId))
+        }
 
       case Agenda.CreateOmegaMessage(roundId) =>
         maybeMessageProducer.fold(noop) {
           createOmegaMessage(_, roundId)
-        } >> HighwayLog.liftF(Agenda.empty.pure[F])
+        } >> noagenda
     }
 
   /** Do any kind of special logic when we encounter a "critical" block in the protocol:
@@ -751,7 +762,7 @@ object EraRuntime {
     bonds = genesis.getHeader.getState.bonds
   )
 
-  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromGenesis[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice: AncestorsStorage](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -763,7 +774,7 @@ object EraRuntime {
     fromEra[F](conf, era, maybeMessageProducer, initRoundExponent, isSynced, leaderSequencer)
   }
 
-  def fromEra[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice](
+  def fromEra[F[_]: Sync: MakeSemaphore: Clock: Metrics: Log: DagStorage: EraStorage: FinalityStorageReader: ForkChoice: AncestorsStorage](
       conf: HighwayConf,
       era: Era,
       maybeMessageProducer: Option[MessageProducer[F]],
@@ -772,20 +783,23 @@ object EraRuntime {
       leaderSequencer: LeaderSequencer = LeaderSequencer
   ): F[EraRuntime[F]] =
     for {
-      leaderFunction   <- leaderSequencer[F](era)
+      leaderFunction   <- leaderSequencer.leaderFunction[F](era)
+      omegaFunction    <- leaderSequencer.omegaFunction[F](era)
       roundExponentRef <- Ref.of[F, Int](initRoundExponent)
       dag              <- DagStorage[F].getRepresentation
       semaphoreMap     <- SemaphoreMap[F, PublicKeyBS](1)
+      isOrphanEra      <- isOrphanEra[F](era.keyBlockHash)
     } yield {
       new EraRuntime[F](
         conf,
         era,
         leaderFunction,
+        omegaFunction,
         roundExponentRef,
         // Whether the validator is bonded depends on the booking block. Only bonded validators
         // have to produce blocks and ballots in the era.
         maybeMessageProducer.filter { mp =>
-          era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
+          !isOrphanEra && era.bonds.exists(b => b.validatorPublicKey == mp.validatorId)
         },
         semaphoreMap,
         isSynced,
@@ -923,4 +937,33 @@ object EraRuntime {
           false.pure[F]
       }
       .map(_.isDefined)
+
+  /** Check if a given era is one which is still viable according to the last finalized block.
+    * We don't want to produce messages in eras which were completely bypassed by the LFB, which
+    * is possible if the validator(s) producing messages in the era don't see the same messages
+    * as we do. We still validate their incoming messages, although it's possible that we could
+    * just drop them as invalids, since these eras will never be referenced by siblings.
+    * By not dropping we do extra work but at least it's visible in the Explorer, rather than
+    * fill logs with error messages.
+    */
+  def isOrphanEra[F[_]: MonadThrowable: DagStorage: AncestorsStorage: FinalityStorageReader](
+      keyBlockHash: BlockHash
+  ): F[Boolean] =
+    for {
+      dag      <- DagStorage[F].getRepresentation
+      lfbHash  <- FinalityStorageReader[F].getLastFinalizedBlock
+      lfb      <- dag.lookupUnsafe(lfbHash)
+      keyBlock <- dag.lookupUnsafe(keyBlockHash)
+      relation <- DagOperations.relation[F](keyBlock, lfb)
+    } yield relation.isEmpty
+
+  /** Calculate a [0.0,1.0] offset of a given validator among the others for picking the
+    * time to create an omega message. The offsets are balanced, e.g. with 3 validators
+    * they are [0.0, 0.5, 1.0], not [0.0, 0.33, 0.66].
+    */
+  def omegaOffset[T](xs: Seq[T], x: T): Double =
+    xs.size match {
+      case 1 => 0.5
+      case n => xs.indexOf(x).toDouble / (n - 1)
+    }
 }

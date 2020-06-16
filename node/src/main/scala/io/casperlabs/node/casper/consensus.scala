@@ -325,7 +325,8 @@ object Highway {
                        MessageProducer[F](
                          validatorId,
                          chainName = chainSpec.getGenesis.name,
-                         upgrades = chainSpec.upgrades
+                         upgrades = chainSpec.upgrades,
+                         maxBlockCost = conf.casper.maxBlockCost.value
                        )
                      },
                      messageExecutor = new MessageExecutor[F](

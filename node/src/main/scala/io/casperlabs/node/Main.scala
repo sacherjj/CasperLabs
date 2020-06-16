@@ -32,18 +32,19 @@ object Main {
             implicit val logId = Log.log[Id](logger)
             implicit val log   = Log.useLogger[Task](logger)
 
-            implicit val uncaughtExceptionHandler =
+            val uncaughtExceptionHandler =
               new UncaughtExceptionHandler(shutdownTimeout = 1.minute)
+
+            implicit val schedulerFactory = SchedulerFactory(uncaughtExceptionHandler)
 
             // Create a scheduler to execute the program and block waiting on it to finish.
             implicit val scheduler: Scheduler = {
               val cpus  = java.lang.Runtime.getRuntime.availableProcessors()
               val multi = conf.server.parallelismCpuMultiplier.value
-              Scheduler.forkJoin(
+              schedulerFactory.forkJoin(
                 parallelism = Math.max((cpus * multi).toInt, conf.server.minParallelism.value),
                 maxThreads = conf.server.mainThreads.value,
-                name = "node-runner",
-                reporter = uncaughtExceptionHandler
+                name = "node-runner"
               )
             }
 
@@ -66,9 +67,9 @@ object Main {
       chainSpec: ChainSpec
   )(
       implicit scheduler: Scheduler,
+      schedulerFactory: SchedulerFactory,
       log: Log[Task],
-      logId: Log[Id],
-      ueh: UncaughtExceptionHandler
+      logId: Log[Id]
   ): Task[Unit] = {
 
     val program = command match {
@@ -90,9 +91,9 @@ object Main {
 
   private def nodeProgram(conf: Configuration, chainSpec: ChainSpec)(
       implicit scheduler: Scheduler,
+      schedulerFactory: SchedulerFactory,
       log: Log[Task],
-      logId: Log[Id],
-      ueh: UncaughtExceptionHandler
+      logId: Log[Id]
   ): Task[Unit] = {
     val node =
       for {
