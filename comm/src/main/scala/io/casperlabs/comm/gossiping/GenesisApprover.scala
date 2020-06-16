@@ -292,7 +292,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
       } yield (newApprovals ++ prevApprovals, transitioned)
 
       trySync
-        .handleErrorWith {
+        .recoverWith {
           case NonFatal(ex) =>
             Log[F].warn(
               s"Failed to sync Genesis candidate with bootstrap ${bootstrap.show -> "peer"}: $ex"
@@ -375,7 +375,7 @@ class GenesisApproverImpl[F[_]: Concurrent: Log: Timer](
         _       <- Log[F].debug(s"Relayed an approval for $candidate to ${peer.show -> "peer"}")
       } yield true
 
-      tryRelay.handleErrorWith {
+      tryRelay.recoverWith {
         case NonFatal(ex) =>
           Log[F].warn(s"Could not relay the approval for $candidate to ${peer.show -> "peer"}: $ex") *> false
             .pure[F]

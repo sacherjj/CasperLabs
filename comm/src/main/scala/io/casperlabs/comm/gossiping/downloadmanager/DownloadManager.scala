@@ -609,7 +609,7 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                     s"Scheduling download of ${kind} ${id.show -> "id"} from ${source.show -> "peer"} later, $attempt, $delay"
                   ) *>
                     Timer[F].sleep(delay) *>
-                    tryDownload(item.handle, source, item.relay).handleErrorWith {
+                    tryDownload(item.handle, source, item.relay).recoverWith {
                       case NonFatal(ex) =>
                         val nextAttempt = attempt + 1
                         Metrics[F].incrementCounter("downloads_failed") *>

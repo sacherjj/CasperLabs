@@ -26,9 +26,9 @@ import io.casperlabs.models.cltype
 import io.casperlabs.models.DeployImplicits._
 import org.apache.commons.io._
 import scalapb_circe.JsonFormat
-
 import scala.concurrent.duration._
 import scala.language.higherKinds
+import scala.util.control.NonFatal
 import scala.util.Try
 
 object DeployRuntime {
@@ -537,9 +537,10 @@ object DeployRuntime {
             DeployService[F].deploy(deploy)
           }
         })
-        .handleError(
-          ex => Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
-        ),
+        .recover {
+          case NonFatal(ex) =>
+            Left(new RuntimeException(s"Couldn't make deploy, reason: ${ex.getMessage}", ex))
+        },
       exit,
       ignoreOutput
     )

@@ -15,7 +15,7 @@ import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
 import monix.execution.Scheduler
 import simulacrum.typeclass
-
+import scala.util.control.NonFatal
 import scala.util.Random
 
 @typeclass
@@ -87,10 +87,11 @@ abstract class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metri
                     .debug(s"${peer.show -> "peer"} rejected ${hex(hash) -> "message"}")
                     .as("relay_rejected")
       _ <- Metrics[F].incrementCounter(counter)
-    } yield isNew).handleErrorWith { ex =>
-      for {
-        _ <- Log[F].debug(s"$requestName request failed ${peer.show -> "peer"}, $ex")
-        _ <- Metrics[F].incrementCounter("relay_failed")
-      } yield false
+    } yield isNew).recoverWith {
+      case NonFatal(ex) =>
+        for {
+          _ <- Log[F].debug(s"$requestName request failed ${peer.show -> "peer"}, $ex")
+          _ <- Metrics[F].incrementCounter("relay_failed")
+        } yield false
     }
 }

@@ -257,7 +257,7 @@ object ProtoUtil {
   def unsafeGetParents[F[_]: MonadThrowable: BlockStorage](b: Block): F[List[Block]] =
     ProtoUtil.parentHashes(b).toList.traverse { parentHash =>
       ProtoUtil.unsafeGetBlock[F](parentHash)
-    } handleErrorWith {
+    } recoverWith {
       case ex: NoSuchElementException =>
         MonadThrowable[F].raiseError {
           new NoSuchElementException(

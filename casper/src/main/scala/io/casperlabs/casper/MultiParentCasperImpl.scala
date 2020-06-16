@@ -451,7 +451,7 @@ class MultiParentCasperImpl[F[_]: Concurrent: Log: Metrics: Time: BlockStorage: 
                      }
                    }
                    .timer("blockInstance")
-      } yield result).handleErrorWith {
+      } yield result).recoverWith {
         case ex @ SmartContractEngineError(error) =>
           Log[F]
             .error(
