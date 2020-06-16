@@ -100,6 +100,4 @@ class KeyHolder(ABC):
     @property
     def account_hash(self) -> bytes:
         """ Generate hash of public key and key algorithm for use as primary identifier in the system """
-        return crypto.blake2b_hash(
-            self.algorithm.encode("UTF-8") + b"0x00" + self.public_key
-        )
+        return crypto.blake2b_hash(self.algorithm.encode("UTF-8") + b"\x00" + self.public_key)

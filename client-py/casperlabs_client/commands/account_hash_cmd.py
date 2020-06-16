@@ -35,7 +35,7 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
     public_key_path = args.get("public_key")
     file_path = args.get("file_path")
 
-    account_hash = casperlabs_client.account_hash(algorithm, public_key_path)
+    account_hash = casperlabs_client.account_hash(algorithm=algorithm, public_key_pem_path=public_key_path)
     account_hash_hex = account_hash.hex().encode("UTF-8")
 
     if file_path:

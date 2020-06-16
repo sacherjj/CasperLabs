@@ -69,8 +69,7 @@ def test_secp256k1_account_hash():
     )
     key_holder = SECP256K1Key(public_key=public_key)
     expected_account_hash = (
-        b"p\xa7:\x05d\xde\x97\x1b\x12\xa90_  \xb0\xb4\x86e\xd1\x15*X\xae-\x8710\x0f"
-        b"\xf8Q\r\x13"
+        b'M\xdb0c\r.\xf4\xad\x1f1WJ\xb7\x0bw\x87\xd7\xc1\xf1\xb0\xe2\x18\xc2\xa4\xe7\x04\xe7\rM\xbc\xaeN'
     )
     account_hash = key_holder.account_hash
     assert account_hash == expected_account_hash, "account_hash does not equal expected"
