@@ -18,6 +18,7 @@ use types::{
 
 const PACKAGE_HASH_KEY: &str = "package_hash_key";
 const PACKAGE_ACCESS_KEY: &str = "package_access_key";
+const CONTRACT_HASH_KEY: &str = "contract_hash_key";
 const CONTRACT_CODE: &str = "contract_code_test";
 const SESSION_CODE: &str = "session_code_test";
 const NEW_KEY: &str = "new_key";
@@ -165,5 +166,6 @@ pub extern "C" fn call() {
 
     runtime::put_key(PACKAGE_HASH_KEY, contract_package_hash.into());
     runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
-    install_version_1(contract_package_hash);
+    let contract_hash = install_version_1(contract_package_hash);
+    runtime::put_key(CONTRACT_HASH_KEY, Key::Hash(contract_hash));
 }

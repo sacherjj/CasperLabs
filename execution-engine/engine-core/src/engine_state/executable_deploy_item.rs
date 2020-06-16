@@ -1,7 +1,10 @@
+use super::error;
+use crate::execution;
+use engine_shared::account::Account;
 use types::{
     bytesrepr,
     contracts::{ContractVersion, DEFAULT_ENTRY_POINT_NAME},
-    ContractHash, ContractPackageHash, RuntimeArgs,
+    ContractHash, ContractPackageHash, Key, RuntimeArgs,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -42,6 +45,32 @@ pub enum ExecutableDeployItem {
 }
 
 impl ExecutableDeployItem {
+    pub(crate) fn lookup_key_for_account(
+        &self,
+        account: &Account,
+    ) -> Result<Option<Key>, error::Error> {
+        match self {
+            ExecutableDeployItem::StoredContractByHash { hash, .. }
+            | ExecutableDeployItem::StoredVersionedContractByHash { hash, .. } => {
+                Ok(Some(Key::from(*hash)))
+            }
+            ExecutableDeployItem::StoredContractByName { name, .. }
+            | ExecutableDeployItem::StoredVersionedContractByName { name, .. } => {
+                let key = account.named_keys().get(name).cloned().ok_or_else(|| {
+                    error::Error::Exec(execution::Error::NamedKeyNotFound(name.to_string()))
+                })?;
+                Ok(Some(key))
+            }
+            ExecutableDeployItem::ModuleBytes { .. } => Ok(None),
+        }
+    }
+
+    pub fn take_stored_contract_name(self) -> Option<String> {
+        match self {
+            ExecutableDeployItem::StoredContractByName { name, .. } => Some(name),
+            _ => None,
+        }
+    }
     pub fn take_args(self) -> Result<RuntimeArgs, bytesrepr::Error> {
         match self {
             ExecutableDeployItem::ModuleBytes { args, .. }
