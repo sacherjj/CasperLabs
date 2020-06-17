@@ -17,6 +17,43 @@ def test_clarity_running(one_node_network_with_clarity):
     driver.get(clarity_host)
     assert driver.title == "CasperLabs Clarity - Home"
 
+def test_create_account_key(one_node_network_with_clarity):
+    """
+    Feature file: clarity.feature
+    Scenario: User can create/delete account key and request tokens
+    """
+    clarity_host = f"http://{one_node_network_with_clarity.clarity_node.name}:8080"
+    driver = one_node_network_with_clarity.selenium_driver
+    driver.get(clarity_host)
+    driver.set_window_size(1280, 800)
+
+    # We are using Mock Auth0 Service
+    sign_in_button = driver.find_element(By.LINK_TEXT, "Sign In")
+    sign_in_button.click()
+
+    # create account key
+    account_name = create_account(driver)
+    another_account_name = create_account(driver)
+
+    request_token(driver, account_name)
+
+    # There should be 2 deploys sent by faucet account, one for init stored version contract
+    # The other is calling stored version faucet to do the real faucet
+    faucet_public_key = one_node_network_with_clarity.clarity_node.faucet_account_public_key
+    trs = find_deploys(driver, faucet_public_key)
+    assert (
+            len(trs) == 2
+    )
+
+    # There should be 3 deploys, 2 for previous faucet.
+    request_token(driver, another_account_name)
+    trs = find_deploys(driver, faucet_public_key)
+    assert (
+            len(trs) == 3
+    )
+
+    remove_account(driver, account_name)
+    remove_account(driver, another_account_name)
 
 def remove_account(driver, account_name):
     """

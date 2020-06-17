@@ -239,13 +239,6 @@
         access_rights = "READ"
 
 [[test]]
-    name = "Key -- Local"
-    expected = "0x030067050bbc6ec463e6105df87ebb721f5e526424e658e307efab508477e10c9c756f693af2155c6db754f3a66e8d7cfc6a517f2f49431084d08fcdba1cef9e75"
-    [test.data.key_value.local]
-        seed = "0x0067050bbc6ec463e6105df87ebb721f5e526424e658e307efab508477e10c9c"
-        hash = "0x756f693af2155c6db754f3a66e8d7cfc6a517f2f49431084d08fcdba1cef9e75"
-
-[[test]]
     name = "Option -- empty"
     expected = "0x00"
     [test.data.option_value]

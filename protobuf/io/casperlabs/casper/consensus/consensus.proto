@@ -70,22 +70,17 @@ message Deploy {
     // Includes both binary instructions (wasm) and optionally, arguments
     // to those instructions encoded via our ABI
     message Code {
-        // Previously was ABI encoded args (directly as bytes); no longer
-        // supported, use `args` instead.
-        reserved 2;
-        // How contract was referenced prior to contract headers.
-        reserved 3, 4, 5;
         oneof contract {
             // Wasm byte code.
             bytes wasm = 1;
-            StoredContract stored_contract = 7;
-            StoredVersionedContract stored_versioned_contract = 9;
+            StoredContract stored_contract = 2;
+            StoredVersionedContract stored_versioned_contract = 3;
         }
         // Keyword arguments. Note that while the execution engine works with the original
         // positional argument passing style, the order of the arguments matters.
-        repeated Arg args = 6;
+        repeated Arg args = 4;
         // Name of the entry method in the contract.
-        string entry_point = 8;
+        string entry_point = 5;
 
         message StoredVersionedContract {
             oneof address {

@@ -659,9 +659,8 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
     val keyType =
       opt[String](
         name = "type",
-        descr =
-          "Type of base key. Must be one of 'hash', 'uref', 'address' or 'local'. For 'local' key type, 'key' value format is {seed}:{rest}, where both parts are hex encoded.",
-        validate = s => Set("hash", "uref", "address", "local").contains(s.toLowerCase),
+        descr = "Type of base key. Must be one of 'hash', 'uref', 'address'.",
+        validate = s => Set("hash", "uref", "address").contains(s.toLowerCase),
         default = Option("address")
       )
 
@@ -670,16 +669,7 @@ final case class Options(arguments: Seq[String]) extends ScallopConf(arguments) 
         name = "key",
         descr = "Base16 encoding of the base key.",
         required = true,
-        validate = (key: String) => {
-          keyType() match {
-            case "local" =>
-              key.split(":") match {
-                case arr @ Array(_, _) => arr.forall(hexCheck)
-                case _                 => false
-              }
-            case _ => hexCheck(key)
-          }
-        }
+        validate = (key: String) => hexCheck(key)
       )
 
     val path =

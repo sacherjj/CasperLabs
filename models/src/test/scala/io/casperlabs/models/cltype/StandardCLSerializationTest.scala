@@ -347,12 +347,6 @@ object StandardCLSerializationTest {
         val address = readHex(getString(data, key))
         Key.Hash(ByteArray32(address).get)
 
-      case key if key == "local" =>
-        val localData = getTable(data, key)
-        val seed      = readHex(getString(localData, "seed"))
-        val hash      = readHex(getString(localData, "hash"))
-        Key.Local(ByteArray32(seed).get, ByteArray32(hash).get)
-
       case key if key == "uref_value" =>
         val urefData = getTable(data, key)
         val uref     = parseURef(urefData)

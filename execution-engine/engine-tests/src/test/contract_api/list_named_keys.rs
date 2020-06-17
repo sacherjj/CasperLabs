@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use engine_core::execution::{MINT_NAME, POS_NAME};
 use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
@@ -18,7 +19,19 @@ fn should_list_named_keys() {
     let mut builder = InMemoryWasmTestBuilder::default();
     builder.run_genesis(&DEFAULT_RUN_GENESIS_REQUEST);
 
-    let initial_named_keys: BTreeMap<String, Key> = BTreeMap::new();
+    let mint_hash = builder.get_mint_contract_hash();
+    let pos_hash = builder.get_pos_contract_hash();
+
+    let initial_named_keys = {
+        let mut named_keys = BTreeMap::new();
+        assert!(named_keys
+            .insert(MINT_NAME.to_string(), Key::Hash(mint_hash))
+            .is_none());
+        assert!(named_keys
+            .insert(POS_NAME.to_string(), Key::Hash(pos_hash))
+            .is_none());
+        named_keys
+    };
 
     let new_named_keys = {
         let public_key = PublicKey::ed25519_from([1; 32]);

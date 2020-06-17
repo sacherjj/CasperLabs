@@ -4,7 +4,7 @@ import { Args, ByteArray } from "casperlabs-sdk";
 export class CallFaucet {
   public static args(accountPublicKey: ByteArray, amount: bigint): Deploy.Arg[] {
     return Args.Args(
-      ["account", Args.BytesValue(accountPublicKey)],
+      ["target", Args.BytesValue(accountPublicKey)],
       ["amount", Args.BigIntValue(amount)]
     );
   }
@@ -12,8 +12,6 @@ export class CallFaucet {
 
 export class StoredFaucet {
   public static args(): Deploy.Arg[] {
-    return Args.Args(
-      ["destination", Args.StringValue("hash")]
-    );
+    return [];
   }
 }

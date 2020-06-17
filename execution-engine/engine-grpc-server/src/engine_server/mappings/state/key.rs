@@ -50,7 +50,6 @@ impl TryFrom<state::Key> for Key {
                 let uref = pb_uref.try_into()?;
                 Key::URef(uref)
             }
-            _ => return Err(ParsingError::from("Unable to parse Protobuf Key")),
         };
         Ok(key)
     }

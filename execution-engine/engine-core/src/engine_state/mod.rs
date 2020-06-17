@@ -70,6 +70,7 @@ use crate::{
     tracking_copy::{TrackingCopy, TrackingCopyExt},
     KnownKeys,
 };
+use execution::{MINT_NAME, POS_NAME};
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
@@ -370,12 +371,16 @@ where
         // * Similarly, the system account does not need to be handled differently than a normal
         //   account (with the exception of its known keys)
         //
+        // Create known keys for chainspec accounts
+        let account_named_keys = {
+            let mut ret = BTreeMap::new();
+            ret.insert(MINT_NAME.to_string(), Key::Hash(mint_hash));
+            ret.insert(POS_NAME.to_string(), Key::Hash(proof_of_stake_hash));
+            ret
+        };
 
         // Create accounts
         {
-            // Create known keys for chainspec accounts
-            let account_named_keys: BTreeMap<String, Key> = BTreeMap::new();
-
             // Collect chainspec accounts and their known keys with the genesis account and its
             // known keys
             let accounts = {

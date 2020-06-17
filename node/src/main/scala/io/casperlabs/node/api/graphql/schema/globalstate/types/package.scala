@@ -96,24 +96,12 @@ package object types {
     )
   )
 
-  lazy val KeyLocal = ObjectType(
-    "KeyLocal",
-    fields[Unit, cltype.Key.Local](
-      Field(
-        "hash",
-        StringType,
-        resolve = c => Base16.encode((c.value.seed.bytes ++ c.value.hash.bytes).toArray)
-      )
-    )
-  )
-
   lazy val KeyUnion = UnionType(
     "KeyUnion",
     types = List(
       KeyAddress,
       KeyHash,
-      KeyURef,
-      KeyLocal
+      KeyURef
     )
   )
 
@@ -124,7 +112,6 @@ package object types {
         "value",
         KeyUnion,
         resolve = _.value.value match {
-          case value: cltype.Key.Local   => value
           case value: cltype.Key.Hash    => value
           case value: cltype.Key.Account => value
           case value: cltype.Key.URef    => value

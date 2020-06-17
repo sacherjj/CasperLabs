@@ -299,7 +299,6 @@ message Key {
 		Address address = 1;
 		Hash hash = 2;
 		URef uref = 3;
-		Local local = 4;
 	}
 
 	message Address {
@@ -326,10 +325,6 @@ message Key {
 			ADD_WRITE      = 6;
 			READ_ADD_WRITE = 7;
 		}
-	}
-
-	message Local {
-		bytes hash = 1;
 	}
 }
 
