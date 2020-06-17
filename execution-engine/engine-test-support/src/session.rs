@@ -104,6 +104,12 @@ impl SessionBuilder {
         self
     }
 
+    /// Returns `self` with the provided block time set.
+    pub fn with_block_time(mut self, block_time: u64) -> Self {
+        self.er_builder = self.er_builder.with_block_time(block_time);
+        self
+    }
+
     /// Returns `self` with the provided gas price set.
     pub fn with_gas_price(mut self, price: u64) -> Self {
         self.di_builder = self.di_builder.with_gas_price(price);
