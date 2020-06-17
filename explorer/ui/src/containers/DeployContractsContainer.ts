@@ -16,8 +16,7 @@ type SupportedType = CLType.SimpleMap[keyof CLType.SimpleMap] | 'Bytes';
 export enum KeyType {
   ADDRESS = 'Address',
   HASH = 'Hash',
-  UREF = 'URef',
-  LOCAL = 'Local'
+  UREF = 'URef'
 }
 
 export enum BitWidth {
@@ -410,11 +409,6 @@ export class DeployContractsContainer {
             uRef.setUref(valueInByteArray);
             uRef.setAccessRights(arg.$.URefAccessRight.value!);
             key.setUref(uRef);
-            break;
-          case KeyType.LOCAL:
-            const local = new Key.Local();
-            local.setHash(valueInByteArray);
-            key.setLocal(local);
             break;
         }
         value.setKey(key);
