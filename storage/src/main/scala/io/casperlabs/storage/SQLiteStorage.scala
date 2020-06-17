@@ -36,13 +36,15 @@ object SQLiteStorage {
       with EventStorage[F]
 
   def create[F[_]: Sync: Metrics: Time](
-      deployStorageChunkSize: Int = 100,
+      deployStorageChunkSize: Int = 10,
+      dagStorageChunkSize: Int = 10,
       tickUnit: TimeUnit = TimeUnit.MILLISECONDS,
       readXa: Transactor[F],
       writeXa: Transactor[F]
   ): F[CombinedStorage[F]] =
     create[F](
       deployStorageChunkSize = deployStorageChunkSize,
+      dagStorageChunkSize = dagStorageChunkSize,
       tickUnit = tickUnit,
       readXa = readXa,
       writeXa = writeXa,
@@ -55,6 +57,7 @@ object SQLiteStorage {
 
   def create[F[_]: Sync: Metrics: Time](
       deployStorageChunkSize: Int,
+      dagStorageChunkSize: Int,
       tickUnit: TimeUnit,
       readXa: Transactor[F],
       writeXa: Transactor[F],
@@ -68,8 +71,9 @@ object SQLiteStorage {
       ]
   ): F[CombinedStorage[F]] =
     for {
-      blockStorage  <- SQLiteBlockStorage.create[F](readXa, writeXa) >>= wrapBlockStorage
-      dagStorage    <- SQLiteDagStorage.create[F](readXa, writeXa) >>= wrapDagStorage
+      blockStorage <- SQLiteBlockStorage.create[F](readXa, writeXa) >>= wrapBlockStorage
+      dagStorage <- SQLiteDagStorage
+                     .create[F](dagStorageChunkSize, readXa, writeXa) >>= wrapDagStorage
       deployStorage <- SQLiteDeployStorage.create[F](deployStorageChunkSize, readXa, writeXa)
       eraStorage    <- SQLiteEraStorage.create[F](tickUnit, readXa, writeXa)
       eventStorage  <- SQLiteEventStorage.create[F](readXa, writeXa)

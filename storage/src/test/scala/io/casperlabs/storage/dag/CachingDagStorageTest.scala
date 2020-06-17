@@ -45,7 +45,7 @@ class CachingDagStorageTest
   private def prepareTestEnvironment(cacheSize: Long, neighborhoodRange: Int) = {
     implicit val metrics: MockMetrics = new MockMetrics()
     for {
-      dagStorage <- SQLiteDagStorage.create[Task](xa, xa)
+      dagStorage <- SQLiteDagStorage.create[Task](10, xa, xa)
       cache <- CachingDagStorage[Task](
                 dagStorage,
                 cacheSize,

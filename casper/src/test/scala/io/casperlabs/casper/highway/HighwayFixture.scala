@@ -39,12 +39,12 @@ trait HighwayFixture
     with ArbitraryConsensus { self: Suite =>
 
   /** Create multiple databases, one for each validator. */
-  def testFixtures(validators: List[String])(
+  def testFixtures(validators: List[String], timeout: FiniteDuration = 10.seconds)(
       f: Timer[Task] => List[(String, SQLiteStorage.CombinedStorage[Task])] => FixtureLike
   ): Unit = {
     val ctx   = TestScheduler()
     val timer = SchedulerEffect.timer[Task](ctx)
-    withCombinedStorages(numStorages = validators.size) { dbs =>
+    withCombinedStorages(numStorages = validators.size, timeout = timeout) { dbs =>
       Task.async[Unit] { cb =>
         val fix = f(timer)(validators zip dbs)
         // TestScheduler allows us to manually forward time.
@@ -73,14 +73,15 @@ trait HighwayFixture
   import HighwayConf.{EraDuration, VotingDuration}
 
   val genesisEraStart       = date(2019, 12, 30)
-  val eraDuration           = days(10)
+  val eraDuration           = days(7)
+  val bookingDuration       = days(10)
   val postEraVotingDuration = days(2)
 
   val defaultConf = HighwayConf(
     tickUnit = TimeUnit.SECONDS,
     genesisEraStart = genesisEraStart,
-    eraDuration = EraDuration.FixedLength(days(7)),
-    bookingDuration = eraDuration,
+    eraDuration = EraDuration.FixedLength(eraDuration),
+    bookingDuration = bookingDuration,
     entropyDuration = hours(3),
     postEraVotingDuration = VotingDuration.FixedLength(postEraVotingDuration),
     omegaMessageTimeStart = 0.5,
@@ -209,13 +210,22 @@ trait HighwayFixture
       def addChildEra(keyBlockHash: BlockHash = ByteString.EMPTY): Task[Era] = {
         val nextEndTick = conf.toTicks(conf.eraEnd(conf.toInstant(Ticks(era.endTick))))
         val randomEra   = sample[Era]
-        val childEra = randomEra
-          .withKeyBlockHash(if (keyBlockHash.isEmpty) randomEra.keyBlockHash else keyBlockHash)
-          .withParentKeyBlockHash(era.keyBlockHash)
-          .withStartTick(era.endTick)
-          .withEndTick(nextEndTick)
-          .withBonds(era.bonds)
-        db.addEra(childEra).as(childEra)
+
+        for {
+          keyBlock <- if (keyBlockHash.isEmpty) {
+                       era.block(messageProducer, era.keyBlockHash).flatMap(db.lookupUnsafe)
+                     } else {
+                       db.lookupUnsafe(keyBlockHash)
+                     }
+          childEra = randomEra
+            .withKeyBlockHash(keyBlock.messageHash)
+            .withParentKeyBlockHash(era.keyBlockHash)
+            .withStartTick(era.endTick)
+            .withEndTick(nextEndTick)
+            .withBonds(era.bonds)
+
+          _ <- db.addEra(childEra)
+        } yield childEra
       }
 
       // It's the same as in `ForkChoiceTest` :( or vice versa
@@ -267,7 +277,12 @@ trait HighwayFixture
       )
 
     def insertGenesis(): Task[Unit] =
-      db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock))
+      db.put(BlockMsgWithTransform().withBlockMessage(genesisBlock)) *>
+        db.markAsFinalized(
+          genesis.messageHash,
+          Set.empty,
+          Set.empty
+        )
 
     def makeSupervisor(): Resource[Task, EraSupervisor[Task]] =
       for {

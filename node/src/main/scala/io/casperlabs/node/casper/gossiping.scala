@@ -314,6 +314,7 @@ package object gossiping {
       _ <- Resource.liftF(DeployDownloadManagerImpl.establishMetrics[F])
       downloadManager <- DeployDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelDeploys,
+                          cacheExpiry = conf.server.downloadCacheExpiry,
                           connectToGossip = connectToGossip,
                           backend = new DeployDownloadManagerImpl.Backend[F] {
                             override def contains(deployHash: ByteString): F[Boolean] =
@@ -365,6 +366,7 @@ package object gossiping {
       downloadManager <- BlockDownloadManagerImpl[F](
                           maxParallelDownloads = conf.server.downloadMaxParallelBlocks,
                           partialBlocksEnabled = conf.server.downloadPartialBlocks,
+                          cacheExpiry = conf.server.downloadCacheExpiry,
                           connectToGossip = connectToGossip,
                           backend = new BlockDownloadManagerImpl.Backend[F] {
                             override def contains(blockHash: ByteString): F[Boolean] =
@@ -585,12 +587,6 @@ package object gossiping {
                         deployHash: DeployHash
                     ): F[Option[DeploySummary]] =
                       DeployStorage[F].reader.getDeploySummary(deployHash)
-
-                    override def hasDeploy(deployHash: DeployHash): F[Boolean] =
-                      DeployStorage[F].reader.contains(deployHash)
-
-                    override def hasBlock(blockHash: ByteString): F[Boolean] =
-                      isInDag(blockHash)
 
                     override def getBlockSummary(blockHash: ByteString): F[Option[BlockSummary]] =
                       BlockStorage[F]

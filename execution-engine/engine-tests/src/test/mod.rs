@@ -1,5 +1,7 @@
+mod check_transfer_success;
 mod contract_api;
 mod contract_context;
+mod counter;
 mod deploy;
 mod explorer;
 mod groups;
