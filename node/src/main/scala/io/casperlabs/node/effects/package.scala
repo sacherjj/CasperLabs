@@ -7,6 +7,7 @@ import cats.effect._
 import cats.effect.implicits._
 import cats.implicits._
 import cats.mtl._
+import com.zaxxer.hikari.metrics.MetricsTrackerFactory
 import doobie.hikari.HikariTransactor
 import doobie.implicits._
 import doobie.util.transactor.Transactor
@@ -95,7 +96,8 @@ package object effects {
   def doobieTransactors(
       conf: Configuration,
       connectEC: (String, Int, Int) => ExecutionContext,
-      transactEC: (String, Int) => ExecutionContext
+      transactEC: (String, Int) => ExecutionContext,
+      metricsTrackerFactory: MetricsTrackerFactory
   ): Resource[Task, (Transactor[Task], Transactor[Task])] = {
     val serverDataDir = conf.server.dataDir
     val readThreads   = conf.server.dbReadThreads.value
@@ -127,7 +129,8 @@ package object effects {
       config.addDataSourceProperty("busy_timeout", "5000")
       config.addDataSourceProperty("journal_mode", "WAL")
       config.setConnectionTimeout(connectionTimeout.toMillis)
-      config.setPoolName(s"${poolName}-pool")
+      config.setPoolName(poolName)
+      config.setMetricsTrackerFactory(metricsTrackerFactory)
       config
     }
 
@@ -187,6 +190,28 @@ package object effects {
       _                 <- Metrics[F].setGauge("sqlite-size-bytes", sqlS)
       _                 <- Metrics[F].setGauge("global-state-size-bytes", gsS)
       _                 <- Timer[F].sleep(updatePeriod)
+    } yield ()
+
+    update.forever.background
+  }
+
+  def periodicThreadPoolMetrics[F[_]: Concurrent: Timer: Metrics](
+      schedulerFactory: SchedulerFactory,
+      updatePeriod: FiniteDuration = 15.seconds
+  ): Resource[F, F[Unit]] = {
+    implicit val metricsSource = Metrics.BaseSource / "threads"
+    val update = for {
+      poolStats <- Sync[F].delay(schedulerFactory.getStats)
+      _ <- poolStats.toList.traverse {
+            case (name, stats) =>
+              for {
+                _ <- Metrics[F].setGauge(s"$name-pool-size", stats.poolSize.toLong)
+                _ <- Metrics[F]
+                      .setGauge(s"$name-active-thread-count", stats.activeThreadCount.toLong)
+                _ <- Metrics[F].setGauge(s"$name-task-queue-size", stats.taskQueueSize)
+              } yield ()
+          }
+      _ <- Timer[F].sleep(updatePeriod)
     } yield ()
 
     update.forever.background

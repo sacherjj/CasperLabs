@@ -213,8 +213,8 @@ object CachingBlockStorageTest {
   ): Task[BlockStorage[Task]] =
     for {
       underlyingBlockStorage <- SQLiteBlockStorage.create[Task](xa, xa)
-      dagStorage             <- SQLiteDagStorage.create[Task](xa, xa)
-      deployStorage          <- SQLiteDeployStorage.create[Task](100, xa, xa)
+      dagStorage             <- SQLiteDagStorage.create[Task](10, xa, xa)
+      deployStorage          <- SQLiteDeployStorage.create[Task](10, xa, xa)
     } yield new BlockStorage[Task] {
       override def get(
           blockHash: BlockHash
