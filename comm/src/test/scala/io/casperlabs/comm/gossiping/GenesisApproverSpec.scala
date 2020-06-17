@@ -519,7 +519,8 @@ object GenesisApproverSpec extends ArbitraryConsensusAndComm {
         downloaded = true
         Task.unit
       }
-    override def isScheduled(id: ByteString): Task[Boolean] = false.pure[Task]
+    override def isScheduled(id: ByteString): Task[Boolean]   = false.pure[Task]
+    override def wasDownloaded(id: ByteString): Task[Boolean] = false.pure[Task]
     override def addSource(id: ByteString, source: Node): Task[Task[Unit]] =
       ().pure[Task].pure[Task]
     override def validateCandidate(block: Block)                           = Task.now(Right(none[Approval]))

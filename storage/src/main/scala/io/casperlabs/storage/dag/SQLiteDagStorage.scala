@@ -31,6 +31,7 @@ import io.casperlabs.storage.dag.AncestorsStorage.MeteredAncestorsStorage
 import io.casperlabs.storage.dag.FinalityStorage.MeteredFinalityStorage
 
 class SQLiteDagStorage[F[_]: Sync](
+    chunkSize: Int,
     readXa: Transactor[F],
     writeXa: Transactor[F]
 )(implicit met: Metrics[F])
@@ -39,7 +40,7 @@ class SQLiteDagStorage[F[_]: Sync](
     with AncestorsStorage[F]
     with FinalityStorage[F]
     with DoobieCodecs {
-  import SQLiteDagStorage.StreamOps
+  import SQLiteDagStorage.{ranges, StreamOps}
   implicit val MT: MonadThrowable[F] = Sync[F]
 
   override def getRepresentation: F[DagRepresentation[F]] =
@@ -251,40 +252,47 @@ class SQLiteDagStorage[F[_]: Sync](
   override def topoSort(
       startBlockNumber: Long,
       endBlockNumber: Long
-  ): fs2.Stream[F, Vector[BlockInfo]] =
-    (fr"""SELECT j_rank, """ ++ blockInfoCols() ++ fr"""
-          FROM block_metadata
-          WHERE j_rank>=$startBlockNumber AND j_rank<=$endBlockNumber
-          ORDER BY j_rank
-          """)
-      .query[(Long, BlockInfo)]
-      .stream
-      .transact(readXa)
+  ): fs2.Stream[F, Vector[BlockInfo]] = {
+    val cols = blockInfoCols()
+    // Query a list of ranks at a time, releasing the database connection in between.
+    val batches = ranges(chunkSize)(startBlockNumber, endBlockNumber)
+    val batchStream: fs2.Stream[F, List[(Long, BlockInfo)]] =
+      fs2.Stream
+        .fromIterator[F](batches.toIterator)
+        .flatMap {
+          case (startBlockNumber, endBlockNumber) =>
+            // Return the range as a list first so we can check if it's empty and quit early.
+            fs2.Stream.eval {
+              (fr"""
+              SELECT j_rank, """ ++ cols ++ fr"""
+              FROM   block_metadata
+              WHERE  j_rank >= $startBlockNumber AND j_rank <= $endBlockNumber
+              ORDER BY j_rank
+              """)
+                .query[(Long, BlockInfo)]
+                .to[List]
+                .transact(readXa)
+            }
+        }
+
+    batchStream
+      .takeWhile(_.nonEmpty)
+      .flatMap(xs => fs2.Stream.fromIterator[F](xs.toIterator))
       .groupByRank
+  }
 
   override def topoSort(startBlockNumber: Long): fs2.Stream[F, Vector[BlockInfo]] =
-    (fr"""SELECT j_rank, """ ++ blockInfoCols() ++ fr"""
-          FROM block_metadata
-          WHERE j_rank>=$startBlockNumber
-          ORDER BY j_rank""")
-      .query[(Long, BlockInfo)]
-      .stream
-      .transact(readXa)
-      .groupByRank
+    fs2.Stream.eval(getMaxJRank).flatMap(topoSort(startBlockNumber, _))
 
   override def topoSortTail(tailLength: Int): fs2.Stream[F, Vector[BlockInfo]] =
-    (fr"""SELECT a.j_rank, """ ++ blockInfoCols("a") ++ fr"""
-          FROM block_metadata a
-          INNER JOIN (
-           SELECT max(j_rank) max_rank FROM block_metadata
-          ) b
-          ON a.j_rank>b.max_rank-$tailLength
-          ORDER BY a.j_rank
-          """)
-      .query[(Long, BlockInfo)]
-      .stream
+    fs2.Stream.eval(getMaxJRank).flatMap(x => topoSort(math.max(x - tailLength + 1, 0), x))
+
+  private def getMaxJRank: F[Long] =
+    sql"""SELECT max(j_rank) FROM block_metadata"""
+      .query[Long]
+      .option
       .transact(readXa)
-      .groupByRank
+      .map(_.getOrElse(0L))
 
   override def getBlockInfosByValidator(
       validator: Validator,
@@ -569,7 +577,11 @@ object SQLiteDagStorage {
       Base16.encode(info.getSummary.blockHash.toByteArray).take(10)
   }
 
-  private[storage] def create[F[_]: Sync](readXa: Transactor[F], writeXa: Transactor[F])(
+  private[storage] def create[F[_]: Sync](
+      chunkSize: Int,
+      readXa: Transactor[F],
+      writeXa: Transactor[F]
+  )(
       implicit
       met: Metrics[F]
   ): F[
@@ -577,7 +589,7 @@ object SQLiteDagStorage {
   ] =
     for {
       dagStorage <- Sync[F].delay(
-                     new SQLiteDagStorage[F](readXa, writeXa)
+                     new SQLiteDagStorage[F](chunkSize, readXa, writeXa)
                        with MeteredDagStorage[F]
                        with MeteredDagRepresentation[F]
                        with MeteredAncestorsStorage[F]
@@ -590,4 +602,9 @@ object SQLiteDagStorage {
     } yield dagStorage: DagStorage[F] with DagRepresentation[F] with FinalityStorage[F] with AncestorsStorage[
       F
     ]
+
+  def ranges(chunkSize: Int)(startBlockNumber: Long, endBlockNumber: Long): Stream[(Long, Long)] =
+    (startBlockNumber to endBlockNumber by chunkSize.toLong).toStream.map { from =>
+      from -> math.min(from + chunkSize - 1, endBlockNumber)
+    }
 }

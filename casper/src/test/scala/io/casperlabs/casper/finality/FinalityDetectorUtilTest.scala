@@ -4,6 +4,7 @@ import cats.Monad
 import cats.data.StateT
 import com.google.protobuf.ByteString
 import io.casperlabs.casper.Estimator.BlockHash
+import io.casperlabs.casper.consensus.Era
 import io.casperlabs.casper.consensus.info.BlockInfo
 import io.casperlabs.casper.helper.BlockUtil.generateValidator
 import io.casperlabs.casper.helper.{BlockGenerator, StorageFixture}
@@ -210,6 +211,74 @@ class FinalityDetectorUtilTest
     }
   }
 
+  "levelZeroMsgsOfValidator" should "expect multiple messages from the validator in justifications (TNET-36)" in withCombinedStorage() {
+    implicit storage =>
+      // When we have multiple eras the validator appears multiple times in justifications,
+      // but that mustn't prevent us from recognising the earliest vote that goes for a candidate.
+
+      // G - A - B -|- C* - D - E
+
+      for {
+        g  <- createAndStoreMessage[Task](Seq(), ByteString.EMPTY, bonds)
+        e0 = Era(keyBlockHash = g.blockHash)
+        _  <- storage.addEra(e0)
+        a <- createAndStoreBlockFull[Task](
+              v1,
+              Seq(g),
+              Seq.empty,
+              bonds,
+              keyBlockHash = e0.keyBlockHash,
+              maybeValidatorPrevBlockHash = None
+            )
+        e1 = Era(keyBlockHash = a.blockHash, parentKeyBlockHash = e0.keyBlockHash)
+        _  <- storage.addEra(e1)
+        b <- createAndStoreBlockFull[Task](
+              v1,
+              Seq(a),
+              Seq(a),
+              bonds,
+              keyBlockHash = e0.keyBlockHash,
+              maybeValidatorPrevBlockHash = Some(a.blockHash)
+            )
+        c <- createAndStoreBlockFull[Task](
+              v1,
+              Seq(b),
+              Seq(b),
+              bonds,
+              keyBlockHash = e1.keyBlockHash,
+              maybeValidatorPrevBlockHash = Some(b.blockHash)
+            )
+        d <- createAndStoreBlockFull[Task](
+              v1,
+              Seq(c),
+              Seq(c, b),
+              bonds,
+              keyBlockHash = e1.keyBlockHash,
+              maybeValidatorPrevBlockHash = Some(c.blockHash)
+            )
+        _ <- createAndStoreBlockFull[Task](
+              v1,
+              Seq(d),
+              Seq(d, b),
+              bonds,
+              keyBlockHash = e1.keyBlockHash,
+              maybeValidatorPrevBlockHash = Some(d.blockHash)
+            )
+        dag <- storage.getRepresentation
+
+        // Say C is the candidate and we want to know what is the first message that votes on C.
+        candidate = Message.fromBlock(c).get
+        messages <- FinalityDetectorUtil.levelZeroMsgsOfValidator(
+                     dag,
+                     v1,
+                     candidate,
+                     isHighway = true
+                   )
+      } yield {
+        messages should not be empty
+        messages.last.messageHash shouldBe candidate.messageHash
+      }
+  }
 }
 
 object FinalityDetectorUtilTest {

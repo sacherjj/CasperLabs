@@ -94,8 +94,7 @@ object FinalityDetectorUtil {
             previousAgreedBlockFromTheSameValidator(
               dag,
               _,
-              candidateBlock.messageHash,
-              validator
+              candidateBlock.messageHash
             )
           )
           .toList
@@ -111,15 +110,9 @@ object FinalityDetectorUtil {
   private[casper] def previousAgreedBlockFromTheSameValidator[F[_]: Monad](
       dag: DagRepresentation[F],
       block: Message,
-      candidateBlockHash: BlockHash,
-      validator: Validator
+      candidateBlockHash: BlockHash
   ): F[List[Message]] = {
-    // Assumes that validator always includes his last message as justification.
-    val previousHashO = block.justifications
-      .find(
-        _.validatorPublicKey == validator
-      )
-      .map(_.latestBlockHash)
+    val previousHashO = Option(block.validatorPrevMessageHash).filterNot(_.isEmpty)
 
     previousHashO match {
       case Some(previousHash) =>

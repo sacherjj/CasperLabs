@@ -661,6 +661,15 @@ where
         utils::get_exec_costs(exec_response)
     }
 
+    pub fn last_exec_gas_cost(&self) -> Gas {
+        let exec_response = self
+            .exec_responses
+            .last()
+            .expect("Expected to be called after run()");
+        let exec_result = exec_response.get(0).expect("should have result");
+        exec_result.cost()
+    }
+
     pub fn exec_error_message(&self, index: usize) -> Option<String> {
         let response = self.get_exec_response(index)?;
         Some(utils::get_error_message(response))

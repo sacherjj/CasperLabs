@@ -16,7 +16,12 @@ import io.casperlabs.casper.highway.mocks.MockMessageProducer
 import io.casperlabs.crypto.Keys
 import io.casperlabs.shared.Log
 
-class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with HighwayFixture {
+class EraSupervisorSpec
+    extends FlatSpec
+    with Matchers
+    with Inspectors
+    with HighwayFixture
+    with HighwayNetworkFixture {
 
   behavior of "collectActiveEras"
 
@@ -28,12 +33,18 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
       //         \ e4 - e5
       override def test =
         for {
+          _  <- insertGenesis()
           e0 <- addGenesisEra()
-          _  <- e0.addChildEra()
-          e2 <- e0.addChildEra()
-          e3 <- e2.addChildEra()
-          e4 <- e2.addChildEra()
-          e5 <- e4.addChildEra()
+          b1 <- e0.block(messageProducer, genesis.blockSummary.blockHash)
+          b2 <- e0.block(messageProducer, genesis.blockSummary.blockHash)
+          _  <- e0.addChildEra(b1)
+          e2 <- e0.addChildEra(b2)
+          b3 <- e2.block(messageProducer, b2)
+          b4 <- e2.block(messageProducer, b2)
+          e3 <- e2.addChildEra(b3)
+          e4 <- e2.addChildEra(b4)
+          b5 <- e4.block(messageProducer, b3)
+          e5 <- e4.addChildEra(b5)
           // Wait until where e3 and e4 are voting.
           // Their parent eras will have their voting over, and
           // their children should be active.
@@ -99,84 +110,50 @@ class EraSupervisorSpec extends FlatSpec with Matchers with Inspectors with High
 
   it should "relay created messages to other nodes" in testFixtures(
     validators = List("Alice", "Bob", "Charlie")
-  ) { implicit timer => validatorDatabases =>
-    new FixtureLike {
+  ) { timer => validatorDatabases =>
+    new NetworkFixture(validatorDatabases) {
+
       override val start  = genesisEraStart
       override val length = days(5)
 
-      class RelayFixture(
+      override def makeRelayFixture(
           validator: String,
           db: SQLiteStorage.CombinedStorage[Task],
           supervisorsRef: Ref[Task, Map[String, EraSupervisor[Task]]],
           isSyncedRef: Ref[Task, Boolean]
-      ) extends Fixture(
-            length,
-            validator = validator,
-            initRoundExponent = 15,
-            isSyncedRef = isSyncedRef
-          ) (timer, db) {
+      ) =
+        new RelayFixture(
+          length,
+          validator = validator,
+          initRoundExponent = 15,
+          supervisorsRef,
+          isSyncedRef
+        ) (timer, db) {
 
-        val validatorId: PublicKeyBS              = validator
-        val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
+          val validatorId: PublicKeyBS = validator
 
-        override lazy val blockRelaying = new BlockRelaying[Task] {
-          override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
-            for {
-              _           <- relayedRef.update(_ ++ hashes)
-              blocks      <- hashes.traverse(h => db.getBlockMessage(h)).map(_.flatten)
-              _           = blocks should not be empty
-              supervisors <- supervisorsRef.get
-              // Notify other supervisors.
-              _ <- supervisors
-                    .filterKeys(_ != validator)
-                    .values
-                    .toList
-                    .traverse(s => blocks.traverse(b => s.validateAndAddBlock(b)))
-            } yield ().pure[Task]
-        }
+          override val test = for {
+            _        <- sleepUntil(start plus length)
+            relayed  <- relayedRef.get
+            dag      <- db.getRepresentation
+            messages <- relayed.toList.traverse(dag.lookupUnsafe)
+            parents  <- messages.traverse(m => dag.lookupUnsafe(m.parentBlock))
+          } yield {
+            messages should not be empty
+            atLeast(1, messages) shouldBe a[Message.Ballot]
+            atLeast(1, messages) shouldBe a[Message.Block]
 
-        override val test = for {
-          _        <- sleepUntil(start plus length)
-          relayed  <- relayedRef.get
-          dag      <- db.getRepresentation
-          messages <- relayed.toList.traverse(dag.lookupUnsafe)
-          parents  <- messages.traverse(m => dag.lookupUnsafe(m.parentBlock))
-        } yield {
-          messages should not be empty
-          atLeast(1, messages) shouldBe a[Message.Ballot]
-          atLeast(1, messages) shouldBe a[Message.Block]
-
-          // Validators should only try to relay their own messages.
-          forAll(messages) { m =>
-            m.validatorId shouldBe validatorId
-          }
-          // There should be some responses to other validators' messages.
-          forAtLeast(1, parents) { p =>
-            p.validatorId should not be empty
-            p.validatorId should not be validatorId
+            // Validators should only try to relay their own messages.
+            forAll(messages) { m =>
+              m.validatorId shouldBe validatorId
+            }
+            // There should be some responses to other validators' messages.
+            forAtLeast(1, parents) { p =>
+              p.validatorId should not be empty
+              p.validatorId should not be validatorId
+            }
           }
         }
-      }
-
-      val network =
-        for {
-          // Don't create messages until we add all supervisors to this collection,
-          // otherwise they might miss some messages and there's no synchronizer here.
-          isSyncedRef    <- Resource.liftF(Ref[Task].of(false))
-          supervisorsRef <- Resource.liftF(Ref[Task].of(Map.empty[String, EraSupervisor[Task]]))
-          fixtures = validatorDatabases.map {
-            case (validator, db) =>
-              new RelayFixture(validator, db, supervisorsRef, isSyncedRef)
-          }
-          validators  = validatorDatabases.unzip._1
-          supervisors <- fixtures.traverse(_.makeSupervisor())
-          _ <- Resource.liftF {
-                supervisorsRef.set(validators zip supervisors toMap) *> isSyncedRef.set(true)
-              }
-        } yield fixtures
-
-      override def test: Task[Unit] =
-        network.use(_.traverse(_.test).void)
     }
   }
 }

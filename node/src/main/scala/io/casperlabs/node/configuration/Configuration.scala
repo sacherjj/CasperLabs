@@ -98,6 +98,7 @@ object Configuration extends ParserImplicits {
       downloadRetryInitialBackoffPeriod: FiniteDuration,
       downloadRetryBackoffFactor: Double Refined GreaterEqual[W.`1.0`.T],
       downloadPartialBlocks: Boolean,
+      downloadCacheExpiry: FiniteDuration,
       relayMaxParallelBlocks: Int,
       relayBlockChunkConsumerTimeout: FiniteDuration,
       validateMaxParallelBlocks: Int Refined Positive,
@@ -119,7 +120,8 @@ object Configuration extends ParserImplicits {
       cacheMaxSizeBytes: Long,
       cacheNeighborhoodBefore: Int,
       cacheNeighborhoodAfter: Int,
-      deployStreamChunkSize: Int
+      deployStreamChunkSize: Int,
+      dagStreamChunkSize: Int
   ) extends SubConfig
 
   case class Grpc(
