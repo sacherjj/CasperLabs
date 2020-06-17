@@ -42,7 +42,7 @@ pub enum ExecutableDeployItem {
         // finds header by entry point name
         args: Vec<u8>,
     },
-    TransferToAccount {
+    Transfer {
         args: Vec<u8>,
     },
 }
@@ -64,7 +64,9 @@ impl ExecutableDeployItem {
                 })?;
                 Ok(Some(key))
             }
-            ExecutableDeployItem::ModuleBytes { .. } => Ok(None),
+            ExecutableDeployItem::ModuleBytes { .. } | ExecutableDeployItem::Transfer { .. } => {
+                Ok(None)
+            }
         }
     }
 
@@ -75,7 +77,7 @@ impl ExecutableDeployItem {
             | ExecutableDeployItem::StoredContractByName { args, .. }
             | ExecutableDeployItem::StoredVersionedContractByHash { args, .. }
             | ExecutableDeployItem::StoredVersionedContractByName { args, .. }
-            | ExecutableDeployItem::TransferToAccount { args } => {
+            | ExecutableDeployItem::Transfer { args } => {
                 let runtime_args: RuntimeArgs = bytesrepr::deserialize(args)?;
                 Ok(runtime_args)
             }
@@ -84,8 +86,9 @@ impl ExecutableDeployItem {
 
     pub fn entry_point_name(&self) -> &str {
         match self {
-            ExecutableDeployItem::ModuleBytes { .. }
-            | ExecutableDeployItem::TransferToAccount { .. } => DEFAULT_ENTRY_POINT_NAME,
+            ExecutableDeployItem::ModuleBytes { .. } | ExecutableDeployItem::Transfer { .. } => {
+                DEFAULT_ENTRY_POINT_NAME
+            }
             ExecutableDeployItem::StoredVersionedContractByName { entry_point, .. }
             | ExecutableDeployItem::StoredVersionedContractByHash { entry_point, .. }
             | ExecutableDeployItem::StoredContractByHash { entry_point, .. }

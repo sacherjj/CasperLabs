@@ -10,6 +10,7 @@ pub mod op;
 pub mod query;
 pub mod run_genesis_request;
 pub mod system_contract_cache;
+mod transfer;
 pub mod upgrade;
 pub mod utils;
 
@@ -51,6 +52,7 @@ use types::{
 pub use self::{
     engine_config::EngineConfig,
     error::{Error, RootNotFound},
+    transfer::TransferRuntimeArgsBuilder,
 };
 use crate::{
     engine_state::{
@@ -734,7 +736,7 @@ where
             let result = match deploy_item {
                 Err(exec_result) => Ok(exec_result),
                 Ok(deploy_item) => match deploy_item.session {
-                    ExecutableDeployItem::TransferToAccount { .. } => self.transfer(
+                    ExecutableDeployItem::Transfer { .. } => self.transfer(
                         correlation_id,
                         &executor,
                         &preprocessor,
@@ -845,9 +847,11 @@ where
 
                 (contract_package, contract, contract_package_key)
             }
-            ExecutableDeployItem::TransferToAccount { .. } => Err(
-                error::Error::InvalidDeployItemVariant(String::from("TransferToAccount")),
-            ),
+            ExecutableDeployItem::Transfer { .. } => {
+                return Err(error::Error::InvalidDeployItemVariant(String::from(
+                    "Transfer",
+                )))
+            }
         };
 
         let entry_point_name = deploy_item.entry_point_name();
@@ -994,6 +998,25 @@ where
             Err(e) => return Ok(ExecutionResult::precondition_failure(e)),
         };
 
+        let input_runtime_args = match deploy_item.session.into_runtime_args() {
+            Ok(runtime_args) => runtime_args,
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+        };
+
+        let runtime_args_builder = TransferRuntimeArgsBuilder::new(input_runtime_args);
+
+        let runtime_args =
+            match runtime_args_builder.build(correlation_id, &account, Rc::clone(&tracking_copy)) {
+                Ok(runtime_args) => runtime_args,
+                Err(error) => {
+                    return Ok(ExecutionResult::Failure {
+                        error,
+                        effect: Default::default(),
+                        cost: Gas::default(),
+                    });
+                }
+            };
+
         let mint_contract = match tracking_copy
             .borrow_mut()
             .get_contract(correlation_id, protocol_data.mint())
@@ -1020,15 +1043,7 @@ where
                 }
             }
         };
-        let runtime_args = {
-            let mut runtime_args = match deploy_item.session.into_runtime_args() {
-                Ok(runtime_args) => runtime_args,
-                Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
-            };
 
-            runtime_args.insert("source", account.main_purse());
-            runtime_args
-        };
         let mut named_keys = mint_contract.named_keys().to_owned();
         let base_key = Key::from(protocol_data.mint());
         let deploy_hash = deploy_item.deploy_hash;

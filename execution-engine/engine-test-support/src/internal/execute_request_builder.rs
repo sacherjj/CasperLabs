@@ -12,6 +12,7 @@ use crate::internal::{DeployItemBuilder, DEFAULT_BLOCK_TIME, DEFAULT_PAYMENT};
 
 const ARG_AMOUNT: &str = "amount";
 
+#[derive(Debug)]
 pub struct ExecuteRequestBuilder {
     execute_request: ExecuteRequest,
 }

@@ -317,7 +317,7 @@ impl Executor {
         let named_keys = runtime.context().named_keys().to_owned();
 
         if !self.config.use_system_contracts() {
-            return direct_system_contract_call.host_call(
+            return direct_system_contract_call.host_exec(
                 runtime,
                 protocol_version,
                 named_keys,
@@ -539,7 +539,7 @@ impl DirectSystemContractCall {
         }
     }
 
-    fn host_call<R>(
+    fn host_exec<R>(
         &self,
         mut runtime: Runtime<R>,
         protocol_version: ProtocolVersion,

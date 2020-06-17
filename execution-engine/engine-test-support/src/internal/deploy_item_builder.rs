@@ -93,6 +93,12 @@ impl DeployItemBuilder {
         self.with_session_bytes(module_bytes, args)
     }
 
+    pub fn with_transfer_args(mut self, args: RuntimeArgs) -> Self {
+        let args = Self::serialize_args(args);
+        self.deploy_item.session_code = Some(ExecutableDeployItem::Transfer { args });
+        self
+    }
+
     pub fn with_stored_session_hash(
         mut self,
         hash: ContractHash,

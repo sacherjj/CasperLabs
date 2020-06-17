@@ -43,7 +43,7 @@ message StoredContractPackageHash {
     bytes args = 4; // ABI-encoded arguments
 }
 
-message TransferToAccount {
+message Transfer {
     bytes args = 4; // ABI-encoded arguments
 }
 
@@ -55,7 +55,7 @@ message DeployPayload {
     StoredContractName stored_contract_name = 3;  
     StoredContractPackage stored_package_by_name = 5; 
     StoredContractPackageHash stored_package_by_hash = 6;
-    TransferToAccount transfer_to_account = 7;
+    Transfer transfer = 7;
   }
 }
 
