@@ -557,12 +557,12 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
         }
         .timerGauge("fetches") // Measure with wait time.
 
-    def tryDownload(handle: Handle, source: Node, relay: Boolean) =
+    def tryDownload(handle: Handle, source: Node, relay: Boolean, knownSources: Set[Node]) =
       for {
         downloadable <- throttledFetchAndRestore(source, handle)
         _            <- backend.validate(downloadable)
         _            <- backend.store(downloadable)
-        _            <- relaying.relay(List(handle.id.toByteString)).whenA(relay)
+        _            <- relaying.relay(List(handle.id.toByteString), knownSources).whenA(relay)
         _            <- success
         _            <- Metrics[F].incrementCounter("downloads_succeeded")
       } yield ()
@@ -609,15 +609,16 @@ trait DownloadManagerImpl[F[_]] extends DownloadManager[F] { self =>
                     s"Scheduling download of ${kind} ${id.show -> "id"} from ${source.show -> "peer"} later, $attempt, $delay"
                   ) *>
                     Timer[F].sleep(delay) *>
-                    tryDownload(item.handle, source, item.relay).recoverWith {
-                      case NonFatal(ex) =>
-                        val nextAttempt = attempt + 1
-                        Metrics[F].incrementCounter("downloads_failed") *>
-                          Log[F].warn(
-                            s"Retrying download of ${kind} ${id.show -> "id"} from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
-                          ) >>
-                          loop(counterPerSource.updated(source, nextAttempt), ex.some)
-                    }
+                    tryDownload(item.handle, source, item.relay, potentiallyNewSources)
+                      .recoverWith {
+                        case NonFatal(ex) =>
+                          val nextAttempt = attempt + 1
+                          Metrics[F].incrementCounter("downloads_failed") *>
+                            Log[F].warn(
+                              s"Retrying download of ${kind} ${id.show -> "id"} from other sources, failed source: ${source.show -> "peer"}, prev $attempt: $ex"
+                            ) >>
+                            loop(counterPerSource.updated(source, nextAttempt), ex.some)
+                      }
                 case _: Duration.Infinite => sys.error("Unreachable")
               }
           }
