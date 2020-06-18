@@ -16,7 +16,7 @@ ALGORITHM_OPTION = (
 FROM_OPTION = (
     ("-f", "--from"),
     dict(
-        required=True,
+        required=False,
         type=str,
         help="The account hash of the account which is the context of this deployment, base16 encoded.",
     ),
