@@ -5,7 +5,7 @@ import java.nio.file.Files
 
 import io.casperlabs.client.configuration.Options.DeployOptions
 import io.casperlabs.casper.consensus.Deploy.{Arg, Code}
-import Code.{Contract, StoredContract, StoredVersionedContract}
+import Code.{Contract, StoredContract, StoredVersionedContract, WasmContract}
 import io.casperlabs.casper.consensus.state.SemVer
 import io.casperlabs.crypto.Keys.PublicKey
 import io.casperlabs.crypto.codec.Base16
@@ -109,12 +109,23 @@ object DeployConfig {
   private def toCode(opts: CodeConfig, defaultArgs: Seq[Arg]): Code = {
     val contract = opts.file.map { f =>
       val wasm = ByteString.copyFrom(Files.readAllBytes(f.toPath))
-      Contract.Wasm(wasm)
+      Contract.WasmContract(WasmContract(wasm))
     } orElse {
 
       opts.contractHash.map { x =>
         Contract.StoredContract(
-          StoredContract().withContractHash(ByteString.copyFrom(Base16.decode(x)))
+          StoredContract()
+            .withContractHash(ByteString.copyFrom(Base16.decode(x)))
+            .withEntryPoint(opts.entryPoint.getOrElse(""))
+        )
+      }
+    } orElse {
+
+      opts.contractName.map { x =>
+        Contract.StoredContract(
+          StoredContract()
+            .withName(x)
+            .withEntryPoint(opts.entryPoint.getOrElse(""))
         )
       }
 
@@ -125,40 +136,26 @@ object DeployConfig {
           StoredVersionedContract()
             .withPackageHash(ByteString.copyFrom(Base16.decode(x)))
             .withVersion(opts.version.getOrElse(0))
-        )
-      }
-
-    } orElse {
-
-      opts.contractName.map { x =>
-        Contract.StoredContract(
-          StoredContract().withName(x)
+            .withEntryPoint(opts.entryPoint.getOrElse(""))
         )
       }
 
     } orElse {
 
       opts.packageName.map { x =>
-        opts.version match {
-          case Some(ver) =>
-            Contract.StoredVersionedContract(
-              StoredVersionedContract()
-                .withName(x)
-                .withVersion(ver)
-            )
-          case None =>
-            Contract.StoredVersionedContract(
-              StoredVersionedContract()
-                .withName(x)
-            )
-        }
+        Contract.StoredVersionedContract(
+          StoredVersionedContract()
+            .withName(x)
+            .withVersion(opts.version.getOrElse(0))
+            .withEntryPoint(opts.entryPoint.getOrElse(""))
+        )
       }
 
     } orElse {
       opts.resource.map { x =>
         val wasm =
           ByteString.copyFrom(consumeInputStream(getClass.getClassLoader.getResourceAsStream(x)))
-        Contract.Wasm(wasm)
+        Contract.WasmContract(WasmContract(wasm))
       }
     } getOrElse {
       Contract.Empty
@@ -166,7 +163,7 @@ object DeployConfig {
 
     val args = opts.args getOrElse defaultArgs
 
-    Code(contract = contract, args = args, entryPoint = opts.entryPoint.getOrElse(""))
+    Code(contract = contract, args = args)
   }
 
   private def consumeInputStream(is: InputStream): Array[Byte] = {
