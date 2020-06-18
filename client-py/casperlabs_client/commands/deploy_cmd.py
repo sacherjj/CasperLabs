@@ -2,6 +2,7 @@ from typing import Dict
 
 from casperlabs_client import consts, reformat, CasperLabsClient
 from casperlabs_client.commands.common_options import (
+    ALGORITHM_OPTION,
     FROM_OPTION,
     PAYMENT_OPTIONS,
     PRIVATE_KEY_OPTION,
@@ -29,6 +30,7 @@ OPTIONS = (
         TTL_MILLIS_OPTION,
         WAIT_PROCESSED_OPTION,
         TIMEOUT_SECONDS_OPTION,
+        ALGORITHM_OPTION,
     ]
     + SESSION_OPTIONS
     + PAYMENT_OPTIONS
