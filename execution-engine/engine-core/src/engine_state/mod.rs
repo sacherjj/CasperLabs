@@ -792,21 +792,21 @@ where
                     version.map(|ver| ContractVersionKey::new(protocol_version.value().major, ver));
 
                 let contract_version_key = maybe_version_key
-                    .or_else(|| contract_package.get_current_contract_version().cloned())
+                    .or_else(|| contract_package.get_current_contract_version())
                     .ok_or_else(|| {
                         error::Error::Exec(execution::Error::NoActiveContractVersions(
                             contract_package_hash,
                         ))
                     })?;
 
-                if !contract_package.is_contract_version_in_use(contract_version_key) {
+                if !contract_package.is_version_enabled(contract_version_key) {
                     return Err(error::Error::Exec(
                         execution::Error::InvalidContractVersion(contract_version_key),
                     ));
                 }
 
                 let contract_hash = *contract_package
-                    .get_contract(contract_version_key)
+                    .lookup_contract_hash(contract_version_key)
                     .ok_or_else(|| {
                         error::Error::Exec(execution::Error::InvalidContractVersion(
                             contract_version_key,
