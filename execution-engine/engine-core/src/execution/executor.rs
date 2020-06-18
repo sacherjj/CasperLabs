@@ -255,7 +255,7 @@ impl Executor {
                     panic!("exec_finalize should only be called with the proof of stake contract");
                 }
             }
-            DirectSystemContractCall::TransferToAccount => {
+            DirectSystemContractCall::Transfer => {
                 if protocol_data.mint() != base_key.into_seed() {
                     panic!("exec_finalize should only be called with the mint contract");
                 }
@@ -528,14 +528,14 @@ impl Executor {
 
 pub enum DirectSystemContractCall {
     FinalizePayment,
-    TransferToAccount,
+    Transfer,
 }
 
 impl DirectSystemContractCall {
     fn entry_point_name(&self) -> &str {
         match self {
             DirectSystemContractCall::FinalizePayment => "finalize_payment",
-            DirectSystemContractCall::TransferToAccount => "transfer",
+            DirectSystemContractCall::Transfer => "transfer",
         }
     }
 
@@ -561,7 +561,7 @@ impl DirectSystemContractCall {
                 args,
                 extra_urefs,
             ),
-            DirectSystemContractCall::TransferToAccount => runtime.call_host_mint(
+            DirectSystemContractCall::Transfer => runtime.call_host_mint(
                 protocol_version,
                 entry_point_name,
                 named_keys,

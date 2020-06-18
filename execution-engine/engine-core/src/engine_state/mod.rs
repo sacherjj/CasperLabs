@@ -1027,7 +1027,7 @@ where
             }
         };
 
-        let direct_system_contract_call = DirectSystemContractCall::TransferToAccount;
+        let direct_system_contract_call = DirectSystemContractCall::Transfer;
         let parity_module = {
             let contract_wasm_hash = mint_contract.contract_wasm_hash();
             let use_system_contracts = self.config.use_system_contracts();
