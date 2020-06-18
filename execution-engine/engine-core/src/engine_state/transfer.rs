@@ -1,10 +1,7 @@
 use engine_shared::{account::Account, newtypes::CorrelationId, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 use std::{cell::RefCell, rc::Rc};
-use types::{
-    system_contract_errors::mint::Error as MintError, AccessRights, ApiError, Key, RuntimeArgs,
-    URef, U512,
-};
+use types::{AccessRights, ApiError, Key, RuntimeArgs, URef, U512};
 
 use crate::{
     engine_state::Error,
@@ -59,11 +56,10 @@ impl TransferRuntimeArgsBuilder {
                 match maybe_named_key {
                     Some(Key::URef(found_uref)) => {
                         if found_uref.is_writeable() {
-                            // it is a valid URef and caller has access but is it a purse URef?
-                            // NOTE: continue to use passed in URef, not found URef
+                            // it is a URef and caller has access but is it a purse URef?
                             tracking_copy
                                 .borrow_mut()
-                                .get_purse_balance_key(correlation_id, uref.into())
+                                .get_purse_balance_key(correlation_id, found_uref.to_owned().into())
                                 .map_err(|_| ExecError::Revert(ApiError::InvalidPurse))?;
                             Ok(uref)
                         } else {
@@ -99,12 +95,19 @@ impl TransferRuntimeArgsBuilder {
         let arg_name = TARGET;
         match imputed_runtime_args.get(arg_name) {
             Some(cl_value) if *cl_value.cl_type() == types::CLType::URef => {
-                let uref = match cl_value.clone().into_t() {
+                let uref: URef = match cl_value.clone().into_t() {
                     Ok(uref) => uref,
                     Err(error) => {
                         return Err(Error::Exec(ExecError::Revert(error.into())));
                     }
                 };
+
+                // it is a URef but is it a purse URef?
+                tracking_copy
+                    .borrow_mut()
+                    .get_purse_balance_key(correlation_id, uref.into())
+                    .map_err(|_| ExecError::Revert(ApiError::InvalidPurse))?;
+
                 Ok(uref)
             }
             Some(cl_value)
@@ -209,11 +212,6 @@ impl TransferRuntimeArgsBuilder {
             if source_uref.addr() == target_uref.addr() {
                 return Err(ExecError::Revert(ApiError::InvalidPurse).into());
             }
-
-            tracking_copy
-                .borrow_mut()
-                .get_purse_balance_key(correlation_id, target_uref.into())
-                .map_err(|_| ExecError::Revert(ApiError::Mint(MintError::DestNotFound as u8)))?;
 
             let amount = self.resolve_amount()?;
 

@@ -44,7 +44,7 @@ message StoredContractPackageHash {
 }
 
 message Transfer {
-    bytes args = 4; // ABI-encoded arguments
+    bytes args = 1; // ABI-encoded arguments
 }
 
 message DeployPayload {

@@ -13,8 +13,7 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
 use types::{
-    account::PublicKey, runtime_args, system_contract_errors::mint::Error as MintError,
-    AccessRights, ApiError, Key, RuntimeArgs, URef, U512,
+    account::PublicKey, runtime_args, AccessRights, ApiError, Key, RuntimeArgs, URef, U512,
 };
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
@@ -384,11 +383,18 @@ fn should_transfer_wasmless_purse_to_purse() {
     transfer_wasmless(WasmlessTransfer::PurseToPurse);
 }
 
+#[ignore]
+#[test]
+fn should_transfer_wasmless_amount_as_u64() {
+    transfer_wasmless(WasmlessTransfer::AmountAsU64);
+}
+
 enum WasmlessTransfer {
     AccountMainPurseToPurse,
     AccountMainPurseToAccountMainPurse,
     PurseToPurse,
     AccountToAccountByKey,
+    AmountAsU64,
 }
 
 fn transfer_wasmless(wasmless_transfer: WasmlessTransfer) {
@@ -420,6 +426,9 @@ fn transfer_wasmless(wasmless_transfer: WasmlessTransfer) {
         }
         WasmlessTransfer::PurseToPurse => {
             runtime_args! { "source" => account_1_purse, "target" => account_2_purse, "amount" => transfer_amount }
+        }
+        WasmlessTransfer::AmountAsU64 => {
+            runtime_args! { "source" => account_1_purse, "target" => account_2_purse, "amount" => 1000u64 }
         }
     };
 
@@ -624,7 +633,7 @@ fn invalid_transfer_wasmless(invalid_wasmless_transfer: InvalidWasmlessTransfer)
         InvalidWasmlessTransfer::SourceURefNotPurse => {
             let not_purse_uref =
                 get_default_account_named_uref(&mut builder, TRANSFER_RESULT_NAMED_KEY);
-            // passes an invalid uref as source
+            // passes an invalid uref as source (an existing uref that is not a purse uref)
             (
                 DEFAULT_ACCOUNT_ADDR,
                 runtime_args! { "source" => not_purse_uref, "target" => ACCOUNT_1_ADDR, "amount" => transfer_amount },
@@ -634,18 +643,18 @@ fn invalid_transfer_wasmless(invalid_wasmless_transfer: InvalidWasmlessTransfer)
         InvalidWasmlessTransfer::TargetURefNotPurse => {
             let not_purse_uref =
                 get_default_account_named_uref(&mut builder, TRANSFER_RESULT_NAMED_KEY);
-            // passes an invalid uref as target
+            // passes an invalid uref as target (an existing uref that is not a purse uref)
             (
                 DEFAULT_ACCOUNT_ADDR,
                 runtime_args! { "target" => not_purse_uref, "amount" => transfer_amount },
-                CoreError::Exec(ExecError::Revert(ApiError::Mint(
-                    MintError::DestNotFound as u8,
-                ))),
+                CoreError::Exec(ExecError::Revert(ApiError::InvalidPurse)),
             )
         }
         InvalidWasmlessTransfer::SourceURefNonexistent => {
             let nonexistent_purse = URef::new([255; 32], AccessRights::READ_ADD_WRITE);
-            // passes an invalid uref as source
+            // passes a nonexistent uref as source; considered to be a forged reference as when
+            // a caller passes a uref as source they are claiming it is a purse and that they have
+            // write access to it / are allowed to take funds from it.
             (
                 ACCOUNT_1_ADDR,
                 runtime_args! { "source" => nonexistent_purse, "target" => ACCOUNT_1_ADDR, "amount" => transfer_amount },
@@ -654,13 +663,11 @@ fn invalid_transfer_wasmless(invalid_wasmless_transfer: InvalidWasmlessTransfer)
         }
         InvalidWasmlessTransfer::TargetURefNonexistent => {
             let nonexistent_purse = URef::new([255; 32], AccessRights::READ_ADD_WRITE);
-            // passes an invalid uref as target
+            // passes a nonexistent uref as target
             (
                 ACCOUNT_1_ADDR,
                 runtime_args! { "target" => nonexistent_purse, "amount" => transfer_amount },
-                CoreError::Exec(ExecError::Revert(ApiError::Mint(
-                    MintError::DestNotFound as u8,
-                ))),
+                CoreError::Exec(ExecError::Revert(ApiError::InvalidPurse)),
             )
         }
         InvalidWasmlessTransfer::OtherPurseToSelfPurse => {
