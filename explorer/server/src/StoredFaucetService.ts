@@ -1,5 +1,5 @@
 import { StateQuery } from "casperlabs-grpc/io/casperlabs/node/api/casper_pb";
-import { CasperService, Contracts, DeployHash, DeployUtil, encodeBase16 } from "casperlabs-sdk";
+import { CasperService, Contracts, DeployHash, DeployUtil, encodeBase16, Keys } from "casperlabs-sdk";
 import { ByteArray, SignKeyPair } from "tweetnacl-ts";
 import { CallFaucet, StoredFaucet } from "./lib/Contracts";
 import DeployService from "./services/DeployService";
@@ -22,7 +22,7 @@ export class StoredFaucetService {
     this.periodCheckState();
   }
 
-  async callStoredFaucet(accountPublicKey: ByteArray): Promise<DeployHash> {
+  async callStoredFaucet(accountPublicKeyHash: ByteArray): Promise<DeployHash> {
     if (!this.storedFaucetFinalized && !this.deployHash) {
       const state = await this.checkState();
       if (state) {
@@ -38,7 +38,7 @@ export class StoredFaucetService {
     if (this.deployHash) {
       dependencies.push(this.deployHash);
     }
-    const deployByName = DeployUtil.makeDeploy(CallFaucet.args(accountPublicKey, this.transferAmount), DeployUtil.ContractType.Name, "faucet", null, this.paymentAmount, this.contractKeys.publicKey, dependencies);
+    const deployByName = DeployUtil.makeDeploy(CallFaucet.args(accountPublicKeyHash, this.transferAmount), DeployUtil.ContractType.Name, "faucet", null, this.paymentAmount, Keys.Ed25519.publicKeyHash(this.contractKeys.publicKey), dependencies);
     const signedDeploy = DeployUtil.signDeploy(deployByName, this.contractKeys);
     await this.deployService.deploy(signedDeploy);
     return signedDeploy.getDeployHash_asU8();
