@@ -66,25 +66,29 @@ export function makeDeploy(
 ): Deploy {
   const sessionCode = new Deploy.Code();
   if (type === ContractType.WASM) {
-    sessionCode.setWasm(session);
+    const wasmContract = new Deploy.Code.WasmContract();
+    wasmContract.setWasm(session);
+    sessionCode.setWasmContract(wasmContract);
   } else if (type === ContractType.Hash) {
     const storedContract = new Deploy.Code.StoredContract();
     storedContract.setContractHash(session);
+    storedContract.setEntryPoint(entryPoint || "");
     sessionCode.setStoredContract(storedContract);
   } else {
     const storedContract = new Deploy.Code.StoredContract();
     storedContract.setName(session as string);
+    storedContract.setEntryPoint(entryPoint || "")
     sessionCode.setStoredContract(storedContract);
   }
   sessionCode.setArgsList(args);
-  if(entryPoint){
-    sessionCode.setEntryPoint(entryPoint)
-  }
+
   if (paymentWasm === null) {
     paymentWasm = Buffer.from('');
   }
+  const paymentContract = new Deploy.Code.WasmContract();
+  paymentContract.setWasm(paymentWasm);
   const payment = new Deploy.Code();
-  payment.setWasm(paymentWasm);
+  payment.setWasmContract(paymentContract);
   payment.setArgsList(Args(['amount', BigIntValue(paymentAmount)]));
 
   const body = new Deploy.Body();
@@ -97,7 +101,7 @@ export function makeDeploy(
   header.setBodyHash(protoHash(body));
   // we will remove gasPrice eventually
   header.setGasPrice(1);
-  header.setDependenciesList(dependencies??[]);
+  header.setDependenciesList(dependencies ?? []);
 
   const deploy = new Deploy();
   deploy.setBody(body);

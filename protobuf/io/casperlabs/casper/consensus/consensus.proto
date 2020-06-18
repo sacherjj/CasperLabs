@@ -70,28 +70,34 @@ message Deploy {
     // Includes both binary instructions (wasm) and optionally, arguments
     // to those instructions encoded via our ABI
     message Code {
+        // XXX: For the JS serializer the order of fields matters.
+        //      See https://casperlabs.atlassian.net/browse/TNET-45
+
+        // Keyword arguments.
+        repeated Arg args = 1;
+
         oneof contract {
-            // Wasm byte code.
-            bytes wasm = 1;
-            StoredContract stored_contract = 2;
-            StoredVersionedContract stored_versioned_contract = 3;
+            WasmContract wasm_contract = 2;
+            StoredContract stored_contract = 3;
+            StoredVersionedContract stored_versioned_contract = 4;
+            TransferContract transfer_contract = 5;
         }
-        // Keyword arguments. Note that while the execution engine works with the original
-        // positional argument passing style, the order of the arguments matters.
-        repeated Arg args = 4;
-        // Name of the entry method in the contract.
-        string entry_point = 5;
+
+        message WasmContract {
+            bytes wasm = 1;
+        }
 
         message StoredVersionedContract {
             oneof address {
-                bytes package_hash = 1; // Package hash address of already stored contract.
-                // Name of a key that contains a package hash
+                // Package hash address of already stored contract.
+                bytes package_hash = 1;
+                // Name of a key that contains a package hash.
                 string name = 2;
             }
-
-            oneof optional_version {
-                uint32 version = 3;
-            }
+            // Name of the entry method in the contract.
+            string entry_point = 3;
+            // Optionally specify the exact version; 0 means use the highest available.
+            uint32 version = 4;
         }
 
         message StoredContract {
@@ -101,14 +107,17 @@ message Deploy {
                 // Name of a stored contract associated with the executing account (uref or hash).
                 string name = 2;
             }
+            // Name of the entry method in the contract.
+            string entry_point = 3;
         }
+
+        // Built-in transfer, bypassing the WASM execution.
+        message TransferContract {}
     }
 
     message Arg {
         reserved 2; // old state.Value representation of args
         string name = 1;
-        // Note that until the EE doesn't support kwargs directly, missing an Empty values are
-        // not allowed because they would be ambiguous.
         state.CLValueInstance value = 3;
     }
 
