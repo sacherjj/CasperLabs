@@ -16,7 +16,6 @@ pycryptodome = "==3.9.4"
 grpcio-tools = ">=1.20"
 pytest = ">=4.4"
 in-place = ">=0.4.0"
-grpc-tools = "*"
 
 [requires]
 python_version = "3.7"
