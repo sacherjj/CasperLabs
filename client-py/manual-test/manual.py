@@ -3,9 +3,9 @@ from pathlib import Path
 import os
 import pytest
 
-from casperlabs_client import CasperLabsClient
+from casperlabs_client import CasperLabsClient, key_holders
 from casperlabs_client.abi import ABI
-from casperlabs_client.key_holders import ED25519Key
+from casperlabs_client.key_holders import ED25519Key, SECP256K1Key
 from casperlabs_client.commands import (
     show_peers_cmd,
     visualize_dag_cmd,
@@ -34,9 +34,12 @@ NODE_0_PRIVATE_PEM_PATH = (
     / "nodes-0"
     / "validator-private.pem"
 )
+FAUCET_PRIVATE_KEY_PEM_PATH = (
+    HACK_DOCKER_DIRECTORY / "keys" / "faucet-account" / "account-private.pem"
+)
 
 
-@pytest.fixture()
+@pytest.fixture(scope="session")
 def casperlabs_client() -> CasperLabsClient:
     return CasperLabsClient()
 
@@ -50,6 +53,35 @@ def account_keys_directory():
                 directory, algorithm=key_algorithm, filename_prefix=key_algorithm
             )
         yield Path(directory)
+
+
+def faucet_fund_account(casperlabs_client, account_hash_hex, amount=1000000000):
+    faucet_wasm_path = WASM_DIRECTORY / "faucet.wasm"
+    session_args = ABI.args(
+        [ABI.account("account", account_hash_hex), ABI.big_int("amount", amount)]
+    )
+    deploy_hash = casperlabs_client.deploy(
+        private_key=FAUCET_PRIVATE_KEY_PEM_PATH,
+        session=faucet_wasm_path,
+        session_args=ABI.args_to_json(session_args),
+    )
+    result = casperlabs_client.show_deploy(deploy_hash, wait_for_processed=True)
+    block_hash = result.processing_results[0].block_info.summary.block_hash
+    result = casperlabs_client.balance(account_hash_hex, block_hash.hex())
+    assert result > 0
+
+
+@pytest.fixture(scope="session")
+def faucet_funded_accounts(casperlabs_client, account_keys_directory) -> dict:
+    accounts = {}
+    for key_algorithm in SUPPORTED_KEY_ALGORITHMS:
+        private_key_pem_path = account_keys_directory / f"{key_algorithm}-private.pem"
+        key_holder = key_holders.key_holder_object(
+            algorithm=key_algorithm, private_key_pem_path=private_key_pem_path
+        )
+        faucet_fund_account(casperlabs_client, key_holder.account_hash_hex)
+        accounts[key_algorithm] = key_holder, private_key_pem_path
+    return accounts
 
 
 @pytest.fixture(scope="session")
@@ -100,29 +132,19 @@ def test_balance(casperlabs_client, genesis_account_and_hash):
     assert result > 0
 
 
-def test_deploy_for_faucet(casperlabs_client, account_keys_directory):
-    faucet_wasm_path = WASM_DIRECTORY / "faucet.wasm"
-    private_key_pem_path = account_keys_directory / "ED25519-private.pem"
-    key_holder = ED25519Key.from_private_key_path(private_key_pem_path)
-    session_args = ABI.args(
-        [
-            ABI.account("account", key_holder.account_hash_hex),
-            ABI.big_int("amount", 1000000),
-        ]
+@pytest.mark.parametrize("algorithm", SUPPORTED_KEY_ALGORITHMS)
+def test_do_nothing(
+    casperlabs_client, faucet_funded_accounts, account_keys_directory, algorithm
+):
+    key_holder, private_key_pem_path = faucet_funded_accounts[algorithm]
+    do_nothing_wasm_path = WASM_DIRECTORY / "do_nothing.wasm"
+    deploy_hash = casperlabs_client.deploy(
+        session=do_nothing_wasm_path, private_key=private_key_pem_path
     )
-    result = casperlabs_client.deploy(
-        private_key=private_key_pem_path,
-        session=faucet_wasm_path,
-        session_args=ABI.args_to_json(session_args),
-    )
-    print(result)
-
-
-def test_transfer(casperlabs_client, genesis_account_and_hash, account_keys_directory):
-    # genesis_public_key_hex, _, genesis_account_hash_hex = genesis_account_and_hash
-    # casperlabs_client.transfer()
-
-    pass
+    result = casperlabs_client.show_deploy(deploy_hash, wait_for_processed=True)
+    for block_info in result.processing_results:
+        assert not block_info.is_error
+    assert len(result.processing_results) > 0, "No block_info returned"
 
 
 def test_show_peers(casperlabs_client):
@@ -175,6 +197,13 @@ def test_show_blocks(casperlabs_client):
 def test_show_blocks_cli(casperlabs_client):
     args = {"depth": 5}
     show_blocks_cmd.method(casperlabs_client, args)
+
+
+def test_key():
+    key = SECP256K1Key.generate()
+    print(f"Public: {key.public_key.hex()}")
+    print(f"Private: {key.private_key.hex()}")
+    print(f"Sign b111: {key.sign(b'111').hex()}")
 
 
 def test_vdag(casperlabs_client):

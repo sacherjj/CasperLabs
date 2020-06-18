@@ -103,8 +103,9 @@ class KeyHolder(ABC):
     @property
     def account_hash(self) -> bytes:
         """ Generate hash of public key and key algorithm for use as primary identifier in the system as bytes """
+        # account hash is the one place where algorithm is used in upper case.
         return crypto.blake2b_hash(
-            self.algorithm.encode("UTF-8") + b"\x00" + self.public_key
+            self.algorithm.upper().encode("UTF-8") + b"\x00" + self.public_key
         )
 
     @property
