@@ -81,7 +81,7 @@ export class ValidatorsContainer {
   private async upsert(blockInfos: BlockInfo[]) {
     blockInfos.forEach(b => {
       const header = b.getSummary()!.getHeader()!;
-      let validatorId = header.getValidatorPublicKey_asB64();
+      let validatorId = header.getValidatorPublicKeyHash_asB64();
       let item = this.validatorInfoMaps.get(validatorId);
       if (!item || item.rank < header.getJRank()) {
         this.validatorInfoMaps.set(validatorId, {

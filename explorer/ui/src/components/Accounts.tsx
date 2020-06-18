@@ -11,7 +11,7 @@ import { Button, IconButton, ListInline, RefreshableComponent } from './Utils';
 import Modal from './Modal';
 import { FileSelect, Form, SelectField, TextField } from './Forms';
 import {
-  base64to16,
+  base64to16, decodeBase64,
   DeployUtil,
   encodeBase16,
   encodeBase64
@@ -64,6 +64,12 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
               readonly={true}
             />
             <TextField
+              id="id-public-key-base16"
+              label="Public Key (Base16)"
+              fieldState={encodeBase16(decodeBase64(newAccountForm.publicKeyBase64.value))}
+              readonly={true}
+            />
+            <TextField
               id="id-public-key-base64"
               label="Public Key (Base64)"
               fieldState={newAccountForm.publicKeyBase64.value}
@@ -104,7 +110,7 @@ export default class Accounts extends RefreshableComponent<Props, {}> {
               id="id-signature-algorithm"
               label="Signature Algorithm"
               value={'Ed25519'}
-              options={[{'label': 'Ed25519', 'value': 'Ed25519'}]}
+              options={[{ label: 'Ed25519', value: 'Ed25519' }]}
             />
             <TextField
               id="id-account-name"
