@@ -130,6 +130,7 @@ const DeploysTable = observer(
         headers={[
           'Deploy Hash',
           'Account',
+          'Stage',
           'Cost',
           'Remaining Balance',
           'Result',
@@ -150,6 +151,7 @@ const DeploysTable = observer(
                 <Link to={Pages.deploy(id)}>{shortHash(id)}</Link>
               </td>
               <td>{shortHash(accountId)}</td>
+              <td>{deploy.getStage()}</td>
               <td className="text-right">
                 {deploy.getCost().toLocaleString()}
               </td>

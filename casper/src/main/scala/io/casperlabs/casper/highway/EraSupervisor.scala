@@ -19,6 +19,7 @@ import io.casperlabs.storage.era.EraStorage
 
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
+import io.casperlabs.storage.dag.AncestorsStorage
 
 /** The supervisor loads all the active eras when it starts and does the following things:
   * - acts as a gateway for the rest of the system to execute blocks by passing them to the right era
@@ -228,8 +229,10 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
           _ <- addToParent(child)
         } yield ()
 
-      case HighwayEvent.CreatedLambdaMessage(m)  => handleCreatedMessage(m, "lambda-message")
-      case HighwayEvent.CreatedLambdaResponse(m) => handleCreatedMessage(m, "lambda-response")
+      case HighwayEvent.CreatedLambdaMessage(m) =>
+        handleCreatedMessage(m, "lambda-message")
+      case HighwayEvent.CreatedLambdaResponse(m) =>
+        handleCreatedMessage(m, "lambda-response")
       case HighwayEvent.CreatedOmegaMessage(m) =>
         handleCreatedMessage(m, "omega-message")
       case HighwayEvent.HandledLambdaMessage =>
@@ -295,7 +298,7 @@ class EraSupervisor[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: BlockRela
 
 object EraSupervisor {
 
-  def apply[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: DagStorage: FinalityStorageReader: BlockRelaying: ForkChoiceManager](
+  def apply[F[_]: Concurrent: Timer: Log: Metrics: EraStorage: DagStorage: FinalityStorageReader: BlockRelaying: ForkChoiceManager: AncestorsStorage](
       conf: HighwayConf,
       genesis: BlockSummary,
       maybeMessageProducer: Option[MessageProducer[F]],

@@ -84,7 +84,11 @@ package object highway {
       WriterT.tell[F, Vector[HighwayEvent]](events.toVector)
   }
 
+  /** Determine the leader of any given round. */
   type LeaderFunction = Ticks => PublicKeyHashBS
+
+  /** Determine an order in which this validator should produce their omega messages in any given round. */
+  type OmegaFunction = Ticks => Seq[PublicKeyHashBS]
 
   type ValidatedMessage = Message @@ ValidatedTag
   def Validated(m: Message) = m.asInstanceOf[ValidatedMessage]

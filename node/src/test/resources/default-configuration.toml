@@ -49,6 +49,7 @@ download-max-retries = 1
 download-retry-initial-backoff-period = "1second"
 download-retry-backoff-factor = 1.0
 download-partial-blocks = false
+download-cache-expiry = "1second"
 relay-max-parallel-blocks = 1
 relay-block-chunk-consumer-timeout = "1second"
 validate-max-parallel-blocks = 1
@@ -94,6 +95,7 @@ auto-propose-ballot-interval = "1second"
 auto-propose-acc-interval = "1second"
 auto-propose-acc-count = 1
 min-ttl = "1hour"
+max-block-cost = 0
 
 [highway]
 enabled = false
@@ -107,6 +109,7 @@ cache-max-size-bytes = 1
 cache-neighborhood-before = 1
 cache-neighborhood-after = 1
 deploy-stream-chunk-size = 1
+dag-stream-chunk-size = 1
 
 [metrics]
 prometheus = false

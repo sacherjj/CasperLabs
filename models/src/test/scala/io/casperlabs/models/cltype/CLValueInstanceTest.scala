@@ -9,12 +9,18 @@ import io.casperlabs.models.bytesrepr.ToBytes
 import org.scalacheck.{Arbitrary, Gen}
 import org.scalatest.{FlatSpec, Matchers}
 import org.scalatest.prop.PropertyChecks
+import org.scalacheck.Arbitrary.arbitrary
+import org.scalacheck.Shrink
 import scala.annotation.tailrec
 import CLTypeSerializationTest.nested
 import KeySerializationTest.{arbKey, genKey}
 import URefSerializationTest.{arbURef, genURef}
 
 class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
+
+  // Shrinking seems to disregard fixed sized input such as 32 byte hashes.
+  implicit def noShrink[T]: Shrink[T] = Shrink.shrinkAny
+
   "CLValue instantiation" should "be stack safe (deep nesting)" in {
     val n        = 1000000
     val deepType = nested(CLType.Bool, n)(t => CLType.Option(t))
@@ -189,6 +195,53 @@ class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
     )
   }
 
+  it should "instantiate CLType.Map keyed by hashes properly" in forAll(
+    Gen
+      .listOf(
+        for {
+          hash <- Gen.listOfN(32, arbitrary[Byte])
+          flag <- arbitrary[Boolean]
+        } yield hash.toArray -> flag
+      )
+      .map(_.toMap)
+  ) { (m: Map[Array[Byte], Boolean]) =>
+    // Map conversion needs ordered keys, and it has to be what `CLValueInstance.order` is doing.
+    implicit val `Ordering[Array[Byte]]` = Ordering.fromLessThan[Array[Byte]] {
+      case (x, y) => implicitly[Ordering[Iterable[Byte]]].lt(x.toIterable, y.toIterable)
+    }
+
+    // Arrays don't seem to have an implicit conversion but we want them to be FixedList in this case.
+    implicit val `ToBytes[Array[Byte]]` = new ToBytes[Array[Byte]] {
+      val `ToBytes[List[Byte]]` = toBytesFixedList[Byte]
+
+      def toBytes(array: Array[Byte]): Array[Byte] =
+        `ToBytes[List[Byte]]`.toBytes(array.toList)
+    }
+
+    instantiateTest[Map[Array[Byte], Boolean]](
+      m,
+      CLType.Map(CLType.FixedList(CLType.U8, 32), CLType.Bool),
+      x =>
+        CLValueInstance
+          .Map(
+            x.map {
+              case (k, v) =>
+                (
+                  CLValueInstance.FixedList(k.map(CLValueInstance.U8(_)), CLType.U8, 32) match {
+                    case Right(list) => list
+                    case Left(err)   => fail(err.toString)
+                  },
+                  CLValueInstance.Bool(v)
+                )
+            },
+            CLType.FixedList(CLType.U8, 32),
+            CLType.Bool
+          )
+          .right
+          .get
+    )
+  }
+
   it should "instantiate CLType.Tuple1 properly" in forAll { (t: Tuple1[Byte]) =>
     instantiateTest[Tuple1[Byte]](
       t,
@@ -220,10 +273,13 @@ class CLValueInstanceTest extends FlatSpec with Matchers with PropertyChecks {
   }
 
   private def instantiateTest[T: ToBytes](t: T, clType: CLType, instance: T => CLValueInstance) = {
-    val clValue    = CLValue.from(t, clType)
+    // Transform the raw Scala value to bytes using the supplied ToBytes.
+    val clValue = CLValue.from(t, clType)
+    // Parse bytes to API types based on the CLType.
     val clInstance = CLValueInstance.from(clValue)
-
+    // Check that the value parsed from bytes matches what we'd do directly from the raw value.
     clInstance shouldBe Right(instance(t))
+    // Check that if we transform the API value back to bytes we get an identical roundtrip.
     clInstance.flatMap(_.toValue) shouldBe Right(clValue)
   }
 
