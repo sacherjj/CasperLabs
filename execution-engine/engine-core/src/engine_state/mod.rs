@@ -792,7 +792,7 @@ where
                     version.map(|ver| ContractVersionKey::new(protocol_version.value().major, ver));
 
                 let contract_version_key = maybe_version_key
-                    .or_else(|| contract_package.get_current_contract_version())
+                    .or_else(|| contract_package.current_contract_version())
                     .ok_or_else(|| {
                         error::Error::Exec(execution::Error::NoActiveContractVersions(
                             contract_package_hash,
@@ -824,7 +824,7 @@ where
         let entry_point_name = deploy_item.entry_point_name();
 
         let entry_point = contract
-            .get_entry_point(entry_point_name)
+            .entry_point(entry_point_name)
             .cloned()
             .ok_or_else(|| {
                 error::Error::Exec(execution::Error::NoSuchMethod(entry_point_name.to_owned()))

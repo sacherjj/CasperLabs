@@ -66,9 +66,9 @@ impl Group {
     }
 }
 
-impl Into<String> for Group {
-    fn into(self) -> String {
-        self.0
+impl From<Group> for String {
+    fn from(group: Group) -> Self {
+        group.0
     }
 }
 
@@ -121,9 +121,9 @@ impl ContractVersionKey {
     }
 }
 
-impl Into<(ProtocolVersionMajor, ContractVersion)> for ContractVersionKey {
-    fn into(self) -> (ProtocolVersionMajor, ContractVersion) {
-        (self.0, self.1)
+impl From<ContractVersionKey> for (ProtocolVersionMajor, ContractVersion) {
+    fn from(contract_version_key: ContractVersionKey) -> Self {
+        (contract_version_key.0, contract_version_key.1)
     }
 }
 
@@ -319,7 +319,7 @@ impl ContractPackage {
     }
 
     /// Return the contract version key for the newest enabled contract version.
-    pub fn get_current_contract_version(&self) -> Option<ContractVersionKey> {
+    pub fn current_contract_version(&self) -> Option<ContractVersionKey> {
         match self.enabled_versions().keys().next_back() {
             Some(contract_version_key) => Some(*contract_version_key),
             None => None,
@@ -327,7 +327,7 @@ impl ContractPackage {
     }
 
     /// Return the contract hash for the newest enabled contract version.
-    pub fn get_current_contract_hash(&self) -> Option<ContractHash> {
+    pub fn current_contract_hash(&self) -> Option<ContractHash> {
         match self.enabled_versions().values().next_back() {
             Some(contract_hash) => Some(*contract_hash),
             None => None,
@@ -459,30 +459,22 @@ pub struct Contract {
     protocol_version: ProtocolVersion,
 }
 
-impl
-    Into<(
+impl From<Contract>
+    for (
         ContractPackageHash,
         ContractWasmHash,
         NamedKeys,
         EntryPoints,
         ProtocolVersion,
-    )> for Contract
+    )
 {
-    fn into(
-        self,
-    ) -> (
-        ContractPackageHash,
-        ContractWasmHash,
-        NamedKeys,
-        EntryPoints,
-        ProtocolVersion,
-    ) {
+    fn from(contract: Contract) -> Self {
         (
-            self.contract_package_hash,
-            self.contract_wasm_hash,
-            self.named_keys,
-            self.entry_points,
-            self.protocol_version,
+            contract.contract_package_hash,
+            contract.contract_wasm_hash,
+            contract.named_keys,
+            contract.entry_points,
+            contract.protocol_version,
         )
     }
 }
@@ -521,7 +513,7 @@ impl Contract {
     }
 
     /// Returns the type signature for the given `method`.
-    pub fn get_entry_point(&self, method: &str) -> Option<&EntryPoint> {
+    pub fn entry_point(&self, method: &str) -> Option<&EntryPoint> {
         self.entry_points.get(method)
     }
 
@@ -635,9 +627,7 @@ pub enum EntryPointType {
 
 impl ToBytes for EntryPointType {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = bytesrepr::allocate_buffer(self)?;
-        result.push(*self as u8);
-        Ok(result)
+        (*self as u8).to_bytes()
     }
 
     fn serialized_length(&self) -> usize {
@@ -679,14 +669,14 @@ pub struct EntryPoint {
     entry_point_type: EntryPointType,
 }
 
-impl Into<(String, Parameters, CLType, EntryPointAccess, EntryPointType)> for EntryPoint {
-    fn into(self) -> (String, Parameters, CLType, EntryPointAccess, EntryPointType) {
+impl From<EntryPoint> for (String, Parameters, CLType, EntryPointAccess, EntryPointType) {
+    fn from(entry_point: EntryPoint) -> Self {
         (
-            self.name,
-            self.args,
-            self.ret,
-            self.access,
-            self.entry_point_type,
+            entry_point.name,
+            entry_point.args,
+            entry_point.ret,
+            entry_point.access,
+            entry_point.entry_point_type,
         )
     }
 }
@@ -861,7 +851,7 @@ impl FromBytes for EntryPointAccess {
     }
 }
 
-/// Argument to a method
+/// Parameter to a method
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Parameter {
     name: String,
@@ -883,9 +873,9 @@ impl Parameter {
     }
 }
 
-impl Into<(String, CLType)> for Parameter {
-    fn into(self) -> (String, CLType) {
-        (self.name, self.cl_type)
+impl From<Parameter> for (String, CLType) {
+    fn from(parameter: Parameter) -> Self {
+        (parameter.name, parameter.cl_type)
     }
 }
 
