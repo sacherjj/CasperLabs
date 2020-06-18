@@ -713,6 +713,13 @@ object ProtoUtil {
               )
             )
 
+        case Deploy.Code.Contract.TransferContract(_) =>
+          Success(
+            ipc.DeployPayload.Payload.Transfer(
+              io.casperlabs.ipc.Transfer(args)
+            )
+          )
+
         case Deploy.Code.Contract.Empty =>
           Success(ipc.DeployPayload.Payload.DeployCode(ipc.DeployCode(ByteString.EMPTY, args)))
       }

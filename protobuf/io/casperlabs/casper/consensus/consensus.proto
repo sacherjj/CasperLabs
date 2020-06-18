@@ -80,6 +80,7 @@ message Deploy {
             WasmContract wasm_contract = 2;
             StoredContract stored_contract = 3;
             StoredVersionedContract stored_versioned_contract = 4;
+            TransferContract transfer_contract = 5;
         }
 
         message WasmContract {
@@ -109,6 +110,9 @@ message Deploy {
             // Name of the entry method in the contract.
             string entry_point = 3;
         }
+
+        // Built-in transfer, bypassing the WASM execution.
+        message TransferContract {}
     }
 
     message Arg {
