@@ -137,7 +137,7 @@ pub fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
     bytesrepr::deserialize(bytes).unwrap_or_revert()
 }
 
-/// Create a new contract stored under a Key::Hash at version 1.0.0
+/// Create a new contract stored under a Key::Hash at version 1
 /// if `named_keys` are provided, will apply them
 /// if `hash_name` is provided, puts contract hash in current context's named keys under `hash_name`
 /// if `uref_name` is provided, puts access_uref in current context's named keys under `uref_name`

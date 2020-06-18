@@ -3178,7 +3178,8 @@ where
 
         Ok(Ok(()))
     }
-    pub fn validate_entry_point_access(
+
+    fn validate_entry_point_access(
         &self,
         package: &ContractPackage,
         access: &EntryPointAccess,

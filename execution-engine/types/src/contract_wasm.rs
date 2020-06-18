@@ -1,4 +1,4 @@
-use crate::bytesrepr::{self, Error, FromBytes, ToBytes};
+use crate::bytesrepr::{Error, FromBytes, ToBytes};
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
@@ -43,9 +43,7 @@ impl ContractWasm {
 
 impl ToBytes for ContractWasm {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = bytesrepr::allocate_buffer(self)?;
-        result.append(&mut self.bytes.to_bytes()?);
-        Ok(result)
+        self.bytes.to_bytes()
     }
 
     fn serialized_length(&self) -> usize {

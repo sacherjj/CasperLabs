@@ -295,8 +295,6 @@ where
             )?
         };
 
-        log::trace!("PoS hash: {:?}", proof_of_stake_hash);
-
         // Execute standard payment installer wasm code
         //
         // Note: this deviates from the implementation strategy described in the original
@@ -654,18 +652,6 @@ where
                         .put_protocol_data(new_protocol_version, &new_protocol_data)
                         .map_err(Into::into)?;
                 }
-                // *system_account.named_keys_mut() = keys;
-
-                // let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-                // let value = StoredValue::Account(system_account);
-
-                // tracking_copy.borrow_mut().write(key, value);
-
-                // Find package hashes updates
-
-                // let effects = tracking_copy.borrow().effect();
-                // effects.transforms.get(mint_package_hash).expect("mint package should be
-                // changed");
             }
         }
 
