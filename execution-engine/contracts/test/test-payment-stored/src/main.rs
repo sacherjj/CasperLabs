@@ -16,6 +16,7 @@ const HASH_KEY_NAME: &str = "test_payment_hash";
 const PACKAGE_HASH_KEY_NAME: &str = "test_payment_package_hash";
 const ACCESS_KEY_NAME: &str = "test_payment_access";
 const ARG_NAME: &str = "amount";
+const CONTRACT_VERSION: &str = "contract_version";
 
 #[no_mangle]
 pub extern "C" fn pay() {
@@ -36,12 +37,12 @@ pub extern "C" fn call() {
         entry_points.add_entry_point(entry_point);
         entry_points
     };
-    let contract_hash = storage::new_contract(
+    let (contract_hash, contract_version) = storage::new_contract(
         entry_points,
         None,
         Some(PACKAGE_HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),
     );
-
+    runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
     runtime::put_key(HASH_KEY_NAME, contract_hash.into());
 }

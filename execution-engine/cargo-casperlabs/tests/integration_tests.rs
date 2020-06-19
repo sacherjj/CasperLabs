@@ -73,13 +73,11 @@ fn run_tool_and_resulting_tests(turbo: bool) {
     assert_eq!(SUCCESS_EXIT_CODE, test_output.status.code().unwrap());
 }
 
-#[ignore] // TODO: michal re-enable when tests are passing
 #[test]
 fn should_succeed_without_using_system_contracts() {
     run_tool_and_resulting_tests(true);
 }
 
-#[ignore] // TODO: michal re-enable when tests are passing
 #[test]
 fn should_succeed_using_system_contracts() {
     run_tool_and_resulting_tests(false);

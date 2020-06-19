@@ -840,16 +840,17 @@ impl ToBytes for &str {
 /// Returns `true` if a we can serialize and then deserialize a value
 pub fn test_serialization_roundtrip<T>(t: &T)
 where
-    T: ToBytes + FromBytes + PartialEq,
+    T: alloc::fmt::Debug + ToBytes + FromBytes + PartialEq,
 {
     let serialized = ToBytes::to_bytes(t).expect("Unable to serialize data");
     assert_eq!(
         serialized.len(),
         t.serialized_length(),
-        "\nLength of serialized data: {},\nserialized_length() yielded: {},\nserialized data: {:?}",
+        "\nLength of serialized data: {},\nserialized_length() yielded: {},\nserialized data: {:?}, t is {:?}",
         serialized.len(),
         t.serialized_length(),
-        serialized
+        serialized,
+        t
     );
     let deserialized = deserialize::<T>(serialized).expect("Unable to deserialize data");
     assert!(*t == deserialized)

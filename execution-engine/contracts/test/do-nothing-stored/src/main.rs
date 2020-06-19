@@ -15,6 +15,7 @@ const ENTRY_FUNCTION_NAME: &str = "delegate";
 const HASH_KEY_NAME: &str = "do_nothing_hash";
 const PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
 const ACCESS_KEY_NAME: &str = "do_nothing_access";
+const CONTRACT_VERSION: &str = "contract_version";
 
 #[no_mangle]
 pub extern "C" fn delegate() {}
@@ -34,12 +35,13 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    let contract_hash = storage::new_contract(
+    let (contract_hash, contract_version) = storage::new_contract(
         entry_points,
         None,
         Some(PACKAGE_HASH_KEY_NAME.to_string()),
         Some(ACCESS_KEY_NAME.to_string()),
     );
 
+    runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
     runtime::put_key(HASH_KEY_NAME, contract_hash.into());
 }

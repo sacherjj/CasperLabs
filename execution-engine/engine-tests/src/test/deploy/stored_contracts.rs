@@ -1129,7 +1129,11 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
         .get_upgrade_response(0)
         .expect("should have response");
 
-    assert!(upgrade_response.has_success(), "expected success");
+    assert!(
+        upgrade_response.has_success(),
+        "expected success but {:?}",
+        upgrade_response
+    );
 
     // first, store payment contract for v2.0.0
 
@@ -1148,8 +1152,6 @@ fn should_execute_stored_payment_and_session_code_with_new_major_version() {
     )
     .with_protocol_version(new_protocol_version)
     .build();
-
-    println!("before exec request 1");
 
     // store both contracts
     builder.exec(exec_request_1).expect_success().commit();

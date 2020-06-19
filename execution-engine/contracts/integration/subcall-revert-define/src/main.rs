@@ -6,12 +6,13 @@ extern crate alloc;
 use contract::contract_api::{runtime, storage};
 
 use types::{
-    contracts::Parameters, ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints,
+    contracts::Parameters, ApiError, CLType, ContractHash, ContractVersion, EntryPoint,
+    EntryPointAccess, EntryPointType, EntryPoints,
 };
 
 const ENTRY_POINT_NAME: &str = "revert_test_ext";
 const REVERT_TEST_KEY: &str = "revert_test";
+const REVERT_VERSION_KEY: &str = "revert_version";
 
 #[no_mangle]
 pub extern "C" fn revert_test_ext() {
@@ -20,7 +21,7 @@ pub extern "C" fn revert_test_ext() {
     runtime::revert(ApiError::User(2));
 }
 
-fn store() -> ContractHash {
+fn store() -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 
@@ -41,6 +42,8 @@ fn store() -> ContractHash {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_hash = store();
+    let (contract_hash, contract_version) = store();
+    let version_uref = storage::new_uref(contract_version);
+    runtime::put_key(REVERT_VERSION_KEY, version_uref.into());
     runtime::put_key(REVERT_TEST_KEY, contract_hash.into());
 }

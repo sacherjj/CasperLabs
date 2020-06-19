@@ -6,7 +6,7 @@ use alloc::{boxed::Box, collections::BTreeMap, string::String, vec};
 
 use proptest::{
     array, bits,
-    collection::{btree_map, vec},
+    collection::{btree_map, btree_set, vec},
     option,
     prelude::*,
     result,
@@ -14,10 +14,10 @@ use proptest::{
 
 use crate::{
     account::{PublicKey, Weight},
-    contracts::Parameters,
-    AccessRights, CLType, CLValue, Contract, ContractWasm, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Group, Key, NamedArg, Parameter, Phase, ProtocolVersion, SemVer,
-    URef, U128, U256, U512,
+    contracts::{ContractVersions, DisabledVersions, Groups, Parameters},
+    AccessRights, CLType, CLValue, Contract, ContractPackage, ContractVersionKey, ContractWasm,
+    EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Group, Key, NamedArg, Parameter,
+    Phase, ProtocolVersion, SemVer, URef, U128, U256, U512,
 };
 
 pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
@@ -297,4 +297,33 @@ pub fn contract_arb() -> impl Strategy<Value = Contract> {
 
 pub fn contract_wasm_arb() -> impl Strategy<Value = ContractWasm> {
     vec(any::<u8>(), 1..1000).prop_map(ContractWasm::new)
+}
+
+pub fn contract_version_key_arb() -> impl Strategy<Value = ContractVersionKey> {
+    (1..32u32, 1..1000u32)
+        .prop_map(|(major, contract_ver)| ContractVersionKey::new(major, contract_ver))
+}
+
+pub fn contract_versions_arb() -> impl Strategy<Value = ContractVersions> {
+    btree_map(contract_version_key_arb(), u8_slice_32(), 1..5)
+}
+
+pub fn disabled_versions_arb() -> impl Strategy<Value = DisabledVersions> {
+    btree_set(contract_version_key_arb(), 0..5)
+}
+
+pub fn groups_arb() -> impl Strategy<Value = Groups> {
+    btree_map(group_arb(), btree_set(uref_arb(), 1..10), 0..5)
+}
+
+pub fn contract_package_arb() -> impl Strategy<Value = ContractPackage> {
+    (
+        uref_arb(),
+        contract_versions_arb(),
+        disabled_versions_arb(),
+        groups_arb(),
+    )
+        .prop_map(|(access_key, versions, disabled_versions, groups)| {
+            ContractPackage::new(access_key, versions, disabled_versions, groups)
+        })
 }

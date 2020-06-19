@@ -3,7 +3,7 @@
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
 use crate::{
-    bytesrepr::{self, Error, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
+    bytesrepr::{self, Error, FromBytes, ToBytes},
     CLTyped, CLValue,
 };
 
@@ -29,6 +29,27 @@ impl NamedArg {
 impl From<(String, CLValue)> for NamedArg {
     fn from((name, value): (String, CLValue)) -> NamedArg {
         NamedArg(name, value)
+    }
+}
+
+impl ToBytes for NamedArg {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = bytesrepr::allocate_buffer(self)?;
+        result.append(&mut self.0.to_bytes()?);
+        result.append(&mut self.1.to_bytes()?);
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        self.0.serialized_length() + self.1.serialized_length()
+    }
+}
+
+impl FromBytes for NamedArg {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (name, remainder) = String::from_bytes(bytes)?;
+        let (cl_value, remainder) = CLValue::from_bytes(remainder)?;
+        Ok((NamedArg(name, cl_value), remainder))
     }
 }
 
@@ -103,38 +124,18 @@ impl Into<BTreeMap<String, CLValue>> for RuntimeArgs {
 
 impl ToBytes for RuntimeArgs {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
-        let mut result = bytesrepr::allocate_buffer(self)?;
-        let num_keys = self.0.len() as u32;
-        result.append(&mut num_keys.to_bytes()?);
-        for named_value in self.0.iter() {
-            result.append(&mut named_value.name().to_bytes()?);
-            result.append(&mut named_value.cl_value().to_bytes()?);
-        }
-        Ok(result)
+        self.0.to_bytes()
     }
 
     fn serialized_length(&self) -> usize {
-        U32_SERIALIZED_LENGTH
-            + self
-                .0
-                .iter()
-                .map(|NamedArg(name, value)| name.serialized_length() + value.serialized_length())
-                .sum::<usize>()
+        self.0.serialized_length()
     }
 }
 
 impl FromBytes for RuntimeArgs {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
-        let (num_keys, mut rem) = u32::from_bytes(bytes)?;
-        let mut named_args = Vec::with_capacity(num_keys as usize);
-        for _ in 0..num_keys {
-            let (k, rem_key) = String::from_bytes(rem)?;
-            let (v, rem_value) = CLValue::from_bytes(rem_key)?;
-            named_args.push(NamedArg(k, v));
-            rem = rem_value;
-        }
-        debug_assert!(rem.is_empty(), "stream should be empty {:?}", rem);
-        Ok((named_args.into(), rem))
+        let (args, remainder) = Vec::<NamedArg>::from_bytes(bytes)?;
+        Ok((RuntimeArgs(args), remainder))
     }
 }
 

@@ -15,12 +15,13 @@ use contract::{
 use types::{
     api_error::{self},
     bytesrepr::{self},
-    runtime_args, ApiError, CLType, CLValue, ContractHash, ContractPackageHash, EntryPoint,
-    EntryPointAccess, EntryPointType, EntryPoints, Key, Parameter, RuntimeArgs, URef,
+    runtime_args, ApiError, CLType, CLValue, ContractPackageHash, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Key, Parameter, RuntimeArgs, URef,
 };
 
 const HASH_KEY_NAME: &str = "counter_package_hash";
 const ACCESS_KEY_NAME: &str = "counter_package_access";
+const CONTRACT_VERSION_KEY: &str = "contract_version";
 const ENTRYPOINT_SESSION: &str = "session";
 const ENTRYPOINT_COUNTER: &str = "counter";
 const ARG_COUNTER_METHOD: &str = "method";
@@ -75,8 +76,10 @@ pub extern "C" fn call() {
         ret
     };
 
-    let contract_hash: ContractHash =
+    let (contract_hash, contract_version) =
         storage::add_contract_version(contract_package_hash, entry_points, named_keys);
+    let version_uref = storage::new_uref(contract_version);
+    runtime::put_key(CONTRACT_VERSION_KEY, version_uref.into());
     runtime::put_key(ARG_CONTRACT_HASH_NAME, contract_hash.into());
 }
 

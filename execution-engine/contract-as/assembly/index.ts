@@ -447,7 +447,7 @@ export function createContractPackageAtHash(): CreateContractPackageResult {
   );
 }
 
-export function newContract(entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>> | null = null, hashName: String | null = null, urefName: String | null = null): Uint8Array {
+export function newContract(entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>> | null = null, hashName: String | null = null, urefName: String | null = null): AddContractVersionResult {
   let result = createContractPackageAtHash();
   if (hashName !== null) {
     putKey(<String>hashName, Key.fromHash(result.packageHash));
@@ -496,8 +496,16 @@ export function callVersionedContract(packageHash: Uint8Array, contract_version:
   }
 }
 
-export function addContractVersion(packageHash: Uint8Array, entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>>): Uint8Array {
-  var versionPtr = new Uint8Array(1);
+// Container for a result of contract version.
+// Used as a replacement of non-existing tuples.
+export class AddContractVersionResult {
+  constructor(public contractHash: Uint8Array, public contractVersion: u32) {}
+}
+
+// Add new contract version. Requires a package hash, entry points and named keys.
+// Result 
+export function addContractVersion(packageHash: Uint8Array, entryPoints: EntryPoints, namedKeys: Array<Pair<String, Key>>): AddContractVersionResult {
+  var versionPtr = new Uint32Array(1);
   let entryPointsBytes = entryPoints.toBytes();
   let keyToBytes = function(key: Key): Array<u8> { return key.toBytes(); };
   let namedKeysBytes = toBytesMap(namedKeys, toBytesString, keyToBytes);
@@ -519,9 +527,12 @@ export function addContractVersion(packageHash: Uint8Array, entryPoints: EntryPo
   const error = Error.fromResult(ret);
   if (error !== null) {
     error.revert();
-    return <Uint8Array>unreachable();
+    return <AddContractVersionResult>unreachable();
   }
-  return keyBytes.slice(0, totalBytes[0])
+
+  const contractHash = keyBytes.slice(0, totalBytes[0]);
+  const contractVersion = versionPtr[0];
+  return new AddContractVersionResult(contractHash, contractVersion);
 }
 
 export function createContractUserGroup(packageHash: Uint8Array, label: String, newURefs: u8, existingURefs: Array<URef>): Array<URef> {

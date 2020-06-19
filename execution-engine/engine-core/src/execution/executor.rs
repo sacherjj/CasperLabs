@@ -4,6 +4,7 @@ use std::{
     rc::Rc,
 };
 
+use log::warn;
 use parity_wasm::elements::Module;
 use wasmi::ModuleRef;
 
@@ -32,7 +33,7 @@ macro_rules! on_fail_charge {
             Ok(res) => res,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
-                log::warn!("Execution failed: {:?}", exec_err);
+                warn!("Execution failed: {:?}", exec_err);
                 return ExecutionResult::precondition_failure(exec_err.into());
             }
         }
@@ -42,7 +43,7 @@ macro_rules! on_fail_charge {
             Ok(res) => res,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
-                log::warn!("Execution failed: {:?}", exec_err);
+                warn!("Execution failed: {:?}", exec_err);
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: Default::default(),
@@ -56,7 +57,7 @@ macro_rules! on_fail_charge {
             Ok(res) => res,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
-                log::warn!("Execution failed: {:?}", exec_err);
+                warn!("Execution failed: {:?}", exec_err);
                 return ExecutionResult::Failure {
                     error: exec_err.into(),
                     effect: $effect,

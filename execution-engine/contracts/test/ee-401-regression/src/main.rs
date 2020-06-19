@@ -16,6 +16,9 @@ use types::{
     EntryPoints, Parameter, URef,
 };
 
+const HELLO_EXT: &str = "hello_ext";
+const CONTRACT_VERSION: &str = "contract_version";
+
 #[no_mangle]
 pub extern "C" fn hello_ext() {
     let test_string = String::from("Hello, world!");
@@ -30,7 +33,7 @@ pub extern "C" fn call() {
         let mut entry_points = EntryPoints::new();
 
         let entry_point = EntryPoint::new(
-            "hello_ext",
+            HELLO_EXT,
             Parameters::new(),
             CLType::URef,
             EntryPointAccess::Public,
@@ -41,7 +44,8 @@ pub extern "C" fn call() {
 
         entry_points
     };
-    let contract_hash = storage::new_contract(entry_points, None, None, None);
-    // let contract_pointer: ContractRef = storage::store_function_at_hash("hello_ext", named_keys);
-    runtime::put_key("hello_ext", contract_hash.into());
+    let (contract_hash, contract_version) = storage::new_contract(entry_points, None, None, None);
+
+    runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
+    runtime::put_key(HELLO_EXT, contract_hash.into());
 }
