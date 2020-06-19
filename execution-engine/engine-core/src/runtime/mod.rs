@@ -2452,7 +2452,7 @@ where
         let protocol_version = self.context.protocol_version();
         let major = protocol_version.value().major;
 
-        // TODO: Implement different ways of carrying on existing named keys
+        // TODO: EE-1032 - Implement different ways of carrying on existing named keys
         if let Some(previous_contract_hash) = contract_package.current_contract_hash() {
             let previous_contract: Contract =
                 self.context.read_gs_typed(&previous_contract_hash.into())?;
