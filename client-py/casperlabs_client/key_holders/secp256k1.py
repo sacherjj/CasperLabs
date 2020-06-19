@@ -8,8 +8,23 @@ from .key_holder import KeyHolder
 
 
 class NoChangeHasher:
-    def __init__(self, data: bytes):
-        self.data = data
+    def __init__(self, data=None):
+        if data is None:
+            self.data = b""
+        else:
+            self.data = data
+
+    def update(self, data):
+        self.data += data
+        return self
+
+    def copy(self):
+        return NoChangeHasher(self.data)
+
+    def __call__(self, data=None):
+        if data:
+            self.data = data
+        return self
 
     def digest(self):
         return self.data
@@ -71,7 +86,9 @@ class SECP256K1Key(KeyHolder):
         # .sign provides entropy.
         # .sign_deterministic wants to hash
         # this is method after .sign_deterministic should have hashed.
-        return private_key.sign_digest_deterministic(data)
+        return private_key.sign_digest_deterministic(
+            data, sigencode=ecdsa.util.sigencode_der_canonize
+        )
 
     @staticmethod
     def generate():

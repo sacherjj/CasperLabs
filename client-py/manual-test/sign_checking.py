@@ -1,5 +1,6 @@
 from eth_keys import KeyAPI
 from casperlabs_client.key_holders import SECP256K1Key
+import ecdsa
 
 key_api = KeyAPI()
 pk_hex = "805450db5849a42806fb909a78e6ab36448b9f0e00a2a036d6fffe815e79c97e"
@@ -17,6 +18,12 @@ signatureb = kh.sign(sign_bytes)
 print(signatureb.hex())
 signatureb = kh.sign(sign_bytes)
 print(signatureb.hex())
+
+pk = ecdsa.SigningKey.from_string(bytes.fromhex(pk_hex), ecdsa.SECP256k1)
+print(pk.sign_digest(sign_bytes).hex())
+print(pk.sign_digest(sign_bytes, sigencode=ecdsa.util.sigencode_der_canonize).hex())
+print(pk.sign_digest(sign_bytes, sigencode=ecdsa.util.sigdecode_strings).hex())
+print(pk.sign_digest(sign_bytes, sigencode=ecdsa.util.sigencode_strings_canonize).hex())
 # pk
 # pk.public_key
 # signature
