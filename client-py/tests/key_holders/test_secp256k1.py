@@ -7,7 +7,7 @@ from casperlabs_client.key_holders import SECP256K1Key
 
 def test_secp256k1_generate():
     PRIVATE_KEY_LENGTH = 32
-    PUBLIC_KEY_LENGTH = 64  # TODO should this be 64?
+    PUBLIC_KEY_LENGTH = 65
 
     key_holder = SECP256K1Key.generate()
     assert len(key_holder.private_key) == PRIVATE_KEY_LENGTH, "private key length"

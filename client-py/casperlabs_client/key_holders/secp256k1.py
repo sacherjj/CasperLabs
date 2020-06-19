@@ -7,6 +7,18 @@ from casperlabs_client.io import read_binary_file
 from .key_holder import KeyHolder
 
 
+class NoChangeHasher:
+    def __init__(self, data: bytes):
+        self.data = data
+
+    def digest(self):
+        return self.data
+
+    @property
+    def digest_size(self) -> int:
+        return len(self.data)
+
+
 class SECP256K1Key(KeyHolder):
     """
     Class for loading, generating and handling public/private keys using secp256k1 algorithm
@@ -15,6 +27,7 @@ class SECP256K1Key(KeyHolder):
     """
 
     CURVE = ecdsa.SECP256k1
+    UNCOMPRESSED = "uncompressed"
 
     def __init__(
         self,
@@ -31,60 +44,34 @@ class SECP256K1Key(KeyHolder):
             SECP256K1_KEY_ALGORITHM,
         )
 
-    @property
-    def private_key_pem(self):
-        """ Returns or generates private key pem data from other internal fields """
-        if self._private_key_pem is None:
-            if self._private_key is None:
-                raise ValueError("Must have either _private_key or _private_key_pem.")
-            private_key_object = ecdsa.SigningKey.from_string(
-                self._private_key, curve=self.CURVE
-            )
-            self._private_key_pem = private_key_object.to_pem()
-        return self._private_key_pem
+    def _private_key_pem_from_private_key(self) -> bytes:
+        return ecdsa.SigningKey.from_string(self.private_key, curve=self.CURVE).to_pem()
 
-    @property
-    def private_key(self):
-        """ Returns or generates private key bytes from other internal fields """
-        if self._private_key is None:
-            if self._private_key_pem is None:
-                raise ValueError("Must have either _private_key or _private_key_pem.")
-            private_key_object = ecdsa.SigningKey.from_pem(self._private_key_pem)
-            self._private_key = private_key_object.to_string()
-        return self._private_key
+    def _private_key_from_private_key_pem(self) -> bytes:
+        return ecdsa.SigningKey.from_pem(
+            self.private_key_pem.decode("UTF-8")
+        ).to_string()
 
-    @property
-    def public_key_pem(self):
-        """ Returns or generates public key pem data from other internal fields """
-        if self._public_key_pem is None:
-            public_key_object = ecdsa.VerifyingKey.from_string(
-                self.public_key, curve=self.CURVE
-            )
-            self._public_key_pem = public_key_object.to_pem()
-        return self._public_key_pem
+    def _public_key_pem_from_public_key(self) -> bytes:
+        public_key = ecdsa.VerifyingKey.from_string(self.public_key, curve=self.CURVE)
+        return public_key.to_pem()
 
-    @property
-    def public_key(self):
-        """ Returns or generates public key bytes from other internal fields """
-        if self._public_key is None:
-            if self._public_key_pem:
-                public_key_object = ecdsa.VerifyingKey.from_pem(self._public_key_pem)
-                self._public_key = public_key_object.to_string()
-            elif self.private_key:
-                private_key_object = ecdsa.SigningKey.from_string(
-                    self.private_key, curve=self.CURVE
-                )
-                self._public_key = private_key_object.verifying_key.to_string()
-            else:
-                raise ValueError("No values given to derive public key")
-        return self._public_key
+    def _public_key_from_public_key_pem(self) -> bytes:
+        return ecdsa.VerifyingKey.from_pem(
+            self.public_key_pem.decode("UTF-8")
+        ).to_string(self.UNCOMPRESSED)
+
+    def _public_key_from_private_key(self) -> bytes:
+        private_key = ecdsa.SigningKey.from_string(self.private_key, curve=self.CURVE)
+        return private_key.verifying_key.to_string("uncompressed")
 
     def sign(self, data: bytes) -> bytes:
         """ Return signature of data given """
-        private_key_object = ecdsa.SigningKey.from_string(
-            self.private_key, curve=self.CURVE
-        )
-        return private_key_object.sign(data)
+        private_key = ecdsa.SigningKey.from_string(self.private_key, curve=self.CURVE)
+        # .sign provides entropy.
+        # .sign_deterministic wants to hash
+        # this is method after .sign_deterministic should have hashed.
+        return private_key.sign_digest_deterministic(data)
 
     @staticmethod
     def generate():

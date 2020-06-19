@@ -15,7 +15,9 @@ def test_sign_deploy(account_keys_directory, algorithm):
     )
     client = CasperLabsClient()
     deploy = client.make_deploy(
-        public_key=public_key_pem_path, session_name="contract_name"
+        public_key=public_key_pem_path,
+        session_name="contract_name",
+        algorithm=algorithm,
     )
     signed_by_pem = client.sign_deploy(
         private_key_pem_file=private_key_pem_path, algorithm=algorithm, deploy=deploy

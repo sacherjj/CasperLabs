@@ -1,6 +1,6 @@
 import os
 import abc
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, Union, Optional
 
 from casperlabs_client.io import read_binary_file
@@ -29,7 +29,11 @@ class ContractCode(abc.ABC):
     contract_hash: bytes = None
     contract_name: str = None
     contract_uref: bytes = None
-    contract_args: list = field(default_factory=list)
+    contract_args: list = None
+
+    def __post_init__(self):
+        if self.contract_args is None:
+            self.contract_args = list()
 
     @staticmethod
     def _maybe_args_from_json(args: Union[str, bytes]) -> Optional[bytes]:

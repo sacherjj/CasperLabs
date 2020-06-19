@@ -139,7 +139,9 @@ def test_do_nothing(
     key_holder, private_key_pem_path = faucet_funded_accounts[algorithm]
     do_nothing_wasm_path = WASM_DIRECTORY / "do_nothing.wasm"
     deploy_hash = casperlabs_client.deploy(
-        session=do_nothing_wasm_path, private_key=private_key_pem_path
+        session=do_nothing_wasm_path,
+        private_key=private_key_pem_path,
+        algorithm=algorithm,
     )
     result = casperlabs_client.show_deploy(deploy_hash, wait_for_processed=True)
     for block_info in result.processing_results:
