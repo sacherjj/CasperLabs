@@ -23,7 +23,7 @@ export function makeDeploy(
   session: ByteArray,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray,
+  accountPublicKeyHash: ByteArray,
   dependencies?: Uint8Array[]
 ): Deploy;
 
@@ -33,7 +33,7 @@ export function makeDeploy(
   sessionName: string,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray,
+  accountPublicKeyHash: ByteArray,
   dependencies?: Uint8Array[]
 ): Deploy;
 
@@ -45,7 +45,7 @@ export function makeDeploy(
   session: ByteArray | string,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray,
+  accountPublicKeyHash: ByteArray,
   dependencies: Uint8Array[] = []
 ): Deploy {
   const sessionCode = new Deploy.Code();
@@ -53,7 +53,7 @@ export function makeDeploy(
     sessionCode.setWasm(session);
   } else if (type === ContractType.Hash) {
     sessionCode.setHash(session);
-  }else{
+  } else {
     sessionCode.setName(session as string);
   }
   sessionCode.setArgsList(args);
@@ -69,7 +69,7 @@ export function makeDeploy(
   body.setPayment(payment);
 
   const header = new Deploy.Header();
-  header.setAccountPublicKey(accountPublicKey);
+  header.setAccountPublicKeyHash(accountPublicKeyHash);
   header.setTimestamp(new Date().getTime());
   header.setBodyHash(protoHash(body));
   // we will remove gasPrice eventually

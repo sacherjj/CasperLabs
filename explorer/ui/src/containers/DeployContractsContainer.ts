@@ -1,15 +1,31 @@
 import { action, observable } from 'mobx';
 
 import ErrorContainer from './ErrorContainer';
-import { CasperService, decodeBase16, DeployUtil, encodeBase16, Signer } from 'casperlabs-sdk';
+import {
+  CasperService,
+  decodeBase16,
+  DeployUtil,
+  encodeBase16,
+  Signer
+} from 'casperlabs-sdk';
 import { FieldState, FormState } from 'formstate';
-import { numberGreaterThan, validateBase16, validateInt, valueRequired } from '../lib/FormsValidator';
+import {
+  numberGreaterThan,
+  validateBase16,
+  validateInt,
+  valueRequired
+} from '../lib/FormsValidator';
 import validator from 'validator';
 import $ from 'jquery';
 import { Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
-import { CLType, CLValueInstance, Key } from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
+import {
+  CLType,
+  CLValueInstance,
+  Key
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/state_pb';
 import { decodeBase64 } from 'tweetnacl-ts';
 import JSBI from 'jsbi';
+import { publicKeyHashForEd25519 } from './AuthContainer';
 
 type SupportedType = CLType.SimpleMap[keyof CLType.SimpleMap] | 'Bytes';
 
@@ -43,7 +59,6 @@ const numberLimitForSigned = (bit: number) => {
     max: JSBI.subtract(powerOf2(bit - 1), JSBI.BigInt(1))
   };
 };
-
 
 const NumberLimit = {
   [CLType.Simple.U8]: numberLimitForUnsigned(8),
@@ -250,8 +265,9 @@ export class DeployContractsContainer {
     if (!publicKeyBase64) {
       throw new Error('Please create an account in the Plugin first!');
     }
-    const publicKey = decodeBase64(publicKeyBase64);
-    let deploy = await this.makeDeploy(publicKey);
+    // Todo: (ECO-441) make Signer return publicKeyHash directly
+    const publicKeyHash = publicKeyHashForEd25519(publicKeyBase64);
+    let deploy = await this.makeDeploy(publicKeyHash);
     if (!deploy) {
       return false;
     }
@@ -261,7 +277,11 @@ export class DeployContractsContainer {
     try {
       sigBase64 = await Signer.sign(encodeBase16(deploy!.getDeployHash_asU8()));
       this.signing = false;
-      let signedDeploy = DeployUtil.setSignature(deploy, decodeBase64(sigBase64), publicKey);
+      let signedDeploy = DeployUtil.setSignature(
+        deploy,
+        decodeBase64(sigBase64),
+        decodeBase64(publicKeyBase64)
+      );
       await this.casperService.deploy(signedDeploy);
       ($(`#${this.accordionId}`) as any).collapse('hide');
       this.deployedHash = encodeBase16(signedDeploy.getDeployHash_asU8());
@@ -272,7 +292,7 @@ export class DeployContractsContainer {
     }
   }
 
-  private async makeDeploy(publicKey: Uint8Array): Promise<Deploy | null> {
+  private async makeDeploy(publicKeyHash: Uint8Array): Promise<Deploy | null> {
     let deployConfigurationForm = await this.deployConfiguration.validate();
     let deployArguments = await this.deployArguments.validate();
     if (deployConfigurationForm.hasError || deployArguments.hasError) {
@@ -294,7 +314,14 @@ export class DeployContractsContainer {
       });
       const paymentAmount = config.paymentAmount.value;
 
-      return DeployUtil.makeDeploy(argsProto, type, session, null, JSBI.BigInt(paymentAmount), publicKey);
+      return DeployUtil.makeDeploy(
+        argsProto,
+        type,
+        session,
+        null,
+        JSBI.BigInt(paymentAmount),
+        publicKeyHash
+      );
     }
   }
 

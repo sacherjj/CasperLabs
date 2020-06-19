@@ -2,9 +2,9 @@ import { Deploy } from "casperlabs-grpc/io/casperlabs/casper/consensus/consensus
 import { Args, ByteArray } from "casperlabs-sdk";
 
 export class CallFaucet {
-  public static args(accountPublicKey: ByteArray, amount: bigint): Deploy.Arg[] {
+  public static args(accountPublicKeyHash: ByteArray, amount: bigint): Deploy.Arg[] {
     return Args.Args(
-      ["account", Args.BytesValue(accountPublicKey)],
+      ["account", Args.BytesValue(accountPublicKeyHash)],
       ["amount", Args.BigIntValue(amount)]
     );
   }
