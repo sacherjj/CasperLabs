@@ -699,7 +699,7 @@ impl EntryPoint {
         }
     }
 
-    /// Create a default [`EntryPpint`] with specified name.
+    /// Create a default [`EntryPoint`] with specified name.
     pub fn default_with_name<T: Into<String>>(name: T) -> Self {
         EntryPoint {
             name: name.into(),
