@@ -30,27 +30,61 @@ class KeyHolder(ABC):
         """ String representation of the key algorithm """
         return self._algorithm
 
-    # TODO: Move common key hydration logic into these properties and make methods for converting
-    # TODO: between key data formats that are implemented in the key algorithm classes.
-
     @property
+    def private_key_pem(self) -> bytes:
+        """ Returns or generates private key pem data from other internal fields """
+        if self._private_key_pem is None:
+            if self._private_key is None:
+                raise ValueError("Must have either _private_key or _private_key_pem.")
+            self._private_key_pem = self._private_key_pem_from_private_key()
+        return self._private_key_pem
+
     @abstractmethod
-    def private_key_pem(self):
+    def _private_key_pem_from_private_key(self) -> bytes:
         pass
 
     @property
+    def private_key(self) -> bytes:
+        """ Returns or generates private key bytes from other internal fields """
+        if self._private_key is None:
+            if self._private_key_pem is None:
+                raise ValueError("Must have either _private_key or _private_key_pem.")
+            self._private_key = self._private_key_from_private_key_pem()
+        return self._private_key
+
     @abstractmethod
-    def private_key(self):
+    def _private_key_from_private_key_pem(self) -> bytes:
         pass
 
     @property
+    def public_key_pem(self) -> bytes:
+        """ Returns or generates public key pem data from other internal fields """
+        if self._public_key_pem is None:
+            self._public_key_pem = self._public_key_pem_from_public_key()
+        return self._public_key_pem
+
     @abstractmethod
-    def public_key_pem(self):
+    def _public_key_pem_from_public_key(self) -> bytes:
         pass
 
     @property
+    def public_key(self) -> bytes:
+        """ Returns or generates public key bytes from other internal fields """
+        if self._public_key is None:
+            if self._public_key_pem:
+                self._public_key = self._public_key_from_public_key_pem()
+            elif self.private_key:
+                self._public_key = self._public_key_from_private_key()
+            else:
+                raise ValueError("No values given to derive public key")
+        return self._public_key
+
     @abstractmethod
-    def public_key(self):
+    def _public_key_from_public_key_pem(self):
+        pass
+
+    @abstractmethod
+    def _public_key_from_private_key(self):
         pass
 
     def save_pem_files(
