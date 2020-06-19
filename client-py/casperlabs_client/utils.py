@@ -8,7 +8,6 @@ from . import abi
 from . import casper_pb2 as casper
 from . import consensus_pb2 as consensus
 from . import crypto
-from . import ipc_pb2 as ipc
 
 
 def _read_binary(file_name: str):
@@ -64,42 +63,41 @@ def key_variant(key_type):
 
 
 def _encode_contract(contract_options, contract_args, version=None, entry_point=None):
-    print(f"utils.py::_encode_contract {contract_options}")
     file_name, contract_hash, contract_name, package_hash, package_name = (
         contract_options
     )
     if file_name:
-        deploy_code = ipc.DeployCode(code=_read_binary(file_name), args=contract_args)
-        return ipc.DeployPayload(deploy_code=deploy_code)
+        wasm_contract = consensus.Deploy.Code.WasmContract(wasm=_read_binary(file_name))
+        return consensus.Deploy.Code(args=contract_args, wasm_contract=wasm_contract)
     elif contract_hash:
-        sch = ipc.StoredContractHash(
-            hash=contract_hash, args=contract_args, entry_point_name=entry_point
+        stored_contract = consensus.Deploy.Code.StoredContract(
+            contract_hash=contract_hash, entry_point=entry_point
         )
-        return ipc.DeployPayload(stored_contract_hash=sch)
+        return consensus.Deploy.Code(
+            args=contract_args, stored_contract=stored_contract
+        )
     elif contract_name:
-        scn = ipc.StoredContractName(
-            name=contract_name, args=contract_args, entry_point_name=entry_point
+        stored_contract = consensus.Deploy.Code.StoredContract(
+            name=contract_name, entry_point=entry_point
         )
-        return ipc.DeployPayload(stored_contract_name=scn)
+        return consensus.Deploy.Code(
+            args=contract_args, stored_contract=stored_contract
+        )
     elif package_hash:
-        sph = ipc.StoredContractPackageHash(
-            hash=package_hash,
-            version=version,
-            entry_point_name=entry_point,
-            args=contract_args,
+        svc = consensus.Deploy.Code.StoredVersionedContract(
+            package_hash=package_hash, entry_point=entry_point, version=version
         )
-        return ipc.DeployPayload(stored_package_by_hash=sph)
+        return consensus.Deploy.Code(args=contract_args, stored_versioned_contract=svc)
     elif package_name:
-        scp = ipc.StoredContractPackage(
-            name=package_name,
-            version=version,
-            entry_point_name=entry_point,
-            args=contract_args,
+        svc = consensus.Deploy.Code.StoredVersionedContract(
+            name=package_name, entry_point=entry_point, version=version
         )
-        return ipc.DeployPayload(stored_package_by_name=scp)
+        return consensus.Deploy.Code(args=contract_args, stored_versioned_contract=svc)
     # If we fall through, this is standard payment
     # TODO: Is this still valid with contract headers?
-    return ipc.DeployPayload(deploy_code=ipc.DeployCode(args=contract_args))
+    return consensus.Deploy.Code(
+        args=contract_args, wasm_contract=consensus.Deploy.Code.WasmContract()
+    )
 
 
 def _serialize(o) -> bytes:
