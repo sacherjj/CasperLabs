@@ -168,7 +168,7 @@ pub extern "C" fn install() {
     runtime::put_key(HASH_KEY_NAME, contract_package_hash.into());
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
-    let contract_key =
+    let (contract_key, _contract_version) =
         storage::add_contract_version(contract_package_hash, entry_points, named_keys);
 
     let return_value = CLValue::from_t((contract_package_hash, contract_key)).unwrap_or_revert();

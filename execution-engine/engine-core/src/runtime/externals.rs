@@ -401,7 +401,10 @@ where
                     existing_urefs_ptr,
                     existing_urefs_size,
                     output_size_ptr,
-                ) = Args::parse(args)?;
+                ): (_, _, _, u32, _, _, u32, _) = Args::parse(args)?;
+                scoped_instrumenter
+                    .add_property("existing_urefs_size", existing_urefs_size.to_string());
+                scoped_instrumenter.add_property("label_size", label_size.to_string());
 
                 let contract_package_hash: ContractPackageHash =
                     self.t_from_mem(package_key_ptr, package_key_size)?;
@@ -432,7 +435,7 @@ where
                 let (
                     contract_package_hash_ptr,
                     contract_package_hash_size,
-                    _version_ptr,
+                    version_ptr,
                     entry_points_ptr,
                     entry_points_size,
                     named_keys_ptr,
@@ -441,6 +444,10 @@ where
                     output_size,
                     bytes_written_ptr,
                 ): (u32, u32, u32, u32, u32, u32, u32, u32, u32, u32) = Args::parse(args)?;
+
+                scoped_instrumenter
+                    .add_property("entry_points_size", entry_points_size.to_string());
+                scoped_instrumenter.add_property("named_keys_size", named_keys_size.to_string());
 
                 let contract_package_hash: ContractPackageHash =
                     self.t_from_mem(contract_package_hash_ptr, contract_package_hash_size)?;
@@ -455,6 +462,7 @@ where
                     output_ptr,
                     output_size as usize,
                     bytes_written_ptr,
+                    version_ptr,
                 )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -491,7 +499,9 @@ where
                     args_ptr,
                     args_size,
                     result_size_ptr,
-                ): (_, _, _, _, _, u32, _) = Args::parse(args)?;
+                ): (_, _, _, u32, _, u32, _) = Args::parse(args)?;
+                scoped_instrumenter
+                    .add_property("entry_point_name_size", entry_point_name_size.to_string());
                 scoped_instrumenter.add_property("args_size", args_size.to_string());
 
                 let contract_hash: ContractHash =
@@ -533,7 +543,11 @@ where
                     args_ptr,
                     args_size,
                     result_size_ptr,
-                ) = Args::parse(args)?;
+                ): (_, _, _, _, _, u32, _, u32, _) = Args::parse(args)?;
+
+                scoped_instrumenter
+                    .add_property("entry_point_name_size", entry_point_name_size.to_string());
+                scoped_instrumenter.add_property("args_size", args_size.to_string());
 
                 let contract_package_hash: ContractPackageHash =
                     self.t_from_mem(contract_package_hash_ptr, contract_package_hash_size)?;
@@ -552,6 +566,7 @@ where
                     entry_point_name,
                     args_bytes,
                     result_size_ptr,
+                    &mut scoped_instrumenter,
                 )?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
@@ -569,16 +584,19 @@ where
                 // args(1) = size of name of the host runtime arg
                 // args(2) = pointer to a argument size (output)
                 let (name_ptr, name_size, size_ptr): (u32, u32, u32) = Args::parse(args)?;
+                scoped_instrumenter.add_property("name_size", name_size.to_string());
                 let ret = self.get_named_arg_size(name_ptr, name_size as usize, size_ptr)?;
                 Ok(Some(RuntimeValue::I32(api_error::i32_from(ret))))
             }
 
             FunctionIndex::GetRuntimeArgIndex => {
-                // args(0) = index of host runtime arg to load
-                // args(1) = pointer to destination in Wasm memory
-                // args(2) = size of destination pointer memory
+                // args(0) = pointer to serialized argument name
+                // args(1) = size of serialized argument name
+                // args(2) = pointer to output pointer where host will write argument bytes
+                // args(3) = size of available data under output pointer
                 let (name_ptr, name_size, dest_ptr, dest_size): (u32, u32, u32, u32) =
                     Args::parse(args)?;
+                scoped_instrumenter.add_property("name_size", name_size.to_string());
                 scoped_instrumenter.add_property("dest_size", dest_size.to_string());
                 let ret =
                     self.get_named_arg(name_ptr, name_size as usize, dest_ptr, dest_size as usize)?;
@@ -588,11 +606,11 @@ where
             FunctionIndex::RemoveContractUserGroupIndex => {
                 // args(0) = pointer to package key in wasm memory
                 // args(1) = size of package key in wasm memory
-                // args(2) = pointer to contract version in wasm memory
-                // args(3) = pointer to label
-                // args(4) = label size
-                let (package_key_ptr, package_key_size, label_ptr, label_size) = Args::parse(args)?;
-
+                // args(2) = pointer to serialized group label
+                // args(3) = size of serialized group label
+                let (package_key_ptr, package_key_size, label_ptr, label_size): (_, _, _, u32) =
+                    Args::parse(args)?;
+                scoped_instrumenter.add_property("label_size", label_size.to_string());
                 let package_key = self.t_from_mem(package_key_ptr, package_key_size)?;
                 let label: Group = self.t_from_mem(label_ptr, label_size)?;
 
@@ -613,6 +631,7 @@ where
                     u32,
                     _,
                 ) = Args::parse(args)?;
+                scoped_instrumenter.add_property("label_size", label_size.to_string());
                 let ret = self.provision_contract_user_group_uref(
                     package_ptr,
                     package_size,
@@ -630,8 +649,16 @@ where
                 // args(3) = label size bytes
                 // args(4) = pointer to urefs
                 // args(5) = size of urefs pointer
-                let (package_ptr, package_size, label_ptr, label_size, urefs_ptr, urefs_size) =
-                    Args::parse(args)?;
+                let (package_ptr, package_size, label_ptr, label_size, urefs_ptr, urefs_size): (
+                    _,
+                    _,
+                    _,
+                    u32,
+                    _,
+                    u32,
+                ) = Args::parse(args)?;
+                scoped_instrumenter.add_property("label_size", label_size.to_string());
+                scoped_instrumenter.add_property("urefs_size", urefs_size.to_string());
                 let ret = self.remove_contract_user_group_urefs(
                     package_ptr,
                     package_size,

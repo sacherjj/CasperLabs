@@ -56,13 +56,13 @@ export function call(): void {
     entryPoints.addEntryPoint(entryPointAdd);
   }
 
-  let contractHash = CL.newContract(
+  let result = CL.newContract(
     entryPoints,
     null,
     HASH_KEY_NAME,
     ACCESS_KEY_NAME);
 
-  putKey(PURSE_HOLDER_STORED_CONTRACT_NAME, Key.fromHash(contractHash));
+  putKey(PURSE_HOLDER_STORED_CONTRACT_NAME, Key.fromHash(result.contractHash));
   const versionKey = Key.create(CLValue.fromString(VERSION));
   if (versionKey === null) {
     Error.fromErrorCode(ErrorCode.Formatting).revert();

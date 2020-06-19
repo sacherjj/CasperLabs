@@ -11,8 +11,8 @@ use contract::{
 };
 use types::{
     contracts::{NamedKeys, Parameters},
-    ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints,
-    RuntimeArgs,
+    ApiError, CLType, ContractHash, ContractVersion, EntryPoint, EntryPointAccess, EntryPointType,
+    EntryPoints, RuntimeArgs,
 };
 
 const ENTRY_POINT_NAME: &str = "contract_ext";
@@ -51,7 +51,7 @@ pub extern "C" fn contract_ext() {
     }
 }
 
-fn store(named_keys: NamedKeys) -> ContractHash {
+fn store(named_keys: NamedKeys) -> (ContractHash, ContractVersion) {
     // extern "C" fn call(named_keys: NamedKeys) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
@@ -72,15 +72,15 @@ fn store(named_keys: NamedKeys) -> ContractHash {
 }
 
 fn install() -> Result<ContractHash, ApiError> {
-    let contract_hash = store(BTreeMap::new());
+    let (contract_hash, _contract_version) = store(BTreeMap::new());
 
     let mut keys = BTreeMap::new();
     keys.insert(CONTRACT_KEY.to_string(), contract_hash.into());
-    let contract_hash = store(keys);
+    let (contract_hash, _contract_version) = store(keys);
 
     let mut keys_2 = BTreeMap::new();
     keys_2.insert(CONTRACT_KEY.to_string(), contract_hash.into());
-    let contract_hash = store(keys_2);
+    let (contract_hash, _contract_version) = store(keys_2);
 
     runtime::put_key(CONTRACT_KEY, contract_hash.into());
 

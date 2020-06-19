@@ -146,7 +146,7 @@ pub fn new_contract(
     named_keys: Option<BTreeMap<String, Key>>,
     hash_name: Option<String>,
     uref_name: Option<String>,
-) -> ContractHash {
+) -> (ContractHash, ContractVersion) {
     let (contract_package_hash, access_uref) = create_contract_package_at_hash();
 
     if let Some(hash_name) = hash_name {
@@ -295,7 +295,7 @@ pub fn add_contract_version(
     contract_package_hash: ContractPackageHash,
     entry_points: EntryPoints,
     named_keys: BTreeMap<String, Key>,
-) -> ContractHash {
+) -> (ContractHash, ContractVersion) {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);
     let (entry_points_ptr, entry_points_size, _bytes4) = contract_api::to_ptr(entry_points);
@@ -325,7 +325,8 @@ pub fn add_contract_version(
         Err(e) => revert(e),
     }
     output_ptr.truncate(total_bytes);
-    bytesrepr::deserialize(output_ptr).unwrap_or_revert()
+    let contract_hash = bytesrepr::deserialize(output_ptr).unwrap_or_revert();
+    (contract_hash, contract_version)
 }
 
 /// Disable a version of a contract from the contract stored at the given

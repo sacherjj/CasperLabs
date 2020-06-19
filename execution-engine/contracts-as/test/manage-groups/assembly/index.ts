@@ -176,7 +176,7 @@ function createEntryPoints1(): CL.EntryPoints {
 function installVersion1(package_hash: Uint8Array): void {
   let contractNamedKeys = new Array<Pair<String, Key>>();
   let entryPoints = createEntryPoints1();
-  CL.addContractVersion(package_hash, entryPoints, contractNamedKeys);
+  const result = CL.addContractVersion(package_hash, entryPoints, contractNamedKeys);
 }
 
 export function call(): void {

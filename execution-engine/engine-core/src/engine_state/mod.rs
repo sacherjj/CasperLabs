@@ -19,6 +19,7 @@ use std::{
     rc::Rc,
 };
 
+use log::{debug, warn};
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
@@ -1190,7 +1191,7 @@ where
                 Ok(args) => args,
                 Err(e) => {
                     let exec_err: crate::execution::Error = e.into();
-                    log::warn!("Unable to deserialize arguments: {:?}", exec_err);
+                    warn!("Unable to deserialize arguments: {:?}", exec_err);
                     return Ok(ExecutionResult::precondition_failure(exec_err.into()));
                 }
             };
@@ -1270,7 +1271,7 @@ where
             }
         };
 
-        log::debug!("Payment result: {:?}", payment_result);
+        debug!("Payment result: {:?}", payment_result);
 
         let payment_result_cost = payment_result.cost();
         // payment_code_spec_3: fork based upon payment purse balance and cost of
@@ -1386,7 +1387,7 @@ where
             Ok(args) => args,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
-                log::warn!("Unable to deserialize session arguments: {:?}", exec_err);
+                warn!("Unable to deserialize session arguments: {:?}", exec_err);
                 return Ok(ExecutionResult::precondition_failure(exec_err.into()));
             }
         };
@@ -1420,7 +1421,7 @@ where
                 &session_package,
             )
         };
-        log::debug!("Session result: {:?}", session_result);
+        debug!("Session result: {:?}", session_result);
 
         let post_session_rc = if session_result.is_failure() {
             // If session code fails we do not include its effects,

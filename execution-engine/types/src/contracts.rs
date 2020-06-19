@@ -2,7 +2,7 @@
 
 use crate::{
     alloc::string::ToString,
-    bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH, U8_SERIALIZED_LENGTH},
+    bytesrepr::{self, FromBytes, ToBytes, U32_SERIALIZED_LENGTH},
     uref::URef,
     CLType, ContractHash, ContractPackageHash, ContractWasmHash, Key, ProtocolVersion,
     KEY_HASH_LENGTH,
@@ -129,7 +129,7 @@ impl From<ContractVersionKey> for (ProtocolVersionMajor, ContractVersion) {
 
 /// Serialized length of `ContractVersionKey`.
 pub const CONTRACT_VERSION_KEY_SERIALIZED_LENGTH: usize =
-    U32_SERIALIZED_LENGTH + U8_SERIALIZED_LENGTH;
+    U32_SERIALIZED_LENGTH + U32_SERIALIZED_LENGTH;
 
 impl ToBytes for ContractVersionKey {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
@@ -165,6 +165,9 @@ pub type ContractVersions = BTreeMap<ContractVersionKey, ContractHash>;
 /// contract versions to be executed.
 pub type DisabledVersions = BTreeSet<ContractVersionKey>;
 
+/// Collection of named groups.
+pub type Groups = BTreeMap<Group, BTreeSet<URef>>;
+
 /// Contract definition, metadata, and security container.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ContractPackage {
@@ -178,17 +181,22 @@ pub struct ContractPackage {
     /// group". This can be used to control access to methods in a particular
     /// version of the contract. A method is callable by any context which
     /// "knows" any of the URefs assoicated with the mthod's user group.
-    groups: BTreeMap<Group, BTreeSet<URef>>,
+    groups: Groups,
 }
 
 impl ContractPackage {
     /// Create new `ContractPackage` (with no versions) from given access key.
-    pub fn new(access_key: URef) -> Self {
+    pub fn new(
+        access_key: URef,
+        versions: ContractVersions,
+        disabled_versions: DisabledVersions,
+        groups: Groups,
+    ) -> Self {
         ContractPackage {
             access_key,
-            versions: BTreeMap::new(),
-            disabled_versions: BTreeSet::new(),
-            groups: BTreeMap::new(),
+            versions,
+            disabled_versions,
+            groups,
         }
     }
 
@@ -198,12 +206,12 @@ impl ContractPackage {
     }
 
     /// Get the mutable group definitions for this contract.
-    pub fn groups_mut(&mut self) -> &mut BTreeMap<Group, BTreeSet<URef>> {
+    pub fn groups_mut(&mut self) -> &mut Groups {
         &mut self.groups
     }
 
     /// Get the group definitions for this contract.
-    pub fn groups(&self) -> &BTreeMap<Group, BTreeSet<URef>> {
+    pub fn groups(&self) -> &Groups {
         &self.groups
     }
 
@@ -360,7 +368,7 @@ impl FromBytes for ContractPackage {
         let (access_key, bytes) = URef::from_bytes(bytes)?;
         let (versions, bytes) = ContractVersions::from_bytes(bytes)?;
         let (disabled_versions, bytes) = DisabledVersions::from_bytes(bytes)?;
-        let (groups, bytes) = BTreeMap::<Group, BTreeSet<URef>>::from_bytes(bytes)?;
+        let (groups, bytes) = Groups::from_bytes(bytes)?;
         let result = ContractPackage {
             access_key,
             versions,
@@ -908,7 +916,12 @@ mod tests {
     use alloc::borrow::ToOwned;
 
     fn make_contract_package() -> ContractPackage {
-        let mut contract_package = ContractPackage::new(URef::new([0; 32], AccessRights::NONE));
+        let mut contract_package = ContractPackage::new(
+            URef::new([0; 32], AccessRights::NONE),
+            ContractVersions::default(),
+            DisabledVersions::default(),
+            Groups::default(),
+        );
 
         // add groups
         {
@@ -963,7 +976,12 @@ mod tests {
     #[test]
     fn next_contract_version() {
         let major = 1;
-        let mut contract_package = ContractPackage::new(URef::new([0; 32], AccessRights::NONE));
+        let mut contract_package = ContractPackage::new(
+            URef::new([0; 32], AccessRights::NONE),
+            ContractVersions::default(),
+            DisabledVersions::default(),
+            Groups::default(),
+        );
         assert_eq!(contract_package.next_contract_version_for(major), 1);
 
         let next_version = contract_package.insert_contract_version(major, [123; 32]);

@@ -7,21 +7,22 @@ use alloc::string::ToString;
 
 use contract::contract_api::{runtime, storage};
 use types::{
-    contracts::Parameters, CLType, ContractHash, EntryPoint, EntryPointAccess, EntryPointType,
-    EntryPoints,
+    contracts::Parameters, CLType, ContractHash, ContractVersion, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints,
 };
 
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const CONTRACT_NAME: &str = "local_state_stored";
 const CONTRACT_PACKAGE_KEY: &str = "contract_package";
 const CONTRACT_ACCESS_KEY: &str = "access_key";
+const CONTRACT_VERSION: &str = "contract_version";
 
 #[no_mangle]
 pub extern "C" fn delegate() {
     local_state::delegate()
 }
 
-fn store() -> ContractHash {
+fn store() -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 
@@ -47,7 +48,7 @@ fn store() -> ContractHash {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_hash = store();
-
+    let (contract_hash, contract_version) = store();
+    runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
     runtime::put_key(CONTRACT_NAME, contract_hash.into());
 }

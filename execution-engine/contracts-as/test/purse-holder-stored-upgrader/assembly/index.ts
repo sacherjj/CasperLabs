@@ -98,12 +98,12 @@ export function call(): void {
   );
   entryPoints.addEntryPoint(remove);
 
-  let newContractHash = CL.addContractVersion(
+  let newResult = CL.addContractVersion(
     contractPackageHash,
     entryPoints,
     new Array<Pair<String, Key>>(),
   );
-  CL.putKey(PURSE_HOLDER_STORED_CONTRACT_NAME, Key.fromHash(newContractHash));
+  CL.putKey(PURSE_HOLDER_STORED_CONTRACT_NAME, Key.fromHash(newResult.contractHash));
 
   let newVersionKey = Key.create(CLValue.fromString(NEW_VERSION));
   if (newVersionKey === null) {
