@@ -66,9 +66,9 @@ impl Group {
     }
 }
 
-impl Into<String> for Group {
-    fn into(self) -> String {
-        self.0
+impl From<Group> for String {
+    fn from(group: Group) -> Self {
+        group.0
     }
 }
 
@@ -121,9 +121,9 @@ impl ContractVersionKey {
     }
 }
 
-impl Into<(ProtocolVersionMajor, ContractVersion)> for ContractVersionKey {
-    fn into(self) -> (ProtocolVersionMajor, ContractVersion) {
-        (self.0, self.1)
+impl From<ContractVersionKey> for (ProtocolVersionMajor, ContractVersion) {
+    fn from(contract_version_key: ContractVersionKey) -> Self {
+        (contract_version_key.0, contract_version_key.1)
     }
 }
 
@@ -158,21 +158,21 @@ impl fmt::Display for ContractVersionKey {
     }
 }
 
-/// Collection of stored contracts.
+/// Collection of contract versions.
 pub type ContractVersions = BTreeMap<ContractVersionKey, ContractHash>;
 
-/// Collection of contract versions that are no longer supported.
+/// Collection of disabled contract versions. The runtime will not permit disabled
+/// contract versions to be executed.
 pub type DisabledVersions = BTreeSet<ContractVersionKey>;
 
-/// Collection of different versions of the same contract.
+/// Contract definition, metadata, and security container.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct ContractPackage {
     /// Key used to add or disable versions
     access_key: URef,
+    /// All versions (enabled & disabled)
     versions: ContractVersions,
-    /// Versions that can be called
-    // versions: BTreeMap<SemVer, Contract>,
-    /// Old versions that are no longer supported
+    /// Disabled versions
     disabled_versions: DisabledVersions,
     /// Mapping maintaining the set of URefs associated with each "user
     /// group". This can be used to control access to methods in a particular
@@ -192,7 +192,7 @@ impl ContractPackage {
         }
     }
 
-    /// Get the access key for this ContractPackage.
+    /// Get the access key for this contract.
     pub fn access_key(&self) -> URef {
         self.access_key
     }
@@ -207,23 +207,30 @@ impl ContractPackage {
         &self.groups
     }
 
-    /// Adds new group to the user groups set
+    /// Adds new group to this contract.
     pub fn add_group(&mut self, group: Group, urefs: BTreeSet<URef>) {
         let v = self.groups.entry(group).or_insert_with(Default::default);
         v.extend(urefs)
     }
 
-    /// Get the contract header for the given version (if present)
-    pub fn get_contract(&self, contract_version_key: ContractVersionKey) -> Option<&ContractHash> {
+    /// Lookup the contract hash for a given contract version (if present)
+    pub fn lookup_contract_hash(
+        &self,
+        contract_version_key: ContractVersionKey,
+    ) -> Option<&ContractHash> {
+        if !self.is_version_enabled(contract_version_key) {
+            return None;
+        }
         self.versions.get(&contract_version_key)
     }
 
-    /// Checks if the given version is active
-    pub fn is_version_active(&self, contract_version_key: ContractVersionKey) -> bool {
-        self.versions.contains_key(&contract_version_key)
+    /// Checks if the given contract version exists and is available for use.
+    pub fn is_version_enabled(&self, contract_version_key: ContractVersionKey) -> bool {
+        !self.disabled_versions.contains(&contract_version_key)
+            && self.versions.contains_key(&contract_version_key)
     }
 
-    /// Modify the collection of active versions to include the given one.
+    /// Insert a new contract version; the next sequential version number will be issued.
     pub fn insert_contract_version(
         &mut self,
         protocol_version_major: ProtocolVersionMajor,
@@ -235,90 +242,96 @@ impl ContractPackage {
         key
     }
 
-    /// Checks if the given version exists and is available for use
-    pub fn is_contract_version_in_use(&self, contract_version_key: ContractVersionKey) -> bool {
-        self.versions.contains_key(&contract_version_key)
-            && !self.disabled_versions.contains(&contract_version_key)
-    }
-
-    /// Remove the given version from active versions, putting it into disabled versions.
+    /// Disable the contract version corresponding to the given hash (if it exists).
     pub fn disable_contract_version(&mut self, contract_hash: ContractHash) -> Result<(), Error> {
-        let key = self
+        let contract_version_key = self
             .versions
             .iter()
             .filter_map(|(k, v)| if *v == contract_hash { Some(*k) } else { None })
             .next()
             .ok_or(Error::ContractNotFound)?;
 
-        self.versions.remove(&key).unwrap(); // Assumed to be safe as the existing key is found by the value
-        self.disabled_versions.insert(key);
+        if !self.disabled_versions.contains(&contract_version_key) {
+            self.disabled_versions.insert(contract_version_key);
+        }
 
         Ok(())
     }
 
-    /// Returns mutable reference to active versions.
+    /// Returns reference to all of this contract's versions.
     pub fn versions(&self) -> &ContractVersions {
         &self.versions
     }
 
-    /// Returns mutable reference to active versions.
+    /// Returns all of this contract's enabled contract versions.
+    pub fn enabled_versions(&self) -> ContractVersions {
+        let mut ret = ContractVersions::new();
+        for version in &self.versions {
+            if !self.is_version_enabled(*version.0) {
+                continue;
+            }
+            ret.insert(*version.0, *version.1);
+        }
+        ret
+    }
+
+    /// Returns mutable reference to all of this contract's versions (enabled and disabled).
     pub fn versions_mut(&mut self) -> &mut ContractVersions {
         &mut self.versions
     }
 
-    /// Consumes the object and returns versions
+    /// Consumes the object and returns all of this contract's versions (enabled and disabled).
     pub fn take_versions(self) -> ContractVersions {
         self.versions
     }
 
-    /// Get disabled versions set.
+    /// Returns all of this contract's disabled versions.
     pub fn disabled_versions(&self) -> &DisabledVersions {
         &self.disabled_versions
     }
 
-    /// Returns mutable versions
+    /// Returns mut reference to all of this contract's disabled versions.
     pub fn disabled_versions_mut(&mut self) -> &mut DisabledVersions {
         &mut self.disabled_versions
     }
 
-    /// Removes a user group.
-    ///
-    /// Returns true if group could be removed, and false otherwise if the user group is still
-    /// active.
+    /// Removes a group from this contract (if it exists).
     pub fn remove_group(&mut self, group: &Group) -> bool {
         self.groups.remove(group).is_some()
     }
 
-    /// Gets next contract version for given protocol version
-    pub fn next_contract_version_for(
-        &self,
-        protocol_version: ProtocolVersionMajor,
-    ) -> ContractVersion {
+    /// Gets the next available contract version for the given protocol version
+    fn next_contract_version_for(&self, protocol_version: ProtocolVersionMajor) -> ContractVersion {
         let current_version = self
             .versions
             .keys()
-            .filter_map(|&contract_version_key| {
+            .rev()
+            .find_map(|&contract_version_key| {
                 if contract_version_key.protocol_version_major() == protocol_version {
                     Some(contract_version_key.contract_version())
                 } else {
                     None
                 }
             })
-            .last()
-            .or(Some(0))
-            .unwrap();
+            .unwrap_or(0);
 
         current_version + 1
     }
 
-    /// Gets most recent contract version hash.
-    pub fn get_current_contract_hash(&self) -> Option<&ContractHash> {
-        self.versions.values().next_back()
+    /// Return the contract version key for the newest enabled contract version.
+    pub fn current_contract_version(&self) -> Option<ContractVersionKey> {
+        match self.enabled_versions().keys().next_back() {
+            Some(contract_version_key) => Some(*contract_version_key),
+            None => None,
+        }
     }
 
-    /// Gets most recent contract version key.
-    pub fn get_current_contract_version(&self) -> Option<&ContractVersionKey> {
-        self.versions.keys().next_back()
+    /// Return the contract hash for the newest enabled contract version.
+    pub fn current_contract_hash(&self) -> Option<ContractHash> {
+        match self.enabled_versions().values().next_back() {
+            Some(contract_hash) => Some(*contract_hash),
+            None => None,
+        }
     }
 }
 
@@ -446,30 +459,22 @@ pub struct Contract {
     protocol_version: ProtocolVersion,
 }
 
-impl
-    Into<(
+impl From<Contract>
+    for (
         ContractPackageHash,
         ContractWasmHash,
         NamedKeys,
         EntryPoints,
         ProtocolVersion,
-    )> for Contract
+    )
 {
-    fn into(
-        self,
-    ) -> (
-        ContractPackageHash,
-        ContractWasmHash,
-        NamedKeys,
-        EntryPoints,
-        ProtocolVersion,
-    ) {
+    fn from(contract: Contract) -> Self {
         (
-            self.contract_package_hash,
-            self.contract_wasm_hash,
-            self.named_keys,
-            self.entry_points,
-            self.protocol_version,
+            contract.contract_package_hash,
+            contract.contract_wasm_hash,
+            contract.named_keys,
+            contract.entry_points,
+            contract.protocol_version,
         )
     }
 }
@@ -508,7 +513,7 @@ impl Contract {
     }
 
     /// Returns the type signature for the given `method`.
-    pub fn get_entry_point(&self, method: &str) -> Option<&EntryPoint> {
+    pub fn entry_point(&self, method: &str) -> Option<&EntryPoint> {
         self.entry_points.get(method)
     }
 
@@ -622,9 +627,7 @@ pub enum EntryPointType {
 
 impl ToBytes for EntryPointType {
     fn to_bytes(&self) -> Result<Vec<u8>, bytesrepr::Error> {
-        let mut result = bytesrepr::allocate_buffer(self)?;
-        result.push(*self as u8);
-        Ok(result)
+        (*self as u8).to_bytes()
     }
 
     fn serialized_length(&self) -> usize {
@@ -666,14 +669,14 @@ pub struct EntryPoint {
     entry_point_type: EntryPointType,
 }
 
-impl Into<(String, Parameters, CLType, EntryPointAccess, EntryPointType)> for EntryPoint {
-    fn into(self) -> (String, Parameters, CLType, EntryPointAccess, EntryPointType) {
+impl From<EntryPoint> for (String, Parameters, CLType, EntryPointAccess, EntryPointType) {
+    fn from(entry_point: EntryPoint) -> Self {
         (
-            self.name,
-            self.args,
-            self.ret,
-            self.access,
-            self.entry_point_type,
+            entry_point.name,
+            entry_point.args,
+            entry_point.ret,
+            entry_point.access,
+            entry_point.entry_point_type,
         )
     }
 }
@@ -848,7 +851,7 @@ impl FromBytes for EntryPointAccess {
     }
 }
 
-/// Argument to a method
+/// Parameter to a method
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Parameter {
     name: String,
@@ -870,9 +873,9 @@ impl Parameter {
     }
 }
 
-impl Into<(String, CLType)> for Parameter {
-    fn into(self) -> (String, CLType) {
-        (self.name, self.cl_type)
+impl From<Parameter> for (String, CLType) {
+    fn from(parameter: Parameter) -> Self {
+        (parameter.name, parameter.cl_type)
     }
 }
 
@@ -1001,17 +1004,31 @@ mod tests {
 
         assert_eq!(
             contract_package.disable_contract_version(CONTRACT_HASH),
-            Err(Error::ContractNotFound)
+            Err(Error::ContractNotFound),
+            "should return contract not found error"
         );
 
         let next_version = contract_package.insert_contract_version(1, CONTRACT_HASH);
-        assert!(contract_package.is_version_active(next_version));
+        assert!(
+            contract_package.is_version_enabled(next_version),
+            "version should exist and be enabled"
+        );
 
         assert_eq!(
             contract_package.disable_contract_version(CONTRACT_HASH),
-            Ok(())
+            Ok(()),
+            "should be able to disable version"
         );
-        assert_eq!(contract_package.get_contract(next_version), None);
-        assert!(!contract_package.is_version_active(next_version));
+
+        assert_eq!(
+            contract_package.lookup_contract_hash(next_version),
+            None,
+            "should not return disabled contract version"
+        );
+
+        assert!(
+            !contract_package.is_version_enabled(next_version),
+            "version should not be enabled"
+        );
     }
 }

@@ -44,7 +44,6 @@ pub fn revert<T: Into<ApiError>>(error: T) -> ! {
 /// If the stored contract calls [`ret`], then that value is returned from `call_contract`.  If the
 /// stored contract calls [`revert`], then execution stops and `call_contract` doesn't return.
 /// Otherwise `call_contract` returns `()`.
-#[allow(clippy::ptr_arg)]
 pub fn call_contract<T: CLTyped + FromBytes>(
     contract_hash: ContractHash,
     entry_point_name: &str,
@@ -81,7 +80,6 @@ pub fn call_contract<T: CLTyped + FromBytes>(
 /// If the stored contract calls [`ret`], then that value is returned from
 /// `call_versioned_contract`.  If the stored contract calls [`revert`], then execution stops and
 /// `call_versioned_contract` doesn't return. Otherwise `call_versioned_contract` returns `()`.
-#[allow(clippy::ptr_arg)]
 pub fn call_versioned_contract<T: CLTyped + FromBytes>(
     contract_package_hash: ContractPackageHash,
     contract_version: Option<ContractVersion>,

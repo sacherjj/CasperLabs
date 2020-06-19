@@ -1904,7 +1904,7 @@ where
         };
 
         let entry_point = contract
-            .get_entry_point(entry_point_name)
+            .entry_point(entry_point_name)
             .cloned()
             .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
@@ -1947,15 +1947,15 @@ where
             Some(version) => {
                 ContractVersionKey::new(self.context.protocol_version().value().major, version)
             }
-            None => match contract_package.get_current_contract_version() {
-                Some(v) => *v,
+            None => match contract_package.current_contract_version() {
+                Some(v) => v,
                 None => return Err(Error::NoActiveContractVersions(contract_package_hash)),
             },
         };
 
         // Get contract entry point hash
         let contract_hash = contract_package
-            .get_contract(contract_version_key)
+            .lookup_contract_hash(contract_version_key)
             .cloned()
             .ok_or_else(|| Error::InvalidContractVersion(contract_version_key))?;
 
@@ -1972,7 +1972,7 @@ where
         };
 
         let entry_point = contract
-            .get_entry_point(&entry_point_name)
+            .entry_point(&entry_point_name)
             .cloned()
             .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
@@ -2444,7 +2444,7 @@ where
         let major = protocol_version.value().major;
 
         // TODO: Implement different ways of carrying on existing named keys
-        if let Some(&previous_contract_hash) = contract_package.get_current_contract_hash() {
+        if let Some(previous_contract_hash) = contract_package.current_contract_hash() {
             let previous_contract: Contract =
                 self.context.read_gs_typed(&previous_contract_hash.into())?;
 
@@ -3178,7 +3178,8 @@ where
 
         Ok(Ok(()))
     }
-    pub fn validate_entry_point_access(
+
+    fn validate_entry_point_access(
         &self,
         package: &ContractPackage,
         access: &EntryPointAccess,

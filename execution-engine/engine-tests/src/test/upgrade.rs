@@ -1,15 +1,11 @@
-#![allow(dead_code)]
-#![allow(unused_imports)]
-#![allow(unused_variables)]
-
-use engine_shared::{stored_value::StoredValue, transform::Transform};
+use engine_shared::stored_value::StoredValue;
 use engine_test_support::{
     internal::{ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST},
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
     contracts::{ContractVersion, CONTRACT_INITIAL_VERSION},
-    runtime_args, CLValue, ContractHash, ContractPackageHash, RuntimeArgs, SemVer,
+    runtime_args, CLValue, ContractPackageHash, RuntimeArgs,
 };
 
 const DO_NOTHING_STORED_CONTRACT_NAME: &str = "do_nothing_stored";
@@ -21,26 +17,20 @@ const DO_NOTHING_HASH_KEY_NAME: &str = "do_nothing_hash";
 const INITIAL_VERSION: ContractVersion = CONTRACT_INITIAL_VERSION;
 const UPGRADED_VERSION: ContractVersion = INITIAL_VERSION + 1;
 const PURSE_NAME_ARG_NAME: &str = "purse_name";
-const HELLO: &str = "Hello";
 const PURSE_1: &str = "purse_1";
-const METHOD_ADD: &str = "add";
 const METHOD_REMOVE: &str = "remove";
-const METHOD_VERSION: &str = "version";
 const VERSION: &str = "version";
 const PURSE_HOLDER_STORED_CALLER_CONTRACT_NAME: &str = "purse_holder_stored_caller";
 const PURSE_HOLDER_STORED_CONTRACT_NAME: &str = "purse_holder_stored";
 const PURSE_HOLDER_STORED_UPGRADER_CONTRACT_NAME: &str = "purse_holder_stored_upgrader";
 const HASH_KEY_NAME: &str = "purse_holder";
 const TOTAL_PURSES: usize = 3;
-
 const PURSE_NAME: &str = "purse_name";
 const ENTRY_POINT_NAME: &str = "entry_point";
 const ENTRY_POINT_ADD: &str = "add_named_purse";
-const CONTRACT_PACKAGE_KEY: &str = "contract_package";
 const ARG_CONTRACT_PACKAGE: &str = "contract_package";
 const ARG_VERSION: &str = "version";
 const ARG_NEW_PURSE_NAME: &str = "new_purse_name";
-const ARG_SEED: &str = "seed";
 
 /// Performs define and execution of versioned contracts, calling them directly from hash
 #[ignore]
@@ -161,7 +151,7 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
         .get_account(DEFAULT_ACCOUNT_ADDR)
         .expect("should get account 1");
 
-    let stored_contract_hash = account_1
+    account_1
         .named_keys()
         .get(DO_NOTHING_HASH_KEY_NAME)
         .expect("should have key of do_nothing_hash")
@@ -175,7 +165,6 @@ fn should_upgrade_do_nothing_to_do_something_contract_call() {
         .into_hash()
         .expect("should have hash");
 
-    // TODO This does not seem to call properly
     // Calling initial stored version from contract package hash, should have no effects
     {
         let contract_name = format!("{}.wasm", DO_NOTHING_STORED_CALLER_CONTRACT_NAME);

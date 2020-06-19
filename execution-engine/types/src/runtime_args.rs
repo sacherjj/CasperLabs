@@ -44,16 +44,13 @@ impl RuntimeArgs {
 
     /// Gets an argument by its name.
     pub fn get(&self, name: &str) -> Option<&CLValue> {
-        self.0
-            .iter()
-            .filter_map(|NamedArg(named_name, named_value)| {
-                if named_name == name {
-                    Some(named_value)
-                } else {
-                    None
-                }
-            })
-            .next()
+        self.0.iter().find_map(|NamedArg(named_name, named_value)| {
+            if named_name == name {
+                Some(named_value)
+            } else {
+                None
+            }
+        })
     }
 
     /// Get length of the collection.
