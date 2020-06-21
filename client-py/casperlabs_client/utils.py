@@ -100,9 +100,7 @@ def _encode_contract(contract_options, contract_args, version=0, entry_point=Non
         )
     # If we fall through, this is standard payment
     # TODO: Is this still valid with contract headers?
-    return consensus.Deploy.Code(
-        args=contract_args, wasm_contract=consensus.Deploy.Code.WasmContract()
-    )
+    return consensus.Deploy.Code(args=contract_args)
 
 
 def _serialize(o) -> bytes:

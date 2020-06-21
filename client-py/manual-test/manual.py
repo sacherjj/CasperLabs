@@ -35,7 +35,6 @@ FAUCET_PUBLIC_KEY_PEM_PATH = (
 ACCOUNT_ID_HEX = "9d39b7fba47d07c1af6f711efe604a112ab371e2deefb99a613d2b3dcdfba414"
 ACCOUNT_PRIVATE_PEM_PATH = THIS_DIRECTORY / "account" / "account-private-1.pem"
 ACCOUNT_PUBLIC_PEM_PATH = THIS_DIRECTORY / "account" / "account-private-1.pem"
-TARGET_ACCOUNT = "7777777777777777777777777777777777777777777777777777777777777777"
 
 
 @pytest.fixture(scope="session")
@@ -43,11 +42,11 @@ def casperlabs_client() -> CasperLabsClient:
     return CasperLabsClient()
 
 
-def faucet_fund_account(casperlabs_client, account_id_hex, amount=1000000000):
+def faucet_fund_account(casperlabs_client, target_account_id_hex, amount=1000):
     faucet_wasm_path = WASM_DIRECTORY / "faucet.wasm"
     session_args = ABI.args(
         [
-            ABI.account("account", bytes.fromhex(account_id_hex)),
+            ABI.fixed_list("target", bytes.fromhex(target_account_id_hex)),
             ABI.big_int("amount", amount),
         ]
     )
@@ -56,12 +55,12 @@ def faucet_fund_account(casperlabs_client, account_id_hex, amount=1000000000):
         private_key=FAUCET_PRIVATE_KEY_PEM_PATH,
         session=faucet_wasm_path,
         session_args=session_args,
+        payment_amount=1000000,
     )
     result = casperlabs_client.showDeploy(deploy_hash, wait_for_processed=True)
-    assert not result.processing_results[0].status_info.is_error
     block_hash = result.processing_results[0].block_info.summary.block_hash
-    result = casperlabs_client.balance(account_id_hex, block_hash.hex())
-    assert result > 0
+    result = casperlabs_client.balance(target_account_id_hex, block_hash.hex())
+    assert result == amount
 
 
 # @pytest.fixture(scope="session")
@@ -75,6 +74,16 @@ def faucet_fund_account(casperlabs_client, account_id_hex, amount=1000000000):
 #         faucet_fund_account(casperlabs_client, key_holder.account_hash_hex)
 #         accounts[key_algorithm] = key_holder, private_key_pem_path
 #     return accounts
+
+
+def get_account_data(account_num: int) -> tuple:
+    key_dir = THIS_DIRECTORY / "account"
+    id_hex_path = key_dir / f"account-id-hex-{account_num}"
+    private_pem_path = key_dir / f"account-private-{account_num}.pem"
+    public_pem_path = key_dir / f"account-public-{account_num}.pem"
+    with open(id_hex_path, "r") as f:
+        id_hex = f.read().strip()
+    return id_hex, private_pem_path, public_pem_path
 
 
 @pytest.fixture(scope="session")
@@ -93,14 +102,22 @@ def test_balance(casperlabs_client, genesis_public_key_hex):
 
 def test_transfer(casperlabs_client):
     transfer_amt = 999999
-    faucet_fund_account(casperlabs_client, ACCOUNT_ID_HEX)
+    acc1_id_hex, acc1_priv_path, acc1_pub_path = get_account_data(1)
+    acc2_id_hex, acc2_priv_path, acc2_pub_path = get_account_data(2)
+    faucet_fund_account(casperlabs_client, acc1_id_hex, 1000000000000)
+    faucet_fund_account(casperlabs_client, acc2_id_hex, 1000000)
     deploy_hash = casperlabs_client.transfer(
-        TARGET_ACCOUNT, transfer_amt, private_key=ACCOUNT_PRIVATE_PEM_PATH
+        from_addr=acc1_id_hex,
+        amount=transfer_amt,
+        target_account=acc2_id_hex,
+        private_key=acc1_priv_path,
     )
     result = casperlabs_client.showDeploy(deploy_hash, wait_for_processed=True)
-    block_hash = result.processing_results[0].block_info.summary.block_hash
-    result = casperlabs_client.balance(TARGET_ACCOUNT, block_hash.hex())
-    assert result == transfer_amt
+    results = result.processing_results[0]
+    block_hash = results.block_info.summary.block_hash
+    assert not results.is_error, f"transfer deploy failed: {results.error_message}"
+    result = casperlabs_client.balance(acc2_id_hex, block_hash.hex())
+    assert result == transfer_amt + 1000000, "transfer amounts don't match"
 
 
 def test_show_peers(casperlabs_client):

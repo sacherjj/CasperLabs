@@ -16,7 +16,6 @@ from casperlabs_client import (
     DEFAULT_HOST,
     DEFAULT_PORT,
     DEFAULT_INTERNAL_PORT,
-    bundled_contract,
 )
 from casperlabs_client.commands import deploy_cmd, transfer_cmd
 from casperlabs_client.utils import hexify, jsonify
@@ -76,14 +75,6 @@ def _show_blocks(response, element_name="block"):
 
 def _show_block(response):
     print(hexify(response))
-
-
-def _set_session(args, file_name):
-    """
-    Use bundled contract unless one of the session* args is set.
-    """
-    if not any((args.session, args.session_hash, args.session_name, args.session_uref)):
-        args.session = bundled_contract(file_name)
 
 
 def _deploy_kwargs(args, private_key_accepted=True):

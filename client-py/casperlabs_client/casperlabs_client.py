@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import base64
 from pathlib import Path
 import os
 import time
@@ -14,6 +13,8 @@ from casperlabs_client.commands import deploy_cmd
 
 # Hack to fix the relative imports problems with grpc #
 import sys
+
+from .reformat import optional_base64_base16_to_bytes
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
@@ -304,7 +305,7 @@ class CasperLabsClient:
         ttl_millis: int = 0,
         dependencies: list = None,
         chain_name: str = None,
-        transfer_args: bytes = False,
+        transfer_args: bytes = None,
     ):
         """
         Create a protobuf deploy object. See deploy for description of parameters.
@@ -414,6 +415,7 @@ class CasperLabsClient:
         :param transfer_args:       Arguments to use with transfer endpoint.  Call transfer method for this.
         :return:                    deploy hash in base16 format
         """
+        # TODO: Make payment_amount required
 
         deploy = self.make_deploy(
             from_addr=from_addr,
@@ -451,43 +453,42 @@ class CasperLabsClient:
     @api
     def transfer(
         self,
-        target_account: Union[str, bytes],
         amount: int,
+        target_account: Union[str, bytes] = None,
+        target_purse: Union[str, bytes] = None,
+        source_purse: Union[str, bytes] = None,
         from_addr: Union[str, bytes] = None,
-        payment: str = None,
-        payment_args: bytes = None,
-        payment_amount: int = None,
-        payment_hash: bytes = None,
-        payment_name: str = None,
-        payment_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies=None,
         chain_name: str = None,
         private_key: str = None,
     ):
-        target_account_bytes = base64.b64decode(target_account)
-        if len(target_account_bytes) != 32:
-            target_account_bytes = bytes.fromhex(target_account)
-            if len(target_account_bytes) != 32:
-                raise ValueError(
-                    "--target_account must be 32 bytes base64 or base16 encoded"
-                )
+        if len(list(filter(None, (target_purse, target_account)))) != 1:
+            raise ValueError("must include either target_account or target_purse")
 
-        transfer_args = abi.ABI.args(
-            [
-                abi.ABI.account("account", target_account_bytes),
-                abi.ABI.u512("amount", amount),
-            ]
+        target_account_bytes = optional_base64_base16_to_bytes(
+            target_account, "target_account"
         )
+        target_purse_bytes = optional_base64_base16_to_bytes(
+            target_purse, "target_purse"
+        )
+        source_purse_bytes = optional_base64_base16_to_bytes(
+            source_purse, "source_purse"
+        )
+
+        target_send_bytes = target_account_bytes or target_purse_bytes
+
+        arg_list = [
+            abi.ABI.fixed_list("target", target_send_bytes),
+            abi.ABI.u512("amount", amount),
+        ]
+        if source_purse_bytes:
+            arg_list.append(abi.ABI.fixed_list("source", source_purse_bytes))
+
+        transfer_args = abi.ABI.args(arg_list)
         return self.deploy(
             from_addr=from_addr,
-            payment=payment,
             private_key=private_key,
-            payment_args=payment_args,
-            payment_amount=payment_amount,
-            payment_hash=payment_hash,
-            payment_name=payment_name,
-            payment_uref=payment_uref,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
