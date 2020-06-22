@@ -33,6 +33,9 @@ def dot_output(file_name):
     return file_name
 
 
+STREAM_CHOICES = ("single-output", "multiple-outputs")
+
+
 OPTIONS = [
     [
         ("-d", "--depth"),
@@ -56,8 +59,11 @@ OPTIONS = [
         ("--stream",),
         dict(
             required=False,
-            choices=("single-output", "multiple-outputs"),
-            help="subscribe to changes, '--out' has to be specified, valid values are 'single-output', 'multiple-outputs'",
+            choices=STREAM_CHOICES,
+            help=(
+                "subscribe to changes, '--out' has to be specified, valid values are "
+                f"{STREAM_CHOICES}"
+            ),
         ),
     ],
 ]

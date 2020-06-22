@@ -1,6 +1,18 @@
 from typing import Dict
 
 from casperlabs_client import consts, reformat, CasperLabsClient
+from casperlabs_client.commands.common_options import (
+    ALGORITHM_OPTION,
+    FROM_OPTION,
+    PAYMENT_OPTIONS,
+    PRIVATE_KEY_OPTION,
+    CHAINNAME_OPTION,
+    DEPENDENCIES_OPTION,
+    SESSION_OPTIONS,
+    TTL_MILLIS_OPTION,
+    WAIT_PROCESSED_OPTION,
+    TIMEOUT_SECONDS_OPTION,
+)
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "deploy"
@@ -10,163 +22,20 @@ HELP: str = (
     "on the configuration of the Casper instance."
 )
 
-OPTIONS = [
+OPTIONS = (
     [
-        ("-f", "--from"),
-        dict(
-            required=True,
-            type=str,
-            help="The public key of the account which is the context of this deployment, base16 encoded.",
-        ),
-    ],
-    [
-        ("--chain-name",),
-        dict(
-            required=False,
-            type=str,
-            help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.",
-        ),
-    ],
-    [
-        ("--dependencies",),
-        dict(
-            required=False,
-            nargs="+",
-            default=None,
-            help="List of deploy hashes (base16 encoded) which must be executed before this deploy.",
-        ),
-    ],
-    [
-        ("--payment-amount",),
-        dict(
-            required=False,
-            type=int,
-            default=None,
-            help=(
-                "Standard payment amount. Use this with the default payment, or override with --payment-args "
-                "if custom payment code is used. By default --payment-amount is set to 10000000"
-            ),
-        ),
-    ],
-    [
-        ("-p", "--payment"),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Path to the file with payment code",
-        ),
-    ],
-    [
-        ("--payment-hash",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Hash of the stored contract to be called in the payment; base16 encoded",
-        ),
-    ],
-    [
-        ("--payment-name",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Name of the stored contract (associated with the executing account) to be called in the payment",
-        ),
-    ],
-    [
-        ("--payment-uref",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="URef of the stored contract to be called in the payment; base16 encoded",
-        ),
-    ],
-    [
-        ("-s", "--session"),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Path to the file with session code",
-        ),
-    ],
-    [
-        ("--session-hash",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Hash of the stored contract to be called in the session; base16 encoded",
-        ),
-    ],
-    [
-        ("--session-name",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Name of the stored contract (associated with the executing account) to be called in the session",
-        ),
-    ],
-    [
-        ("--session-uref",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="URef of the stored contract to be called in the session; base16 encoded",
-        ),
-    ],
-    [
-        ("--session-args",),
-        dict(
-            required=False,
-            type=str,
-            help="""JSON encoded list of session args, e.g.: '[{"name": "amount", "value": {"long_value": 123456}}]'""",
-        ),
-    ],
-    [
-        ("--payment-args",),
-        dict(
-            required=False,
-            type=str,
-            help=(
-                "JSON encoded list of payment args, e.g.: "
-                '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'
-            ),
-        ),
-    ],
-    [
-        ("--ttl-millis",),
-        dict(
-            required=False,
-            type=int,
-            help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""",
-        ),
-    ],
-    [
-        ("-w", "--wait-for-processed"),
-        dict(action="store_true", help="Wait for deploy status PROCESSED or DISCARDED"),
-    ],
-    [
-        ("--timeout-seconds",),
-        dict(type=int, default=consts.STATUS_TIMEOUT, help="Timeout in seconds"),
-    ],
-]
-OPTIONS_WITH_PRIVATE = [
-    [
-        ("--private-key",),
-        dict(
-            required=True,
-            default=None,
-            type=str,
-            help="Path to the file with account private key (Ed25519)",
-        ),
+        FROM_OPTION,
+        CHAINNAME_OPTION,
+        DEPENDENCIES_OPTION,
+        TTL_MILLIS_OPTION,
+        WAIT_PROCESSED_OPTION,
+        TIMEOUT_SECONDS_OPTION,
+        ALGORITHM_OPTION,
     ]
-] + OPTIONS
+    + SESSION_OPTIONS
+    + PAYMENT_OPTIONS
+)
+OPTIONS_WITH_PRIVATE = [PRIVATE_KEY_OPTION] + OPTIONS
 
 
 @guarded_command
@@ -189,6 +58,7 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
         ttl_millis=args.get("ttl_millis"),
         dependencies=args.get("dependencies"),
         chain_name=args.get("chain_name"),
+        algorithm=args.get("algorithm"),
     )
     print(f"Success! Deploy {deploy_hash} deployed")
     if args.get("wait_for_processed", False):

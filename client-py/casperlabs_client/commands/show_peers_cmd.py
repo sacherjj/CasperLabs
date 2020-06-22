@@ -9,7 +9,7 @@ OPTIONS = []
 
 
 @guarded_command
-def method(casperlabs_client: CasperLabsClient, args: Dict):
+def method(casperlabs_client: CasperLabsClient, _: Dict):
     peers = casperlabs_client.show_peers()
     i = 0
     for i, node in enumerate(peers, 1):

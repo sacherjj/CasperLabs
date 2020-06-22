@@ -62,7 +62,7 @@ def justifications(block_info):
 
 
 def rank(block_info):
-    return block_info.summary.header.rank
+    return block_info.summary.header.j_rank
 
 
 def parents(block_info):

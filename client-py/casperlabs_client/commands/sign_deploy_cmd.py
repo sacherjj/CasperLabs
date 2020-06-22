@@ -2,8 +2,11 @@ import sys
 from typing import Dict
 
 from casperlabs_client import consensus_pb2 as consensus, io, CasperLabsClient
+from casperlabs_client.commands.common_options import (
+    PRIVATE_KEY_OPTION,
+    ALGORITHM_OPTION,
+)
 
-from casperlabs_client.crypto import read_pem_key
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "sign-deploy"
@@ -24,31 +27,30 @@ OPTIONS = [
         ("-i", "--deploy-path"),
         dict(required=False, default=None, help="Path to the deploy file."),
     ],
-    [
-        ("--private-key",),
-        dict(required=True, help="Path to the file with account private key (Ed25519)"),
-    ],
-    [
-        ("--public-key",),
-        dict(required=True, help="Path to the file with account public key (Ed25519)"),
-    ],
+    PRIVATE_KEY_OPTION,
+    ALGORITHM_OPTION,
 ]
 
 
 @guarded_command
 def method(casperlabs_client: CasperLabsClient, args: Dict):
-    if args.get("deploy_path"):
-        deploy = casperlabs_client.sign_deploy(
-            None,
-            read_pem_key(args.get("public_key")),
-            args.get("private_key"),
-            args.get("deploy_path"),
-        )
-    else:
+    private_key = args.get("private_key")
+    algorithm = args.get("algorithm")
+    deploy_path = args.get("deploy_path")
+    signed_deploy_path = args.get("signed_deploy_path")
+    deploy = None
+    if not deploy_path:
         deploy = consensus.Deploy()
         deploy.ParseFromString(sys.stdin.read())
 
-    if not args.get("signed_deploy_path"):
-        sys.stdout.write(deploy.SerializeToString())
+    signed_deploy = casperlabs_client.sign_deploy(
+        private_key_pem_file=private_key,
+        algorithm=algorithm,
+        deploy=deploy,
+        deploy_path=deploy_path,
+    )
+    serialized_deploy = signed_deploy.SerializeToString()
+    if signed_deploy_path is None:
+        sys.stdout.write(serialized_deploy)
     else:
-        io.write_binary_file(args.get("signed_deploy_path"), deploy.SerializeToString())
+        io.write_binary_file(signed_deploy_path, serialized_deploy)

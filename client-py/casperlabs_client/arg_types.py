@@ -3,6 +3,17 @@ import os
 from pathlib import Path
 import semver
 
+from casperlabs_client.consts import SUPPORTED_KEY_ALGORITHMS
+
+
+def algorithm(algorithm_name):
+    """ Check the algorithm string is supported """
+    if algorithm_name in SUPPORTED_KEY_ALGORITHMS:
+        return algorithm_name
+    raise argparse.ArgumentTypeError(
+        f"{algorithm_name} is not valid. Must be in {SUPPORTED_KEY_ALGORITHMS}"
+    )
+
 
 def positive_integer(number):
     """Check number is an integer greater than 0"""

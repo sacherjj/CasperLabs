@@ -1,140 +1,53 @@
 from typing import Dict
 
 from casperlabs_client import CasperLabsClient, consts, reformat
+from casperlabs_client.commands.common_options import (
+    FROM_OPTION,
+    PAYMENT_OPTIONS,
+    CHAINNAME_OPTION,
+    SESSION_OPTIONS,
+    DEPENDENCIES_OPTION,
+    TTL_MILLIS_OPTION,
+    PRIVATE_KEY_OPTION,
+    WAIT_PROCESSED_OPTION,
+    TIMEOUT_SECONDS_OPTION,
+)
 from casperlabs_client.decorators import guarded_command
 
 
 TRANSFER_TO_ACCOUNT_WASM: str = "transfer_to_account_u512.wasm"
 NAME: str = "transfer"
 HELP: str = "Transfers funds between accounts"
-OPTIONS = [
+OPTIONS = (
     [
-        ("-a", "--amount"),
-        dict(
-            required=True,
-            default=None,
-            type=int,
-            help="Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.",
-        ),
-    ],
-    [
-        ("-t", "--target-account"),
-        dict(
-            required=True,
-            type=str,
-            help="base64 or base16 representation of target account's public key",
-        ),
-    ],
-    [
-        ("-f", "--from"),
-        dict(
-            required=True,
-            type=str,
-            help="The public key of the account which is the context of this deployment, base16 encoded.",
-        ),
-    ],
-    [
-        ("--chain-name",),
-        dict(
-            required=False,
-            type=str,
-            help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.",
-        ),
-    ],
-    [
-        ("--dependencies",),
-        dict(
-            required=False,
-            nargs="+",
-            default=None,
-            help="List of deploy hashes (base16 encoded) which must be executed before this deploy.",
-        ),
-    ],
-    [
-        ("--payment-amount",),
-        dict(
-            required=False,
-            type=int,
-            default=None,
-            help=(
-                "Standard payment amount. Use this with the default payment, or override with --payment-args "
-                "if custom payment code is used. By default --payment-amount is set to 10000000"
+        [
+            ("-a", "--amount"),
+            dict(
+                required=True,
+                default=None,
+                type=int,
+                help="Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.",
             ),
-        ),
-    ],
-    [
-        ("-p", "--payment"),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Path to the file with payment code",
-        ),
-    ],
-    [
-        ("--payment-hash",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Hash of the stored contract to be called in the payment; base16 encoded",
-        ),
-    ],
-    [
-        ("--payment-name",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="Name of the stored contract (associated with the executing account) to be called in the payment",
-        ),
-    ],
-    [
-        ("--payment-uref",),
-        dict(
-            required=False,
-            type=str,
-            default=None,
-            help="URef of the stored contract to be called in the payment; base16 encoded",
-        ),
-    ],
-    [
-        ("--payment-args",),
-        dict(
-            required=False,
-            type=str,
-            help=(
-                "JSON encoded list of payment args, e.g.: "
-                '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'
+        ],
+        [
+            ("-t", "--target-account"),
+            dict(
+                required=True,
+                type=str,
+                help="base64 or base16 representation of target account's public key hash",
             ),
-        ),
-    ],
-    [
-        ("--ttl-millis",),
-        dict(
-            required=False,
-            type=int,
-            help="""Time to live. Time (in milliseconds) that the deploy will remain valid for.'""",
-        ),
-    ],
-    [
-        ("-w", "--wait-for-processed"),
-        dict(action="store_true", help="Wait for deploy status PROCESSED or DISCARDED"),
-    ],
-    [
-        ("--timeout-seconds",),
-        dict(type=int, default=consts.STATUS_TIMEOUT, help="Timeout in seconds"),
-    ],
-    [
-        ("--private-key",),
-        dict(
-            required=True,
-            default=None,
-            type=str,
-            help="Path to the file with account private key (Ed25519)",
-        ),
-    ],
-]
+        ],
+        FROM_OPTION,
+        CHAINNAME_OPTION,
+        DEPENDENCIES_OPTION,
+        TTL_MILLIS_OPTION,
+        WAIT_PROCESSED_OPTION,
+        TIMEOUT_SECONDS_OPTION,
+        PRIVATE_KEY_OPTION,
+    ]
+    + SESSION_OPTIONS
+    + PAYMENT_OPTIONS
+)
 
 
 @guarded_command

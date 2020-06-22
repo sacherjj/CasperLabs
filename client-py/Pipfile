@@ -20,6 +20,7 @@ semver = ">=2.10.1"
 protobuf = "==3.11.3"
 tox = "*"
 pre-commit = "*"
+ecdsa = "==0.15"
 
 [requires]
 python_version = "3.7"
