@@ -10,6 +10,3 @@ pub use self::{
     error::Error,
     executor::Executor,
 };
-
-pub const MINT_NAME: &str = "mint";
-pub const POS_NAME: &str = "pos";

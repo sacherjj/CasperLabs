@@ -14,11 +14,6 @@ use crate::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 
-/// Name of the reference to the Mint contract in the named keys.
-pub const MINT_NAME: &str = "mint";
-/// Name of the reference to the Proof of Stake contract in the named keys.
-pub const POS_NAME: &str = "pos";
-
 fn get_system_contract(system_contract: SystemContractType) -> ContractHash {
     let system_contract_index = system_contract.into();
     let contract_hash: ContractHash = {

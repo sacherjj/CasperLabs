@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    convert::TryFrom,
-};
+use std::{collections::BTreeSet, convert::TryFrom};
 
 use wasmi::{Externals, RuntimeArgs, RuntimeValue, Trap};
 
@@ -9,7 +6,7 @@ use types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, ToBytes},
-    contracts::EntryPoints,
+    contracts::{EntryPoints, NamedKeys},
     ContractHash, ContractPackageHash, ContractVersion, Group, Key, TransferredTo, URef, U512,
 };
 
@@ -453,8 +450,7 @@ where
                     self.t_from_mem(contract_package_hash_ptr, contract_package_hash_size)?;
                 let entry_points: EntryPoints =
                     self.t_from_mem(entry_points_ptr, entry_points_size)?;
-                let named_keys: BTreeMap<String, Key> =
-                    self.t_from_mem(named_keys_ptr, named_keys_size)?;
+                let named_keys: NamedKeys = self.t_from_mem(named_keys_ptr, named_keys_size)?;
                 let ret = self.add_contract_version(
                     contract_package_hash,
                     entry_points,

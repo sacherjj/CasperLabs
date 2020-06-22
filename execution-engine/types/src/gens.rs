@@ -2,7 +2,7 @@
 //! [`Proptest`](https://crates.io/crates/proptest).
 #![allow(missing_docs)]
 
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec};
+use alloc::{boxed::Box, string::String, vec};
 
 use proptest::{
     array, bits,
@@ -14,7 +14,7 @@ use proptest::{
 
 use crate::{
     account::{PublicKey, Weight},
-    contracts::{ContractVersions, DisabledVersions, Groups, Parameters},
+    contracts::{ContractVersions, DisabledVersions, Groups, NamedKeys, Parameters},
     AccessRights, CLType, CLValue, Contract, ContractPackage, ContractVersionKey, ContractWasm,
     EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Group, Key, NamedArg, Parameter,
     Phase, ProtocolVersion, SemVer, URef, U128, U256, U512,
@@ -28,7 +28,7 @@ pub fn u8_slice_32() -> impl Strategy<Value = [u8; 32]> {
     })
 }
 
-pub fn named_keys_arb(depth: usize) -> impl Strategy<Value = BTreeMap<String, Key>> {
+pub fn named_keys_arb(depth: usize) -> impl Strategy<Value = NamedKeys> {
     btree_map("\\PC*", key_arb(), depth)
 }
 

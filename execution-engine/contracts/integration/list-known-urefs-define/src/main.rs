@@ -3,14 +3,14 @@
 
 extern crate alloc;
 
-use alloc::{borrow::ToOwned, collections::BTreeMap, string::String};
+use alloc::borrow::ToOwned;
 use core::iter;
 
 use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{ApiError, Key};
+use types::{contracts::NamedKeys, ApiError};
 
 const BAR_KEY: &str = "Bar";
 const FOO_KEY: &str = "Foo";
@@ -24,8 +24,8 @@ pub extern "C" fn list_named_keys_ext() {
     let uref = storage::new_uref(TEST_UREF);
     runtime::put_key(BAR_KEY, uref.clone().into());
     let contracts_named_keys = runtime::list_named_keys();
-    let expected_urefs: BTreeMap<String, Key> = {
-        let mut tmp = BTreeMap::new();
+    let expected_urefs = {
+        let mut tmp = NamedKeys::new();
         tmp.insert(BAR_KEY.to_owned(), uref.into());
         tmp.insert(FOO_KEY.to_owned(), passed_in_uref);
         tmp
@@ -39,8 +39,7 @@ pub extern "C" fn call() {
     let uref = storage::new_uref(1i32);
     runtime::put_key(FOO_KEY, uref.clone().into());
     let _accounts_named_keys = runtime::list_named_keys();
-    let _expected_urefs: BTreeMap<String, Key> =
-        iter::once((FOO_KEY.to_owned(), uref.into())).collect();
+    let _expected_urefs: NamedKeys = iter::once((FOO_KEY.to_owned(), uref.into())).collect();
     // Test that `list_named_keys` returns correct value when called in the context of an account.
     // Store `list_named_keys_ext` to be called in the `call` part of this contract.
     // We don't have to  pass `expected_urefs` to exercise this function but

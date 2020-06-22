@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::ToString, vec::Vec};
+use alloc::{string::ToString, vec::Vec};
 
 use contract::{
     contract_api::{runtime, storage},
@@ -11,7 +11,8 @@ use contract::{
 };
 use types::{
     contracts::{
-        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, CONTRACT_INITIAL_VERSION,
+        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys,
+        CONTRACT_INITIAL_VERSION,
     },
     runtime_args, CLType, ContractHash, ContractPackageHash, ContractVersion, Key, RuntimeArgs,
 };
@@ -151,7 +152,7 @@ fn install_version_1(package_hash: ContractPackageHash) -> (ContractHash, Contra
     let contract_named_keys = {
         let contract_variable = storage::new_uref(0);
 
-        let mut named_keys = BTreeMap::new();
+        let mut named_keys = NamedKeys::new();
         named_keys.insert("contract_named_key".to_string(), contract_variable.into());
         named_keys
     };

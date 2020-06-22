@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::String, vec, vec::Vec};
+use alloc::{string::String, vec, vec::Vec};
 use core::convert::TryInto;
 
 use alloc::boxed::Box;
@@ -15,6 +15,7 @@ use contract::{
 use types::{
     api_error::{self},
     bytesrepr::{self},
+    contracts::NamedKeys,
     runtime_args, ApiError, CLType, CLValue, ContractPackageHash, EntryPoint, EntryPointAccess,
     EntryPointType, EntryPoints, Key, Parameter, RuntimeArgs, URef,
 };
@@ -71,7 +72,7 @@ pub extern "C" fn call() {
     let entry_points = get_entry_points();
     let count_value_uref = storage::new_uref(0); //initialize counter
     let named_keys = {
-        let mut ret = BTreeMap::new();
+        let mut ret = NamedKeys::new();
         ret.insert(String::from(COUNTER_VALUE_UREF), count_value_uref.into());
         ret
     };

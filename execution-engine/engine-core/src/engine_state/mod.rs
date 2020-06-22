@@ -40,7 +40,7 @@ use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
     account::PublicKey,
     bytesrepr::{self, ToBytes},
-    contracts::{ENTRY_POINT_NAME_INSTALL, UPGRADE_ENTRY_POINT_NAME},
+    contracts::{NamedKeys, ENTRY_POINT_NAME_INSTALL, UPGRADE_ENTRY_POINT_NAME},
     runtime_args,
     system_contract_errors::mint,
     system_contract_type::PROOF_OF_STAKE,
@@ -69,9 +69,7 @@ use crate::{
     },
     execution::{self, AddressGenerator, AddressGeneratorBuilder, Executor},
     tracking_copy::{TrackingCopy, TrackingCopyExt},
-    KnownKeys,
 };
-use execution::{MINT_NAME, POS_NAME};
 
 // TODO?: MAX_PAYMENT && CONV_RATE values are currently arbitrary w/ real values
 // TBD gas * CONV_RATE = motes
@@ -176,7 +174,7 @@ where
 
         // Spec #3: Create "virtual system account" object.
         let mut virtual_system_account = {
-            let named_keys = BTreeMap::new();
+            let named_keys = NamedKeys::new();
             let purse = URef::new(Default::default(), AccessRights::READ_ADD_WRITE);
             Account::create(SYSTEM_ACCOUNT_ADDR, named_keys, purse)
         };
@@ -371,19 +369,14 @@ where
         //   account (with the exception of its known keys)
         //
         // Create known keys for chainspec accounts
-        let account_named_keys = {
-            let mut ret = BTreeMap::new();
-            ret.insert(MINT_NAME.to_string(), Key::Hash(mint_hash));
-            ret.insert(POS_NAME.to_string(), Key::Hash(proof_of_stake_hash));
-            ret
-        };
+        let account_named_keys = NamedKeys::new();
 
         // Create accounts
         {
             // Collect chainspec accounts and their known keys with the genesis account and its
             // known keys
             let accounts = {
-                let mut ret: Vec<(GenesisAccount, KnownKeys)> = ee_config
+                let mut ret: Vec<(GenesisAccount, NamedKeys)> = ee_config
                     .accounts()
                     .to_vec()
                     .into_iter()
@@ -415,7 +408,7 @@ where
                 };
                 let tracking_copy_exec = Rc::clone(&tracking_copy);
                 let tracking_copy_write = Rc::clone(&tracking_copy);
-                let mut named_keys_exec = BTreeMap::new();
+                let mut named_keys_exec = NamedKeys::new();
                 let base_key = mint_hash;
                 let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
                 let account_public_key = account.public_key();

@@ -551,7 +551,7 @@ impl Contract {
     }
 
     /// Returns a reference to `named_keys`
-    pub fn named_keys(&self) -> &BTreeMap<String, Key> {
+    pub fn named_keys(&self) -> &NamedKeys {
         &self.named_keys
     }
 
@@ -595,7 +595,7 @@ impl FromBytes for Contract {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), bytesrepr::Error> {
         let (contract_package_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
         let (contract_wasm_hash, bytes) = <[u8; KEY_HASH_LENGTH]>::from_bytes(bytes)?;
-        let (named_keys, bytes) = BTreeMap::<String, Key>::from_bytes(bytes)?;
+        let (named_keys, bytes) = NamedKeys::from_bytes(bytes)?;
         let (entry_points, bytes) = EntryPoints::from_bytes(bytes)?;
         let (protocol_version, bytes) = ProtocolVersion::from_bytes(bytes)?;
         Ok((

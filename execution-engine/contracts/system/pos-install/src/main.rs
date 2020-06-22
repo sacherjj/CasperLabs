@@ -18,7 +18,7 @@ use proof_of_stake::Stakes;
 use types::{
     account::PublicKey,
     contracts::{
-        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter,
+        EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys, Parameter,
         CONTRACT_INITIAL_VERSION,
     },
     runtime_args,
@@ -80,8 +80,7 @@ pub extern "C" fn install() {
     // For now, we are storing validators in `named_keys` map of the PoS contract
     // in the form: key: "v_{validator_pk}_{validator_stake}", value: doesn't
     // matter.
-    let mut named_keys: BTreeMap<String, Key> =
-        stakes.strings().map(|key| (key, PLACEHOLDER_KEY)).collect();
+    let mut named_keys: NamedKeys = stakes.strings().map(|key| (key, PLACEHOLDER_KEY)).collect();
     let total_bonds: U512 = stakes.total_bonds();
     let bonding_purse = mint_purse(mint_package_hash, total_bonds);
     let payment_purse = mint_purse(mint_package_hash, U512::zero());
