@@ -16,7 +16,6 @@ from setuptools.command.develop import develop as DevelopCommand
 from setuptools.command.install import install as InstallCommand
 from distutils.spawn import find_executable
 
-
 THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 
 # Directory with Scala client's bundled contracts
@@ -246,7 +245,7 @@ setup(
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
     ],
-    python_requires=">=3.7.0",
+    python_requires="==3.7.0",
     url="https://casperlabs.io/",
     project_urls={
         "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",

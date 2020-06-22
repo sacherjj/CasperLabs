@@ -279,7 +279,9 @@ class SynchronizerImpl[F[_]: Concurrent: Log: Metrics](
       backend
         .validate(summary)
         .as(().asRight[SyncError])
-        .handleError(e => (ValidationError(summary, e): SyncError).asLeft[Unit])
+        .recover {
+          case NonFatal(e) => (ValidationError(summary, e): SyncError).asLeft[Unit]
+        }
     )
 
   /** Check that we are not on a loop, that we we haven't seen the same summary in this

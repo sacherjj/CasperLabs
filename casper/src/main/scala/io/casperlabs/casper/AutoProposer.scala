@@ -82,7 +82,7 @@ class AutoProposer[F[_]: Concurrent: Time: Log: Metrics: MultiParentCasperRef: D
   private def tryPropose(canCreateBallot: Boolean): F[Boolean] =
     BlockAPI.propose(blockApiLock, canCreateBallot).flatMap { blockHash =>
       Log[F].info(s"Proposed ${blockHash.show -> "message"}").as(true)
-    } handleErrorWith {
+    } recoverWith {
       case NonFatal(ex) =>
         Log[F].error(s"Could not propose block: $ex").as(false)
     }

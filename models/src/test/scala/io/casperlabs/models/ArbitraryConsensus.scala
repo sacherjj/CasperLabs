@@ -201,8 +201,8 @@ trait ArbitraryConsensus {
       dependencies    <- Gen.listOfN(numDependencies, genHash)
       body = Deploy
         .Body()
-        .withSession(Deploy.Code().withWasm(sessionCode))
-        .withPayment(Deploy.Code().withWasm(paymentCode))
+        .withSession(Deploy.Code().withWasmContract(Deploy.Code.WasmContract(sessionCode)))
+        .withPayment(Deploy.Code().withWasmContract(Deploy.Code.WasmContract(paymentCode)))
       bodyHash = protoHash(body)
       header = Deploy
         .Header()

@@ -277,7 +277,7 @@ steps:
   commands:
   - "sbt test"
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make docker-build/node docker-build/client"
+  - "make docker-build/node"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -438,6 +438,7 @@ steps:
 - name: docker-build-ee-int-bors
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "make build-client-contracts"
   - "./integration-testing/build_contracts.sh"
   - "make docker-build/execution-engine"
   - "make docker-build/integration-testing"
@@ -649,12 +650,10 @@ steps:
   commands:
   - "make build-client-contracts build-node-contracts"
   - "rm -rf project/target project/project/target"
-  - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+  - "sbt update test node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make docker-build/node docker-build/client"
+  - "make docker-build/node"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
-  - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-  - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
   - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   environment:
@@ -748,26 +747,22 @@ steps:
         REF=${DRONE_BRANCH}
       fi
       docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:"$REF"
-      docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
       docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
       docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:"$REF"
       docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:"$REF"
       docker push casperlabs/node:"$REF"
-      docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
       docker push casperlabs/key-generator:"$REF"
       docker push casperlabs/explorer:"$REF"
       docker push casperlabs/grpcwebproxy:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
-        docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
         docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
         docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:latest
         docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:latest
         docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:latest
         docker push casperlabs/node:latest
-        docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
         docker push casperlabs/key-generator:latest
         docker push casperlabs/explorer:latest
@@ -930,10 +925,8 @@ steps:
 - name: package-sbt-artifacts-tag
   commands:
   - "make build-client-contracts build-node-contracts"
-  - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+  - "sbt update test node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
-  - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-  - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
   - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   environment:
@@ -981,7 +974,6 @@ steps:
   commands:
   - "export DOCKER_LATEST_TAG=${DRONE_TAG}"
   - "make docker-build/node"
-  - "make docker-build/client"
   - "make docker-build/execution-engine"
   - "make docker-build/key-generator"
   - "make docker-build/explorer"
@@ -1010,7 +1002,6 @@ steps:
   - |
       echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
       docker push casperlabs/node:"${DRONE_TAG}"
-      docker push casperlabs/client:"${DRONE_TAG}"
       docker push casperlabs/execution-engine:"${DRONE_TAG}"
       docker push casperlabs/key-generator:"${DRONE_TAG}"
       docker push casperlabs/explorer:"${DRONE_TAG}"
@@ -1020,57 +1011,6 @@ steps:
     - refs/tags/v*
   depends_on:
     - build-docker-tag
-
-- name: mac-ee-tarball-tag
-  image: appleboy/drone-ssh:1.5.5
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-    CARGO_FLAGS: "--release"
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - mkdir -p DRONE_BUILD_${DRONE_BUILD_NUMBER}
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
-    - git clone -b master https://github.com/CasperLabs/CasperLabs.git
-    - export PATH=$PATH:/usr/local/bin/
-    - cd CasperLabs/execution-engine
-    - make setup
-    - CARGO_FLAGS=--release make build
-    - cd target/release/
-    - export OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-    - export ARCH=$(uname -p)
-    - export VERSION=$(./casperlabs-engine-grpc-server --version | awk '{print $NF}')
-    - tar -czvf casperlabs-engine-grpc-server-"$VERSION"_"$OS"_"$ARCH".tar.gz casperlabs-engine-grpc-server
-  when:
-    ref:
-    - refs/tags/v*
-
-- name: rsync-mac-tarball-tag
-  image: "casperlabs/buildenv:latest"
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  commands:
-  - mkdir -p ~/.ssh
-  - mkdir -p artifacts/
-  - umask 077 && echo "$SSH_KEY" > ~/.ssh/id_ed25519
-  - rsync -avzhe "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" $SSH_USERNAME@$SSH_HOST:DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs/execution-engine/target/release/casperlabs-engine-grpc-server-*darwin*.tar.gz artifacts/${DRONE_BRANCH}/
-  when:
-    ref:
-    - refs/tags/v*
-  depends_on:
-    - mac-ee-tarball-tag
 
 - name: generate-metapackages
   commands:
@@ -1118,7 +1058,6 @@ steps:
     ref:
     - refs/tags/v*
   depends_on:
-  - rsync-mac-tarball-tag
   - package-python-client-tag
   - generate-metapackages
 
@@ -1203,30 +1142,6 @@ steps:
   depends_on:
   - github_publish_release_artifacts
 
-- name: cleanup-mac-tag
-  image: appleboy/drone-ssh:1.5.5
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    port:
-      from_secret: mac-port
-    script:
-    - rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
-  when:
-    ref:
-    - refs/tags/v*
-    status:
-    - failure
-    - success
-  depends_on:
-  - mac-ee-tarball-tag
-  - rsync-mac-tarball-tag
-
 volumes:
 - name: docker_sock
   host:
@@ -1235,121 +1150,6 @@ volumes:
 trigger:
   ref:
   - refs/tags/v*
-
----
-kind: pipeline
-name: mac-nightly-cron
-
-clone:
-  disable: true
-
-steps:
-- name: mac-clone
-  image: appleboy/drone-ssh:1.5.5
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - mkdir -p DRONE_BUILD_${DRONE_BUILD_NUMBER}
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}
-    - git clone -b dev https://github.com/CasperLabs/CasperLabs.git
-
-- name: build-node
-  image: appleboy/drone-ssh:1.5.5
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
-    - /usr/local/bin/sbt node/universal:stage
-
-- name: build-client
-  image: appleboy/drone-ssh:1.5.5
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
-    - /usr/local/bin/sbt client/universal:stage
-
-- name: build-ee
-  image: appleboy/drone-ssh:1.5.5
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    command_timeout: 60m
-    port:
-      from_secret: mac-port
-    script:
-    - export PATH=$PATH:/usr/local/bin/
-    - cd DRONE_BUILD_${DRONE_BUILD_NUMBER}/CasperLabs
-    - cd execution-engine
-    - make setup
-    - make build
-
-- name: cleanup-mac
-  image: appleboy/drone-ssh:1.5.5
-  environment:
-    SSH_HOST:
-      from_secret: mac-host
-    SSH_USERNAME:
-      from_secret: mac-user
-    SSH_KEY:
-      from_secret: mac-ssh-key
-  settings:
-    port:
-      from_secret: mac-port
-    script:
-    - rm -rf DRONE_BUILD_${DRONE_BUILD_NUMBER}
-  when:
-    status:
-    - failure
-    - success
-
-- name: notify-mac-cron
-  image: plugins/slack
-  settings:
-    webhook:
-      from_secret: slack_webhook
-    template:
-    - |
-      macOS Build Status: *{{ uppercasefirst build.status }}*
-      Drone Build: <{{ build.link }}|#{{ build.number }}>
-  when:
-    status:
-    - failure
-
-trigger:
-  cron: [ mac-hourly-cron ]
 
 ---
 kind: pipeline

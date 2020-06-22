@@ -154,7 +154,7 @@ object GrpcCasperService {
                   err => SmartContractEngineError(s"Error with EE response $storedValue:\n$err")
                 )
             }
-            value <- Concurrent[F].fromEither(protoValue).handleErrorWith {
+            value <- Concurrent[F].fromEither(protoValue).recoverWith {
                       case SmartContractEngineError(msg) =>
                         MonadThrowable[F].raiseError(InvalidArgument(msg))
                     }
@@ -227,7 +227,7 @@ object GrpcCasperService {
       keyType: StateQuery.KeyVariant,
       keyValue: String
   ): F[state.Key] =
-    Utils.toKey[F](keyType.name, keyValue).handleErrorWith {
+    Utils.toKey[F](keyType.name, keyValue).recoverWith {
       case ex: java.lang.IllegalArgumentException =>
         MonadThrowable[F].raiseError(InvalidArgument(ex.getMessage))
     }

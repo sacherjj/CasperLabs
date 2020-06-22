@@ -29,7 +29,6 @@ pub use wasm_test_builder::{
 pub const MINT_INSTALL_CONTRACT: &str = "mint_install.wasm";
 pub const POS_INSTALL_CONTRACT: &str = "pos_install.wasm";
 pub const STANDARD_PAYMENT_INSTALL_CONTRACT: &str = "standard_payment_install.wasm";
-pub const STANDARD_PAYMENT_CONTRACT: &str = "standard_payment.wasm";
 
 pub const DEFAULT_CHAIN_NAME: &str = "gerald";
 pub const DEFAULT_GENESIS_TIMESTAMP: u64 = 0;
@@ -37,6 +36,8 @@ pub const DEFAULT_BLOCK_TIME: u64 = 0;
 pub const MOCKED_ACCOUNT_ADDRESS: AccountHash = AccountHash::new([48u8; 32]);
 
 pub const DEFAULT_ACCOUNT_KEY: AccountHash = DEFAULT_ACCOUNT_ADDR;
+
+pub const ARG_AMOUNT: &str = "amount";
 
 lazy_static! {
     pub static ref DEFAULT_GENESIS_CONFIG_HASH: Blake2bHash = [42; 32].into();

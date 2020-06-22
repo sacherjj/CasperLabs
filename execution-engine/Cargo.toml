@@ -16,9 +16,6 @@ members = [
     "standard-payment",
     "types"
 ]
-exclude = [
-    "contracts/examples/README.md",
-]
 
 default-members = [
     "cargo-casperlabs",

@@ -1,14 +1,14 @@
 #![no_std]
 #![no_main]
 
-use contract::{contract_api::runtime, unwrap_or_revert::UnwrapOrRevert};
-use types::{account::AccountHash, ApiError};
+use contract::contract_api::runtime;
+use types::account::AccountHash;
+
+const ARG_ACCOUNT: &str = "account";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_account_hash: AccountHash = runtime::get_arg(0)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let known_account_hash: AccountHash = runtime::get_named_arg(ARG_ACCOUNT);
     let caller_account_hash: AccountHash = runtime::get_caller();
     assert_eq!(
         caller_account_hash, known_account_hash,

@@ -1,5 +1,8 @@
 import { grpc } from '@improbable-eng/grpc-web';
-import { Block, Deploy } from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
+import {
+  Block,
+  Deploy
+} from 'casperlabs-grpc/io/casperlabs/casper/consensus/consensus_pb';
 import {
   BlockInfo,
   DeployInfo
@@ -28,7 +31,6 @@ import { Event } from '../../../grpc/io/casperlabs/casper/consensus/info_pb';
 import { StreamEventsRequest } from '../../../grpc/io/casperlabs/node/api/casper_pb';
 import { BlockHash, ByteArray } from '../index';
 import { encodeBase16 } from '../lib/Conversions';
-import { ByteArrayArg } from '../lib/Serialization';
 import { GrpcError } from './Errors';
 
 export interface SubscribeTopics {
@@ -41,10 +43,9 @@ export default class CasperService {
     // Point at either at a URL on a different port where grpcwebproxy is listening,
     // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string,
-    private transport: grpc.TransportFactory = (options) => grpc.CrossBrowserHttpTransport({ withCredentials: false })(options),
-  ) {
-
-  }
+    private transport: grpc.TransportFactory = options =>
+      grpc.CrossBrowserHttpTransport({ withCredentials: false })(options)
+  ) {}
 
   public deploy(deploy: Deploy) {
     return new Promise<void>((resolve, reject) => {
@@ -56,7 +57,7 @@ export default class CasperService {
         transport: this.transport,
         request: deployRequest,
 
-        onEnd: (res) => {
+        onEnd: res => {
           if (res.status === grpc.Code.OK) {
             resolve();
           } else {
@@ -243,7 +244,10 @@ export default class CasperService {
     });
   }
 
-  batchGetBlockState(blockHash: BlockHash, querys: StateQuery[]): Promise<StateValue[]> {
+  batchGetBlockState(
+    blockHash: BlockHash,
+    querys: StateQuery[]
+  ): Promise<StateValue[]> {
     return new Promise<StateValue[]>((resolve, reject) => {
       const request = new BatchGetBlockStateRequest();
       request.setBlockHashBase16(encodeBase16(blockHash));
@@ -255,7 +259,9 @@ export default class CasperService {
         request,
         onEnd: res => {
           if (res.status === grpc.Code.OK) {
-            resolve((res.message as BatchGetBlockStateResponse).getValuesList());
+            resolve(
+              (res.message as BatchGetBlockStateResponse).getValuesList()
+            );
           } else {
             reject(new GrpcError(res.status, res.statusMessage));
           }
@@ -278,22 +284,21 @@ export default class CasperService {
         res => res.getAccount()!
       );
 
-      const mintPublic = account
-        .getNamedKeysList()
-        .find(x => x.getName() === 'mint')!;
+      const mainPurseUref = account.getMainPurse()!;
 
-      const localKeyQuery = QueryLocalKey(
-        mintPublic
-          .getKey()!
-          .getUref()!
-          .getUref_asU8(),
-        ByteArrayArg(account.getMainPurse()!.getUref_asU8())
-      );
+      const mainPurseQuery = QueryHash(mainPurseUref.getUref_asU8()!);
 
       const balanceUref = await this.getBlockState(
         blockHash,
-        localKeyQuery
-      ).then(res => res.getClValue()!.getValue()!.getKey()!.getUref()!);
+        mainPurseQuery
+      ).then(
+        res =>
+          res
+            .getClValue()!
+            .getValue()!
+            .getKey()!
+            .getUref()!
+      );
 
       return balanceUref;
     } catch (err) {
@@ -316,7 +321,11 @@ export default class CasperService {
   ): Promise<number> {
     const balanceQuery = QueryUref(balanceUref);
     const balance = await this.getBlockState(blockHash, balanceQuery).then(
-      res => res.getClValue()!.getValue()!.getU512()!
+      res =>
+        res
+          .getClValue()!
+          .getValue()!
+          .getU512()!
     );
     return Number(balance.getValue());
   }
@@ -364,6 +373,13 @@ export default class CasperService {
   }
 }
 
+const QueryHash = (hash: ByteArray) => {
+  const query = new StateQuery();
+  query.setKeyVariant(StateQuery.KeyVariant.HASH);
+  query.setKeyBase16(encodeBase16(hash));
+  return query;
+};
+
 const QueryAccount = (accountPublicKeyHash: ByteArray) => {
   const query = new StateQuery();
   query.setKeyVariant(StateQuery.KeyVariant.ADDRESS);
@@ -375,12 +391,5 @@ const QueryUref = (uref: Key.URef) => {
   const query = new StateQuery();
   query.setKeyVariant(StateQuery.KeyVariant.UREF);
   query.setKeyBase16(encodeBase16(uref.getUref_asU8()));
-  return query;
-};
-
-const QueryLocalKey = (seed: ByteArray, bytes: ByteArray) => {
-  const query = new StateQuery();
-  query.setKeyVariant(StateQuery.KeyVariant.LOCAL);
-  query.setKeyBase16(encodeBase16(seed) + ':' + encodeBase16(bytes));
   return query;
 };

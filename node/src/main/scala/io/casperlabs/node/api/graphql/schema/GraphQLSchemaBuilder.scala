@@ -36,8 +36,9 @@ import io.casperlabs.storage.dag.DagStorage
 import io.casperlabs.storage.deploy.DeployStorage
 import sangria.execution.deferred.{DeferredResolver, Fetcher, HasId}
 import sangria.schema._
-
 import scala.concurrent.Future
+import scala.util.control.NonFatal
+import sangria.execution.UserFacingError
 
 // format: off
 private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
@@ -319,64 +320,86 @@ private[graphql] class GraphQLSchemaBuilder[F[_]: Fs2SubscriptionStream
             resolve = { c =>
               val queries = c.arg(globalstate.arguments.StateQueryArgument).toList
 
-              val program = for {
-                blockHashBase16Prefix <- validateBlockHashPrefix[F](
-                                          c.arg(blocks.arguments.BlockHashPrefix),
-                                          ByteString.EMPTY
-                                        )
-                maybeBlockProps <- BlockAPI
-                                    .getBlockInfoWithDeploysOpt[F](
-                                      blockHashBase16Prefix,
-                                      maybeDeployView = None,
-                                      blockView = BlockInfo.View.BASIC
-                                    )
-                                    .map(_.map {
-                                      case (info, _) =>
-                                        info.getSummary.getHeader.getState.postStateHash ->
-                                          info.getSummary.getHeader.getProtocolVersion
-                                    })
-                values <- maybeBlockProps.fold(List.empty[Option[StoredValueInstance]].pure[F]) {
-                           case (stateHash, protocolVersion) =>
-                             for {
+              val program =
+                for {
+                  blockHashBase16Prefix <- validateBlockHashPrefix[F](
+                                            c.arg(blocks.arguments.BlockHashPrefix),
+                                            ByteString.EMPTY
+                                          )
+                  maybeBlockProps <- BlockAPI
+                                      .getBlockInfoWithDeploysOpt[F](
+                                        blockHashBase16Prefix,
+                                        maybeDeployView = None,
+                                        blockView = BlockInfo.View.BASIC
+                                      )
+                                      .map(_.map {
+                                        case (info, _) =>
+                                          info.getSummary.getHeader.getState.postStateHash ->
+                                            info.getSummary.getHeader.getProtocolVersion
+                                      })
+                  values <- maybeBlockProps.fold(List.empty[Option[StoredValueInstance]].pure[F]) {
+                             case (stateHash, protocolVersion) =>
+                               for {
 
-                               values <- queries.traverse {
-                                          query =>
-                                            for {
-                                              key <- Utils.toKey[F](
-                                                      query.keyType,
-                                                      query.key
-                                                    )
-                                              possibleResponse <- ExecutionEngineService[F]
-                                                                   .query(
-                                                                     stateHash,
-                                                                     key,
-                                                                     query.pathSegments,
-                                                                     protocolVersion
-                                                                   )
-                                              possibleInstance = possibleResponse.flatMap { sv =>
-                                                StoredValueInstance
-                                                  .from(sv)
-                                                  .leftMap(
-                                                    err =>
-                                                      SmartContractEngineError(
-                                                        s"Error during instantiation of $sv: $err"
+                                 values <- queries.traverse {
+                                            query =>
+                                              for {
+                                                key <- Utils.toKey[F](
+                                                        query.keyType,
+                                                        query.key
                                                       )
-                                                  )
-                                              }
-                                              value <- MonadThrowable[F]
-                                                        .fromEither(possibleInstance)
-                                                        .map(_.some)
-                                                        .handleError {
-                                                          case SmartContractEngineError(message)
-                                                              if message contains "Value not found" =>
-                                                            none[StoredValueInstance]
-                                                        }
-                                            } yield value
-                                        }
-                             } yield values
-                         }
-              } yield values
-              program.unsafeToFuture
+                                                possibleResponse <- ExecutionEngineService[F]
+                                                                     .query(
+                                                                       stateHash,
+                                                                       key,
+                                                                       query.pathSegments,
+                                                                       protocolVersion
+                                                                     )
+                                                possibleInstance = possibleResponse.flatMap { sv =>
+                                                  StoredValueInstance
+                                                    .from(sv)
+                                                    .leftMap(
+                                                      err =>
+                                                        SmartContractEngineError(
+                                                          s"Error during instantiation of $sv: $err"
+                                                        )
+                                                    )
+                                                }
+                                                value <- MonadThrowable[F]
+                                                          .fromEither(possibleInstance)
+                                                          .map(_.some)
+                                                          .recover {
+                                                            case SmartContractEngineError(message)
+                                                                if message.contains(
+                                                                  "Value not found"
+                                                                ) || message.contains(
+                                                                  "Failed to find base key"
+                                                                ) =>
+                                                              none[StoredValueInstance]
+                                                          }
+                                              } yield value
+                                          }
+                               } yield values
+                           }
+                } yield values
+
+              program
+                .recoverWith {
+                  case ex: IllegalArgumentException =>
+                    MonadThrowable[F]
+                      .raiseError(new Exception(ex.getMessage()) with UserFacingError)
+                }
+                .onError {
+                  case ex: UserFacingError =>
+                    Log[F].warn(s"Invalid global state query: ${ex.getMessage -> "error"}")
+
+                  case NonFatal(ex) =>
+                    Log[F]
+                      .error(
+                        s"Error executing queries on global state: $ex"
+                      )
+                }
+                .unsafeToFuture
             }
           )
         )

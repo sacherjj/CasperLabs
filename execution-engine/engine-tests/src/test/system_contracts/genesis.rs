@@ -88,19 +88,20 @@ fn should_run_genesis() {
     assert_eq!(account_1_balance_actual, account_1_balance.value());
     assert_eq!(account_2_balance_actual, account_2_balance.value());
 
-    let mint_contract_uref = builder.get_mint_contract_uref();
-    let pos_contract_uref = builder.get_pos_contract_uref();
+    let mint_contract_hash = builder.get_mint_contract_hash();
+    let pos_contract_hash = builder.get_pos_contract_hash();
 
-    if let Ok(StoredValue::Contract(_)) = builder.query(None, Key::URef(mint_contract_uref), &[]) {
-        // Contract exists at mint contract URef
+    let result = builder.query(None, mint_contract_hash.into(), &[]);
+    if let Ok(StoredValue::Contract(_)) = result {
+        // Contract exists at mint contract hash
     } else {
-        panic!("contract not found at mint uref");
+        panic!("contract not found at mint hash");
     }
 
-    if let Ok(StoredValue::Contract(_)) = builder.query(None, Key::URef(pos_contract_uref), &[]) {
-        // Contract exists at pos contract URef
+    if let Ok(StoredValue::Contract(_)) = builder.query(None, pos_contract_hash.into(), &[]) {
+        // Contract exists at pos contract hash
     } else {
-        panic!("contract not found at pos uref");
+        panic!("contract not found at pos hash");
     }
 }
 

@@ -5,6 +5,9 @@ import {arrayToTyped} from "../../../../contract-as/assembly/utils";
 import {Key, AccountHash} from "../../../../contract-as/assembly/key"
 import {addAssociatedKey, AddKeyFailure, ActionType, setActionThreshold, SetThresholdFailure} from "../../../../contract-as/assembly/account";
 
+const ARG_KEY_MANAGEMENT_THRESHOLD = "key_management_threshold";
+const ARG_DEPLOY_THRESHOLD = "deploy_threshold";
+
 export function call(): void {
   let publicKeyBytes = new Array<u8>(32);
   publicKeyBytes.fill(123);
@@ -21,20 +24,10 @@ export function call(): void {
       break;
   }
 
-  let keyManagementThresholdBytes = CL.getArg(0);
-  if (keyManagementThresholdBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+  let keyManagementThresholdBytes = CL.getNamedArg(ARG_KEY_MANAGEMENT_THRESHOLD);
   let keyManagementThreshold = keyManagementThresholdBytes[0];
 
-  let deployThresholdBytes = CL.getArg(0);
-
-  if (deployThresholdBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-
+  let deployThresholdBytes = CL.getNamedArg(ARG_DEPLOY_THRESHOLD);
   let deployThreshold = deployThresholdBytes[0];
 
   if (keyManagementThreshold != 0) {

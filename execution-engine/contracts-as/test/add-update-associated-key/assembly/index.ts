@@ -9,17 +9,13 @@ import {AccountHash} from "../../../../contract-as/assembly/key";
 const INIT_WEIGHT: u8 = 1;
 const MOD_WEIGHT: u8 = 2;
 
-export function call(): void {
-  let accountHashBytes = CL.getArg(0);
-  if (accountHashBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+const ARG_ACCOUNT = "account";
 
+export function call(): void {
+  let accountHashBytes = CL.getNamedArg(ARG_ACCOUNT);
   const accountHashResult = AccountHash.fromBytes(accountHashBytes);
   if (accountHashResult.hasError()) {
     Error.fromUserError(<u16>4464 + <u16>accountHashResult.error).revert();
-    // Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;
   }
   const accountHash = accountHashResult.value;

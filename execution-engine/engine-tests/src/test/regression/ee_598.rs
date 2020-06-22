@@ -5,11 +5,15 @@ use engine_shared::motes::Motes;
 use engine_test_support::{
     internal::{
         utils, DeployItemBuilder, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS,
-        DEFAULT_PAYMENT, STANDARD_PAYMENT_CONTRACT,
+        DEFAULT_PAYMENT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::AccountHash, ApiError, U512};
+use types::{account::AccountHash, runtime_args, ApiError, RuntimeArgs, U512};
+
+const ARG_AMOUNT: &str = "amount";
+const ARG_ENTRY_POINT: &str = "entry_point";
+const ARG_ACCOUNT_PK: &str = "account_public_key";
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
 const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([7u8; 32]);
@@ -40,18 +44,21 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_POS_BONDING,
-        (
-            String::from("seed_new_account"),
-            ACCOUNT_1_ADDR,
-            *ACCOUNT_1_BALANCE,
-        ),
+        runtime_args! {
+            ARG_ENTRY_POINT => "seed_new_account",
+            ARG_ACCOUNT_PK => ACCOUNT_1_ADDR,
+            ARG_AMOUNT => *ACCOUNT_1_BALANCE,
+        },
     )
     .build();
     let exec_request_2 = {
         let deploy = DeployItemBuilder::new()
             .with_address(ACCOUNT_1_ADDR)
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*ACCOUNT_1_FUND,))
-            .with_session_code("ee_598_regression.wasm", (*ACCOUNT_1_BOND,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *ACCOUNT_1_FUND })
+            .with_session_code(
+                "ee_598_regression.wasm",
+                runtime_args! { ARG_AMOUNT => *ACCOUNT_1_BOND },
+            )
             .with_deploy_hash([2u8; 32])
             .with_authorization_keys(&[ACCOUNT_1_ADDR])
             .build();
@@ -75,9 +82,15 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     let error_message = utils::get_error_message(response);
 
     if !cfg!(feature = "enable-bonding") {
-        assert!(error_message.contains(&format!("{:?}", ApiError::Unhandled)));
+        assert!(
+            error_message.contains(&format!("{:?}", ApiError::Unhandled)),
+            error_message
+        );
     } else {
         // Error::UnbondTooLarge => 7,
-        assert!(error_message.contains(&format!("{:?}", ApiError::ProofOfStake(7))));
+        assert!(
+            error_message.contains(&format!("{:?}", ApiError::ProofOfStake(7))),
+            error_message
+        );
     }
 }

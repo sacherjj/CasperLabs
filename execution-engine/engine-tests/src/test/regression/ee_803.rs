@@ -10,7 +10,7 @@ use engine_test_support::{
     internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::AccountHash, Key, URef, U512};
+use types::{account::AccountHash, runtime_args, Key, RuntimeArgs, URef, U512};
 
 const CONTRACT_DO_NOTHING: &str = "do_nothing.wasm";
 const CONTRACT_TRANSFER: &str = "transfer_purse_to_account.wasm";
@@ -19,6 +19,10 @@ const COMMAND_BOND: &str = "bond";
 const COMMAND_UNBOND: &str = "unbond";
 const ACCOUNT_ADDR_1: AccountHash = AccountHash::new([1u8; 32]);
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
+const ARG_AMOUNT: &str = "amount";
+const ARG_TARGET: &str = "target";
+const ARG_PURSE: &str = "purse";
+const ARG_ENTRY_POINT_NAME: &str = "method";
 
 fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
     let pos_contract = builder.get_pos_contract();
@@ -65,15 +69,19 @@ fn should_not_be_able_to_unbond_reward() {
     builder.run_genesis(&run_genesis_request);
 
     // First request to put some funds in the reward purse
-    let exec_request_0 =
-        ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_DO_NOTHING, ()).build();
+    let exec_request_0 = ExecuteRequestBuilder::standard(
+        DEFAULT_ACCOUNT_ADDR,
+        CONTRACT_DO_NOTHING,
+        RuntimeArgs::default(),
+    )
+    .build();
 
     builder.exec(exec_request_0).expect_success().commit();
 
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER,
-        (ACCOUNT_ADDR_1, U512::from(100)),
+        runtime_args! { ARG_TARGET => ACCOUNT_ADDR_1, ARG_AMOUNT => U512::from(100) },
     )
     .build();
 
@@ -94,7 +102,11 @@ fn should_not_be_able_to_unbond_reward() {
     let exec_request_2 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_EE_803_REGRESSION,
-        (COMMAND_BOND, rewards_purse, amount_to_steal),
+        runtime_args! {
+            ARG_ENTRY_POINT_NAME => COMMAND_BOND,
+            ARG_PURSE => rewards_purse,
+            ARG_AMOUNT => amount_to_steal
+        },
     )
     .build();
 
@@ -112,7 +124,7 @@ fn should_not_be_able_to_unbond_reward() {
     let exec_request_3 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_EE_803_REGRESSION,
-        (COMMAND_UNBOND,),
+        runtime_args! { ARG_ENTRY_POINT_NAME => COMMAND_UNBOND },
     )
     .build();
 

@@ -347,6 +347,7 @@ mod tests {
         let account_hash = AccountHash::try_from(&bytes[..]).expect("should create account hash");
         assert_eq!(&bytes, &account_hash.as_bytes());
     }
+
     #[test]
     fn account_hash_from_slice_too_small() {
         let _account_hash =

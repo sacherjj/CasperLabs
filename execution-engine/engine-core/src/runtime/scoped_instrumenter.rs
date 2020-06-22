@@ -92,16 +92,12 @@ impl Drop for ScopedInstrumenter {
             FunctionIndex::ReadFuncIndex => "host_function_read_value",
             FunctionIndex::ReadLocalFuncIndex => "host_function_read_value_local",
             FunctionIndex::AddFuncIndex => "host_function_add",
-            FunctionIndex::AddLocalFuncIndex => "host_function_add_local",
             FunctionIndex::NewFuncIndex => "host_function_new_uref",
             FunctionIndex::RetFuncIndex => "host_function_ret",
             FunctionIndex::CallContractFuncIndex => "host_function_call_contract",
-            FunctionIndex::GetArgFuncIndex => "host_function_get_arg",
             FunctionIndex::GetKeyFuncIndex => "host_function_get_key",
             FunctionIndex::HasKeyFuncIndex => "host_function_has_key",
             FunctionIndex::PutKeyFuncIndex => "host_function_put_key",
-            FunctionIndex::StoreFnIndex => "host_function_store_function",
-            FunctionIndex::StoreFnAtHashIndex => "host_function_store_function_at_hash",
             FunctionIndex::IsValidURefFnIndex => "host_function_is_valid_uref",
             FunctionIndex::RevertFuncIndex => "host_function_revert",
             FunctionIndex::AddAssociatedKeyFuncIndex => "host_function_add_associated_key",
@@ -122,13 +118,27 @@ impl Drop for ScopedInstrumenter {
             }
             FunctionIndex::GetBalanceIndex => "host_function_get_balance",
             FunctionIndex::GetPhaseIndex => "host_function_get_phase",
-            FunctionIndex::UpgradeContractAtURefIndex => "host_function_upgrade_contract_at_uref",
             FunctionIndex::GetSystemContractIndex => "host_function_get_system_contract",
             FunctionIndex::GetMainPurseIndex => "host_function_get_main_purse",
-            FunctionIndex::GetArgSizeFuncIndex => "host_function_get_arg_size",
             FunctionIndex::ReadHostBufferIndex => "host_function_read_host_buffer",
+            FunctionIndex::CreateContractPackageAtHash => {
+                "host_function_create_contract_package_at_hash"
+            }
+            FunctionIndex::AddContractVersion => "host_function_add_contract_version",
+            FunctionIndex::DisableContractVersion => "host_remove_contract_version",
+            FunctionIndex::CallVersionedContract => "host_call_versioned_contract",
+            FunctionIndex::CreateContractUserGroup => "create_contract_user_group",
             #[cfg(feature = "test-support")]
             FunctionIndex::PrintIndex => "host_function_print",
+            FunctionIndex::GetRuntimeArgsizeIndex => "host_get_named_arg_size",
+            FunctionIndex::GetRuntimeArgIndex => "host_get_named_arg",
+            FunctionIndex::RemoveContractUserGroupIndex => "host_remove_contract_user_group",
+            FunctionIndex::ExtendContractUserGroupURefsIndex => {
+                "host_provision_contract_user_group_uref"
+            }
+            FunctionIndex::RemoveContractUserGroupURefsIndex => {
+                "host_remove_contract_user_group_urefs"
+            }
         };
 
         let mut properties = mem::take(&mut self.properties);

@@ -3,13 +3,11 @@
 
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
-
-use contract::contract_api::{runtime, storage};
+use contract::contract_api::runtime;
 use types::account::AccountHash;
 
-const GET_CALLER_EXT: &str = "get_caller_ext";
-const GET_CALLER_KEY: &str = "get_caller";
+const _GET_CALLER_EXT: &str = "get_caller_ext";
+const _GET_CALLER_KEY: &str = "get_caller";
 
 fn test_get_caller() {
     // Assumes that will be called using test framework genesis account with
@@ -33,6 +31,8 @@ pub extern "C" fn get_caller_ext() {
 pub extern "C" fn call() {
     // works in session code
     test_get_caller();
-    let pointer = storage::store_function_at_hash(GET_CALLER_EXT, BTreeMap::new());
-    runtime::put_key(GET_CALLER_KEY, pointer.into());
+
+    // TODO: new style version store
+    // let pointer = storage::store_function_at_hash(GET_CALLER_EXT, BTreeMap::new());
+    // runtime::put_key(GET_CALLER_KEY, pointer.into());
 }

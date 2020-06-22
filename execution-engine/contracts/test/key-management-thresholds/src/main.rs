@@ -17,11 +17,10 @@ use types::{
     ApiError,
 };
 
+const ARG_STAGE: &str = "stage";
 #[no_mangle]
 pub extern "C" fn call() {
-    let stage: String = runtime::get_arg(0)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let stage: String = runtime::get_named_arg(ARG_STAGE);
 
     if stage == "init" {
         // executed with weight >= 1

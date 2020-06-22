@@ -782,10 +782,11 @@ object BlockDownloadManagerSpec {
   class MockRelaying extends BlockRelaying[Task] {
     @volatile var relayed = Vector.empty[ByteString]
 
-    override def relay(hashes: List[ByteString]): Task[Task[Unit]] = Task.delay {
-      synchronized { relayed = relayed ++ hashes }
-      Task.unit
-    }
+    override def relay(hashes: List[ByteString], sources: Set[Node]): Task[Task[Unit]] =
+      Task.delay {
+        synchronized { relayed = relayed ++ hashes }
+        Task.unit
+      }
   }
   object MockRelaying {
     def default: MockRelaying = apply()
