@@ -16,7 +16,7 @@ import simulacrum.typeclass
 trait DeployRelaying[F[_]] extends Relaying[F]
 
 class NoOpsDeployRelaying[F[_]: Applicative] extends DeployRelaying[F] {
-  override def relay(hashes: List[ByteString]) = ().pure[F].pure[F]
+  override def relay(hashes: List[ByteString], sources: Set[Node]) = ().pure[F].pure[F]
 }
 
 object DeployRelayingImpl {

@@ -2,6 +2,7 @@ package io.casperlabs.casper.equivocations
 
 import cats.Monad
 import cats.implicits._
+import cats.syntax.show
 import cats.mtl.FunctorRaise
 import io.casperlabs.casper.Estimator.{BlockHash, Validator}
 import io.casperlabs.casper.consensus.Block
@@ -13,7 +14,7 @@ import io.casperlabs.models.Message
 import io.casperlabs.shared.{Cell, Log, LogSource, StreamT}
 import io.casperlabs.storage.dag.DagRepresentation
 import io.casperlabs.shared.Sorting.jRankOrdering
-
+import io.casperlabs.shared.ByteStringPrettyPrinter.byteStringShow
 import scala.collection.immutable.{Map, Set}
 
 object EquivocationDetector {
@@ -94,13 +95,17 @@ object EquivocationDetector {
                         // And we've also validated that message creator is not merging his swimlane,
                         // a message creates an equivocation iff latest message (as seen by local node)
                         // is different from what new message cites as the previous one.
-                        if (message.validatorPrevMessageHash != head.messageHash) {
+                        if (message.messageHash == head.messageHash) {
+                          // Maybe this is a retry of a message that failed partially.
                           Log[F]
                             .warn(
-                              s"Found equivocation: justifications of ${PrettyPrinter
-                                .buildString(message.messageHash) -> "message"} don't cite the latest message by ${PrettyPrinter
-                                .buildString(message.validatorId) -> "validator"}: ${PrettyPrinter
-                                .buildString(head.messageHash)    -> "latestMessage"}"
+                              s"The latest message from ${message.validatorId.show -> "validator"} is the current ${message.messageHash.show -> "message"} itself."
+                            )
+                            .as(false)
+                        } else if (message.validatorPrevMessageHash != head.messageHash) {
+                          Log[F]
+                            .warn(
+                              s"Found equivocation: justifications of ${message.messageHash.show -> "message"} don't cite the latest message by ${message.validatorId.show -> "validator"}: ${head.messageHash.show -> "latestMessage"}"
                             )
                             .as(true)
                         } else false.pure[F]

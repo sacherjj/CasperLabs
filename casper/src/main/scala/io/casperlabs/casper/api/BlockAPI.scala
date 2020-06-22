@@ -267,7 +267,7 @@ object BlockAPI {
             .compile
             .toVector
       }
-    } handleErrorWith {
+    } recoverWith {
       case ex: StorageError =>
         MonadThrowable[F].raiseError(InvalidArgument(StorageError.errorMessage(ex)))
       case ex: IllegalArgumentException =>

@@ -17,6 +17,7 @@ import io.casperlabs.casper.mocks.NoOpValidation
 import io.casperlabs.casper.util.{ByteStringPrettifier, CasperLabsProtocol}
 import io.casperlabs.casper.util.execengine.ExecutionEngineServiceStub
 import io.casperlabs.casper.validation.{raiseValidateErrorThroughApplicativeError, Validation}
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.crypto.Keys.{PublicKey, PublicKeyBS}
@@ -198,7 +199,8 @@ trait HighwayFixture
     )
 
     implicit lazy val blockRelaying = new BlockRelaying[Task] {
-      override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] = ().pure[Task].pure[Task]
+      override def relay(hashes: List[BlockHash], sources: Set[Node]): Task[WaitHandle[Task]] =
+        ().pure[Task].pure[Task]
     }
 
     def addGenesisEra(): Task[Era] = {

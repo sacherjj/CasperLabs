@@ -27,7 +27,7 @@ import org.http4s.websocket.WebSocketFrame
 import org.http4s.{Header, Headers, HttpRoutes, MalformedMessageBodyFailure, Response, StaticFile}
 import sangria.execution._
 import sangria.parser.QueryParser
-
+import scala.util.control.NonFatal
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
@@ -88,10 +88,12 @@ object GraphQL {
                 }
         } yield res
 
-        res.handleErrorWith {
+        res.recoverWith {
           case e: ErrorWithResolver           => BadRequest(e.resolveError)
           case e: MalformedMessageBodyFailure => BadRequest(toJson(e))
-          case e: Throwable                   => InternalServerError(toJson(e))
+          case NonFatal(ex) =>
+            Log[F].error(s"Error serving GraphQL: $ex") *>
+              InternalServerError(toJson(ex))
         }
     }
   }
@@ -264,8 +266,10 @@ object GraphQL {
             executor
               .execute[Json](queryAst, (), (), none[String], Json.fromJsonObject(JsonObject.empty))
               .onComplete {
-                case Success(json) => callback(json.asRight[Throwable])
-                case Failure(e)    => callback(e.asLeft[Json])
+                case Success(json) =>
+                  callback(json.asRight[Throwable])
+                case Failure(e) =>
+                  callback(e.asLeft[Json])
               }(ec)
         )
       }
