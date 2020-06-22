@@ -9,7 +9,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, U512};
+use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
@@ -25,14 +25,19 @@ lazy_static! {
 fn setup() -> InMemoryWasmTestBuilder {
     // Creates victim account
     let exec_request_1 = {
-        let args = (VICTIM_ADDR, *VICTIM_INITIAL_FUNDS);
+        let args = runtime_args! {
+            "target" => VICTIM_ADDR,
+            "amount" => *VICTIM_INITIAL_FUNDS,
+        };
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_TRANSFER_TO_ACCOUNT, args)
             .build()
     };
 
     // Deploy contract
     let exec_request_2 = {
-        let args = ("install".to_string(),);
+        let args = runtime_args! {
+            "method" => "install".to_string(),
+        };
         ExecuteRequestBuilder::standard(DEFAULT_ACCOUNT_ADDR, CONTRACT_EE_599_REGRESSION, args)
             .build()
     };
@@ -76,11 +81,11 @@ fn should_not_be_able_to_transfer_funds_with_transfer_purse_to_purse() {
     let donation_purse_copy = donation_purse_copy_key.into_uref().expect("should be uref");
 
     let exec_request_3 = {
-        let args = (
-            "call".to_string(),
-            transfer_funds,
-            "transfer_from_purse_to_purse",
-        );
+        let args = runtime_args! {
+            "method" => "call",
+            "contract_key" => transfer_funds.into_hash().expect("should be hash"),
+            "sub_contract_method_fwd" => "transfer_from_purse_to_purse_ext",
+        };
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
@@ -147,11 +152,11 @@ fn should_not_be_able_to_transfer_funds_with_transfer_from_purse_to_account() {
     let donation_purse_copy = donation_purse_copy_key.into_uref().expect("should be uref");
 
     let exec_request_3 = {
-        let args = (
-            "call".to_string(),
-            transfer_funds,
-            "transfer_from_purse_to_account",
-        );
+        let args = runtime_args! {
+            "method" => "call".to_string(),
+            "contract_key" => transfer_funds.into_hash().expect("should get key"),
+            "sub_contract_method_fwd" => "transfer_from_purse_to_account_ext",
+        };
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
@@ -229,11 +234,11 @@ fn should_not_be_able_to_transfer_funds_with_transfer_to_account() {
     let donation_purse_copy = donation_purse_copy_key.into_uref().expect("should be uref");
 
     let exec_request_3 = {
-        let args = (
-            "call".to_string(),
-            transfer_funds,
-            "transfer_to_account_u512",
-        );
+        let args = runtime_args! {
+            "method" => "call",
+            "contract_key" => transfer_funds.into_hash().expect("should be hash"),
+            "sub_contract_method_fwd" => "transfer_to_account_ext",
+        };
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 
@@ -303,11 +308,11 @@ fn should_not_be_able_to_get_main_purse_in_invalid_context() {
         .unwrap_or_else(|| panic!("should have {}", TRANSFER_FUNDS_KEY));
 
     let exec_request_3 = {
-        let args = (
-            "call".to_string(),
-            transfer_funds,
-            "transfer_to_account_u512",
-        );
+        let args = runtime_args! {
+            "method" => "call".to_string(),
+            "contract_key" => transfer_funds.into_hash().expect("should be hash"),
+            "sub_contract_method_fwd" => "transfer_to_account_ext",
+        };
         ExecuteRequestBuilder::standard(VICTIM_ADDR, CONTRACT_EE_599_REGRESSION, args).build()
     };
 

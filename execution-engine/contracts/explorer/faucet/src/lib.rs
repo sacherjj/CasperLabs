@@ -6,6 +6,9 @@ use contract::{
 };
 use types::{account::PublicKey, ApiError, U512};
 
+const ARG_TARGET: &str = "target";
+const ARG_AMOUNT: &str = "amount";
+
 #[repr(u32)]
 enum CustomError {
     AlreadyFunded = 1,
@@ -16,13 +19,9 @@ enum CustomError {
 /// 1 - requested transfer to already funded public key.
 #[no_mangle]
 pub fn delegate() {
-    let public_key: PublicKey = runtime::get_arg(0)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let public_key: PublicKey = runtime::get_named_arg(ARG_TARGET);
 
-    let amount: U512 = runtime::get_arg(1)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
 
     // Maybe we will decide to allow multiple funds up until some maximum value.
     let already_funded = storage::read_local::<PublicKey, U512>(&public_key)

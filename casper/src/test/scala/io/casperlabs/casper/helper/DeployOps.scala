@@ -33,11 +33,17 @@ object DeployOps extends ArbitraryConsensus {
     }
     def withSessionCode(bytes: ByteString): Deploy =
       rehash(
-        deploy.withBody(deploy.getBody.withSession(Deploy.Code().withWasm(bytes)))
+        deploy.withBody(
+          deploy.getBody
+            .withSession(Deploy.Code().withWasmContract(Deploy.Code.WasmContract(bytes)))
+        )
       )
     def withPaymentCode(bytes: ByteString): Deploy =
       rehash(
-        deploy.withBody(deploy.getBody.withPayment(Deploy.Code().withWasm(bytes)))
+        deploy.withBody(
+          deploy.getBody
+            .withPayment(Deploy.Code().withWasmContract(Deploy.Code.WasmContract(bytes)))
+        )
       )
     def withTimestamp(timestamp: Long): Deploy =
       rehash(

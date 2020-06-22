@@ -24,7 +24,7 @@ use engine_shared::logging::{self, Settings};
 use engine_test_support::internal::{
     DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder,
 };
-use types::{ApiError, U512};
+use types::{runtime_args, ApiError, RuntimeArgs};
 
 use casperlabs_engine_tests::profiling;
 
@@ -56,6 +56,9 @@ const HOST_FUNCTION_METRICS_CONTRACT: &str = "host_function_metrics.wasm";
 const PAYMENT_AMOUNT: u64 = profiling::ACCOUNT_1_INITIAL_AMOUNT - 1_000_000_000;
 const EXPECTED_REVERT_VALUE: u16 = 10;
 const CSV_HEADER: &str = "args,n_exec,total_elapsed_time";
+const ARG_AMOUNT: &str = "amount";
+const ARG_SEED: &str = "seed";
+const ARG_OTHERS: &str = "others";
 
 fn execute_as_subprocess_arg() -> Arg<'static, 'static> {
     Arg::with_name(EXECUTE_AS_SUBPROCESS_ARG)
@@ -158,12 +161,12 @@ fn run_test(root_hash: Vec<u8>, repetitions: usize, data_dir: &Path) {
             .with_deploy_hash(rng.gen())
             .with_session_code(
                 HOST_FUNCTION_METRICS_CONTRACT,
-                (
-                    seed,
-                    (random_bytes, account_1_public_key, account_2_public_key),
-                ),
+                runtime_args! {
+                    ARG_SEED => seed,
+                    ARG_OTHERS => (random_bytes, account_1_public_key, account_2_public_key),
+                },
             )
-            .with_empty_payment_bytes((U512::from(PAYMENT_AMOUNT),))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => PAYMENT_AMOUNT })
             .with_authorization_keys(&[account_1_public_key])
             .build();
         let exec_request = ExecuteRequestBuilder::new()

@@ -17,9 +17,10 @@ export enum ContractType {
 
 // The following two methods definition guarantee that session is a string iff its contract type is ContractType.Name
 // See https://stackoverflow.com/questions/39700093/variable-return-types-based-on-string-literal-type-argument for detail
+// for ContractType.WASM, the type of session is ByteArray, and entryPoint is not required
 export function makeDeploy(
   args: Deploy.Arg[],
-  type: ContractType.Hash | ContractType.WASM,
+  type: ContractType.WASM,
   session: ByteArray,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
@@ -27,6 +28,19 @@ export function makeDeploy(
   dependencies?: Uint8Array[]
 ): Deploy;
 
+// for ContractType.Hash, the type of session is ByteArray, and entryPoint is required
+export function makeDeploy(
+  args: Deploy.Arg[],
+  type: ContractType.Hash,
+  session: ByteArray,
+  paymentWasm: ByteArray | null,
+  paymentAmount: bigint | JSBI,
+  accountPublicKey: ByteArray,
+  dependencies: Uint8Array[],
+  entryPoint: string
+): Deploy;
+
+// for ContractType.Name, the type of sessionName is string, and entryPoint is required
 export function makeDeploy(
   args: Deploy.Arg[],
   type: ContractType.Name,
@@ -34,7 +48,8 @@ export function makeDeploy(
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
   accountPublicKey: ByteArray,
-  dependencies?: Uint8Array[]
+  dependencies: Uint8Array[],
+  entryPoint: string
 ): Deploy;
 
 // If EE receives a deploy with no payment bytes,
@@ -46,22 +61,34 @@ export function makeDeploy(
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
   accountPublicKey: ByteArray,
-  dependencies: Uint8Array[] = []
+  dependencies?: Uint8Array[],
+  entryPoint?: string,
 ): Deploy {
   const sessionCode = new Deploy.Code();
   if (type === ContractType.WASM) {
-    sessionCode.setWasm(session);
+    const wasmContract = new Deploy.Code.WasmContract();
+    wasmContract.setWasm(session);
+    sessionCode.setWasmContract(wasmContract);
   } else if (type === ContractType.Hash) {
-    sessionCode.setHash(session);
-  }else{
-    sessionCode.setName(session as string);
+    const storedContract = new Deploy.Code.StoredContract();
+    storedContract.setContractHash(session);
+    storedContract.setEntryPoint(entryPoint || "");
+    sessionCode.setStoredContract(storedContract);
+  } else {
+    const storedContract = new Deploy.Code.StoredContract();
+    storedContract.setName(session as string);
+    storedContract.setEntryPoint(entryPoint || "")
+    sessionCode.setStoredContract(storedContract);
   }
   sessionCode.setArgsList(args);
+
   if (paymentWasm === null) {
     paymentWasm = Buffer.from('');
   }
+  const paymentContract = new Deploy.Code.WasmContract();
+  paymentContract.setWasm(paymentWasm);
   const payment = new Deploy.Code();
-  payment.setWasm(paymentWasm);
+  payment.setWasmContract(paymentContract);
   payment.setArgsList(Args(['amount', BigIntValue(paymentAmount)]));
 
   const body = new Deploy.Body();
@@ -74,14 +101,14 @@ export function makeDeploy(
   header.setBodyHash(protoHash(body));
   // we will remove gasPrice eventually
   header.setGasPrice(1);
-  header.setDependenciesList(dependencies);
+  header.setDependenciesList(dependencies ?? []);
 
   const deploy = new Deploy();
   deploy.setBody(body);
   deploy.setHeader(header);
   deploy.setDeployHash(protoHash(header));
   return deploy;
-};
+}
 
 export const signDeploy = (
   deploy: Deploy,

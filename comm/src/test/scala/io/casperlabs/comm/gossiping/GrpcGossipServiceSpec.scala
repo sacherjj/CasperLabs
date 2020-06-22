@@ -1121,6 +1121,8 @@ class GrpcGossipServiceSpec
     }
   }
 
+  // TNET-46: Re-enable after the contract header feature branch is merged.
+  @Ignore
   object NewDeploysSpec extends WordSpecLike {
 
     implicit val consensusConfig =

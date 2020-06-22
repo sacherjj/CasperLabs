@@ -1,13 +1,14 @@
 use rand::Rng;
 
-use contract::args_parser::ArgsParser;
 use engine_core::engine_state::execute_request::ExecuteRequest;
-use types::{ProtocolVersion, URef, U512};
+use types::{runtime_args, ProtocolVersion, RuntimeArgs, URef, U512};
 
 use crate::{
     internal::{DeployItemBuilder, ExecuteRequestBuilder, DEFAULT_PAYMENT},
     Code, PublicKey,
 };
+
+const ARG_AMOUNT: &str = "amount";
 
 /// Transfer Information for validating a transfer including gas usage from source
 pub struct SessionTransferInfo {
@@ -57,15 +58,17 @@ impl SessionBuilder {
     /// Constructs a new `SessionBuilder` containing a deploy with the provided session code and
     /// session args, and with default values for the account address, payment code args, gas price,
     /// authorization keys and protocol version.
-    pub fn new(session_code: Code, session_args: impl ArgsParser) -> Self {
-        let di_builder = DeployItemBuilder::new().with_empty_payment_bytes((*DEFAULT_PAYMENT,));
+    pub fn new(session_code: Code, session_args: RuntimeArgs) -> Self {
+        let di_builder = DeployItemBuilder::new()
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT });
         let di_builder = match session_code {
             Code::Path(path) => di_builder.with_session_code(path, session_args),
-            Code::NamedKey(name) => di_builder.with_stored_session_named_key(&name, session_args),
-            Code::URef(uref) => {
-                di_builder.with_stored_session_uref_addr(uref.to_vec(), session_args)
+            Code::NamedKey(name, entry_point) => {
+                di_builder.with_stored_session_named_key(&name, &entry_point, session_args)
             }
-            Code::Hash(hash) => di_builder.with_stored_session_hash(hash.to_vec(), session_args),
+            Code::Hash(hash, entry_point) => {
+                di_builder.with_stored_session_hash(hash, &entry_point, session_args)
+            }
         };
         let expect_failure = false;
         let check_transfer_success = None;
@@ -86,17 +89,24 @@ impl SessionBuilder {
     }
 
     /// Returns `self` with the provided payment code and args set.
-    pub fn with_payment_code(mut self, code: Code, args: impl ArgsParser) -> Self {
+    pub fn with_payment_code(mut self, code: Code, args: RuntimeArgs) -> Self {
         self.di_builder = match code {
             Code::Path(path) => self.di_builder.with_payment_code(path, args),
-            Code::NamedKey(name) => self.di_builder.with_stored_payment_named_key(&name, args),
-            Code::URef(uref) => self
-                .di_builder
-                .with_stored_payment_uref_addr(uref.to_vec(), args),
-            Code::Hash(hash) => self
-                .di_builder
-                .with_stored_payment_hash(hash.to_vec(), args),
+            Code::NamedKey(name, entry_point) => {
+                self.di_builder
+                    .with_stored_payment_named_key(&name, &entry_point, args)
+            }
+            Code::Hash(hash, entry_point) => {
+                self.di_builder
+                    .with_stored_payment_hash(hash, &entry_point, args)
+            }
         };
+        self
+    }
+
+    /// Returns `self` with the provided block time set.
+    pub fn with_block_time(mut self, block_time: u64) -> Self {
+        self.er_builder = self.er_builder.with_block_time(block_time);
         self
     }
 

@@ -143,6 +143,7 @@ impl CLTyped for Weight {
         CLType::U8
     }
 }
+
 /// The length in bytes of a [`PublicKey`].
 pub const ED25519_LENGTH: usize = 32;
 
@@ -396,6 +397,7 @@ mod tests {
         let public_key = PublicKey::ed25519_try_from(&bytes[..]).expect("should create public key");
         assert_eq!(&bytes, &public_key.as_bytes());
     }
+
     #[test]
     fn ed25519_public_key_from_slice_too_small() {
         let _public_key =

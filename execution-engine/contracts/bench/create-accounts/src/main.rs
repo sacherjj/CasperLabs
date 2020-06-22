@@ -11,19 +11,13 @@ use contract::{
 };
 use types::{account::PublicKey, ApiError, U512};
 
+const ARG_ACCOUNTS: &str = "accounts";
+const ARG_SEED_AMOUNT: &str = "seed_amount";
+
 #[no_mangle]
 pub extern "C" fn call() {
-    let accounts: Vec<PublicKey> = {
-        let data: Vec<Vec<u8>> = runtime::get_arg(0)
-            .unwrap_or_revert_with(ApiError::MissingArgument)
-            .unwrap_or_revert_with(ApiError::InvalidArgument);
-        data.into_iter()
-            .map(|bytes| PublicKey::ed25519_try_from(bytes.as_slice()).unwrap_or_revert())
-            .collect()
-    };
-    let seed_amount: U512 = runtime::get_arg(1)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let accounts: Vec<PublicKey> = runtime::get_named_arg(ARG_ACCOUNTS);
+    let seed_amount: U512 = runtime::get_named_arg(ARG_SEED_AMOUNT);
     for public_key in accounts {
         system::transfer_to_account(public_key, seed_amount)
             .unwrap_or_revert_with(ApiError::Transfer);

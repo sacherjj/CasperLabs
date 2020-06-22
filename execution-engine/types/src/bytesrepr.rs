@@ -7,7 +7,11 @@ use alloc::vec;
 use alloc::alloc::{alloc, Layout};
 #[cfg(not(feature = "no-unstable-features"))]
 use alloc::collections::TryReserveError;
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    string::String,
+    vec::Vec,
+};
 use core::mem::{self, MaybeUninit};
 #[cfg(feature = "no-unstable-features")]
 use core::ptr::NonNull;
@@ -592,6 +596,38 @@ impl_to_from_bytes_for_byte_array! {
     64 128 256 512
 }
 
+impl<V: ToBytes> ToBytes for BTreeSet<V> {
+    fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut result = allocate_buffer(self)?;
+
+        let num_keys = self.len() as u32;
+        result.append(&mut num_keys.to_bytes()?);
+
+        for value in self.iter() {
+            result.append(&mut value.to_bytes()?);
+        }
+
+        Ok(result)
+    }
+
+    fn serialized_length(&self) -> usize {
+        U32_SERIALIZED_LENGTH + self.iter().map(|v| v.serialized_length()).sum::<usize>()
+    }
+}
+
+impl<V: FromBytes + Ord> FromBytes for BTreeSet<V> {
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
+        let (num_keys, mut stream) = u32::from_bytes(bytes)?;
+        let mut result = BTreeSet::new();
+        for _ in 0..num_keys {
+            let (v, rem) = V::from_bytes(stream)?;
+            result.insert(v);
+            stream = rem;
+        }
+        Ok((result, stream))
+    }
+}
+
 impl<K, V> ToBytes for BTreeMap<K, V>
 where
     K: ToBytes,
@@ -804,16 +840,17 @@ impl ToBytes for &str {
 /// Returns `true` if a we can serialize and then deserialize a value
 pub fn test_serialization_roundtrip<T>(t: &T)
 where
-    T: ToBytes + FromBytes + PartialEq,
+    T: alloc::fmt::Debug + ToBytes + FromBytes + PartialEq,
 {
     let serialized = ToBytes::to_bytes(t).expect("Unable to serialize data");
     assert_eq!(
         serialized.len(),
         t.serialized_length(),
-        "\nLength of serialized data: {},\nserialized_length() yielded: {},\nserialized data: {:?}",
+        "\nLength of serialized data: {},\nserialized_length() yielded: {},\nserialized data: {:?}, t is {:?}",
         serialized.len(),
         t.serialized_length(),
-        serialized
+        serialized,
+        t
     );
     let deserialized = deserialize::<T>(serialized).expect("Unable to deserialize data");
     assert!(*t == deserialized)

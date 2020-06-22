@@ -216,7 +216,7 @@ mod tests {
             Err(Error::BondTooLarge),
             stakes.validate_bonding(
                 &PublicKey::ed25519_from(KEY1),
-                U512::from(super::MAX_REL_INCREASE * total / 1_000_000 + 1)
+                U512::from(super::MAX_REL_INCREASE * total / 1_000_000 + 1),
             ),
             "Successfully bonded more than the maximum amount."
         );
@@ -224,7 +224,7 @@ mod tests {
             Ok(()),
             stakes.validate_bonding(
                 &PublicKey::ed25519_from(KEY1),
-                U512::from(super::MAX_REL_INCREASE * total / 1_000_000)
+                U512::from(super::MAX_REL_INCREASE * total / 1_000_000),
             ),
             "Failed to bond the maximum amount."
         );
@@ -267,7 +267,7 @@ mod tests {
             Err(Error::UnbondTooLarge),
             stakes.unbond(
                 &PublicKey::ed25519_from(KEY1),
-                Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000 + 1))
+                Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000 + 1)),
             ),
             "Successfully unbonded more than the maximum amount."
         );
@@ -275,7 +275,7 @@ mod tests {
             Ok(U512::from(super::MAX_REL_DECREASE * total / 1_000_000)),
             stakes.unbond(
                 &PublicKey::ed25519_from(KEY1),
-                Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000))
+                Some(U512::from(super::MAX_REL_DECREASE * total / 1_000_000)),
             ),
             "Failed to unbond the maximum amount."
         );

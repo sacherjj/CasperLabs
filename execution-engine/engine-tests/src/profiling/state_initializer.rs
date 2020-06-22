@@ -11,19 +11,23 @@ use engine_core::engine_state::{
 };
 use engine_test_support::{
     internal::{
-        utils, DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, DEFAULT_ACCOUNTS,
-        DEFAULT_GENESIS_CONFIG_HASH, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION, DEFAULT_WASM_COSTS,
-        MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT, STANDARD_PAYMENT_CONTRACT,
+        utils, DeployItemBuilder, ExecuteRequestBuilder, LmdbWasmTestBuilder, ARG_AMOUNT,
+        DEFAULT_ACCOUNTS, DEFAULT_GENESIS_CONFIG_HASH, DEFAULT_PAYMENT, DEFAULT_PROTOCOL_VERSION,
+        DEFAULT_WASM_COSTS, MINT_INSTALL_CONTRACT, POS_INSTALL_CONTRACT,
         STANDARD_PAYMENT_INSTALL_CONTRACT,
     },
     DEFAULT_ACCOUNT_ADDR,
 };
 
 use casperlabs_engine_tests::profiling;
+use types::{runtime_args, RuntimeArgs};
 
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";
 const STATE_INITIALIZER_CONTRACT: &str = "state_initializer.wasm";
+const ARG_ACCOUNT1_PUBLIC_KEY: &str = "account_1_public_key";
+const ARG_ACCOUNT1_AMOUNT: &str = "account_1_amount";
+const ARG_ACCOUNT2_PUBLIC_KEY: &str = "account_2_public_key";
 
 fn data_dir() -> PathBuf {
     let exe_name = profiling::exe_name();
@@ -50,13 +54,13 @@ fn main() {
             .with_deploy_hash([1; 32])
             .with_session_code(
                 STATE_INITIALIZER_CONTRACT,
-                (
-                    account_1_public_key,
-                    account_1_initial_amount,
-                    account_2_public_key,
-                ),
+                runtime_args! {
+                    ARG_ACCOUNT1_PUBLIC_KEY => account_1_public_key,
+                    ARG_ACCOUNT1_AMOUNT => account_1_initial_amount,
+                    ARG_ACCOUNT2_PUBLIC_KEY => account_2_public_key,
+                },
             )
-            .with_payment_code(STANDARD_PAYMENT_CONTRACT, (*DEFAULT_PAYMENT,))
+            .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => *DEFAULT_PAYMENT, })
             .with_authorization_keys(&[genesis_public_key])
             .build();
 

@@ -11,13 +11,10 @@ use contract::{
 };
 use types::{ApiError, URef, U512};
 
-#[repr(u8)]
-enum Args {
-    DestinationPurseOne = 0,
-    TransferAmountOne = 1,
-    DestinationPurseTwo = 2,
-    TransferAmountTwo = 3,
-}
+const DESTINATION_PURSE_ONE: &str = "destination_purse_one";
+const DESTINATION_PURSE_TWO: &str = "destination_purse_two";
+const TRANSFER_AMOUNT_ONE: &str = "transfer_amount_one";
+const TRANSFER_AMOUNT_TWO: &str = "transfer_amount_two";
 
 #[repr(u16)]
 enum CustomError {
@@ -44,25 +41,16 @@ fn get_or_create_purse(purse_name: &str) -> URef {
 pub extern "C" fn call() {
     let main_purse: URef = account::get_main_purse();
 
-    let destination_purse_one_name: String = runtime::get_arg(Args::DestinationPurseOne as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let destination_purse_one_name: String = runtime::get_named_arg(DESTINATION_PURSE_ONE);
 
     let destination_purse_one = get_or_create_purse(&destination_purse_one_name);
 
-    let destination_purse_two_name: String = runtime::get_arg(Args::DestinationPurseTwo as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-
-    let transfer_amount_one: U512 = runtime::get_arg(Args::TransferAmountOne as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let destination_purse_two_name: String = runtime::get_named_arg(DESTINATION_PURSE_TWO);
+    let transfer_amount_one: U512 = runtime::get_named_arg(TRANSFER_AMOUNT_ONE);
 
     let destination_purse_two = get_or_create_purse(&destination_purse_two_name);
 
-    let transfer_amount_two: U512 = runtime::get_arg(Args::TransferAmountTwo as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let transfer_amount_two: U512 = runtime::get_named_arg(TRANSFER_AMOUNT_TWO);
 
     system::transfer_from_purse_to_purse(main_purse, destination_purse_one, transfer_amount_one)
         .unwrap_or_revert_with(ApiError::User(CustomError::TransferToPurseOneFailed as u16));

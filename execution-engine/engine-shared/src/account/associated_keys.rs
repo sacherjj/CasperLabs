@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(
             keys.add_key(
                 PublicKey::ed25519_from([100u8; ED25519_LENGTH]),
-                Weight::new(100)
+                Weight::new(100),
             ),
             Err(AddKeyFailure::MaxKeysLimit)
         )

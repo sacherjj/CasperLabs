@@ -663,7 +663,7 @@ where
         &txn,
         store,
         root,
-        present
+        present,
     )?);
 
     txn.commit()?;

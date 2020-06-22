@@ -1,7 +1,7 @@
-use std::{collections::BTreeMap, convert::TryFrom};
+use std::convert::TryFrom;
 
 use engine_shared::stored_value::StoredValue;
-use types::{account::PublicKey, Key, URef};
+use types::{account::PublicKey, contracts::NamedKeys, URef};
 
 use crate::{Error, Result};
 
@@ -23,7 +23,7 @@ impl Account {
     }
 
     /// Returns the named_keys.
-    pub fn named_keys(&self) -> &BTreeMap<String, Key> {
+    pub fn named_keys(&self) -> &NamedKeys {
         self.inner.named_keys()
     }
 

@@ -17,7 +17,6 @@ def test_clarity_running(one_node_network_with_clarity):
     driver.get(clarity_host)
     assert driver.title == "CasperLabs Clarity - Home"
 
-
 def test_create_account_key(one_node_network_with_clarity):
     """
     Feature file: clarity.feature
@@ -55,7 +54,6 @@ def test_create_account_key(one_node_network_with_clarity):
 
     remove_account(driver, account_name)
     remove_account(driver, another_account_name)
-
 
 def remove_account(driver, account_name):
     """
