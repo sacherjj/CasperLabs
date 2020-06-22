@@ -40,15 +40,15 @@ def test_create_account_key(one_node_network_with_clarity):
 
     # There should be 2 deploys sent by faucet account, one for init stored version contract
     # The other is calling stored version faucet to do the real faucet
-    faucet_public_key = one_node_network_with_clarity.clarity_node.faucet_account_public_key
-    trs = find_deploys(driver, faucet_public_key)
+    faucet_public_key_hash = one_node_network_with_clarity.clarity_node.faucet_account_public_key_hash
+    trs = find_deploys(driver, faucet_public_key_hash)
     assert (
             len(trs) == 2
     )
 
     # There should be 3 deploys, 2 for previous faucet.
     request_token(driver, another_account_name)
-    trs = find_deploys(driver, faucet_public_key)
+    trs = find_deploys(driver, faucet_public_key_hash)
     assert (
             len(trs) == 3
     )
