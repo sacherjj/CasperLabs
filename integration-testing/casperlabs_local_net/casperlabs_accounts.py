@@ -65,14 +65,6 @@ class Account:
         return base64.b64decode(self.public_key).hex()
 
     @property
-    def public_key_hash_hex(self) -> str:
-        alg = b"ed25519"
-        bytes = bytearray(alg)
-        bytes.extend([0])
-        bytes.extend(base64.b64decode(self.public_key))
-        return blake2b_hash(bytes).hex()
-
-    @property
     def public_key_int_list(self) -> List[int]:
         pkh = self.public_key_hex
         return [int(pkh[i : i + 2], 16) for i in range(0, len(pkh), 2)]
