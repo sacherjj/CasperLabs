@@ -6,7 +6,7 @@ extern crate alloc;
 
 use alloc::{
     boxed::Box,
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     string::{String, ToString},
     vec::Vec,
 };
@@ -18,7 +18,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
     CLType, ContractPackageHash, Key, Parameter, URef,
 };
 
@@ -151,7 +151,7 @@ fn create_entry_points_1() -> EntryPoints {
 }
 
 fn install_version_1(package_hash: ContractPackageHash) {
-    let contract_named_keys = BTreeMap::new();
+    let contract_named_keys = NamedKeys::new();
 
     let entry_points = create_entry_points_1();
     storage::add_contract_version(package_hash, entry_points, contract_named_keys);

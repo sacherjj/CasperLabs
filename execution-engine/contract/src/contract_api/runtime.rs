@@ -3,14 +3,14 @@
 // Can be removed once https://github.com/rust-lang/rustfmt/issues/3362 is resolved.
 #[rustfmt::skip]
 use alloc::vec;
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
     account::PublicKey,
     api_error,
     bytesrepr::{self, FromBytes},
-    contracts::ContractVersion,
+    contracts::{ContractVersion, NamedKeys},
     ApiError, BlockTime, CLTyped, CLValue, ContractHash, ContractPackageHash, Key, Phase,
     RuntimeArgs, URef, BLOCKTIME_SERIALIZED_LENGTH, PHASE_SERIALIZED_LENGTH,
 };
@@ -280,7 +280,7 @@ pub fn remove_key(name: &str) {
 ///
 /// The current context is either the caller's account or a stored contract depending on whether the
 /// currently-executing module is a direct call or a sub-call respectively.
-pub fn list_named_keys() -> BTreeMap<String, Key> {
+pub fn list_named_keys() -> NamedKeys {
     let (total_keys, result_size) = {
         let mut total_keys = MaybeUninit::uninit();
         let mut result_size = 0;
@@ -292,7 +292,7 @@ pub fn list_named_keys() -> BTreeMap<String, Key> {
         (total_keys, result_size)
     };
     if total_keys == 0 {
-        return BTreeMap::new();
+        return NamedKeys::new();
     }
     let bytes = read_host_buffer(result_size).unwrap_or_revert();
     bytesrepr::deserialize(bytes).unwrap_or_revert()

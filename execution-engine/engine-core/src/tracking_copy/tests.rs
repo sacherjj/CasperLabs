@@ -1,4 +1,4 @@
-use std::{cell::Cell, collections::BTreeMap, iter, rc::Rc};
+use std::{cell::Cell, iter, rc::Rc};
 
 use assert_matches::assert_matches;
 use proptest::prelude::*;
@@ -12,6 +12,7 @@ use engine_shared::{
 use engine_storage::global_state::{in_memory::InMemoryGlobalState, StateProvider, StateReader};
 use types::{
     account::{PublicKey, Weight, ED25519_LENGTH},
+    contracts::NamedKeys,
     gens::*,
     AccessRights, CLValue, Contract, EntryPoints, Key, ProtocolVersion, URef,
 };
@@ -180,7 +181,7 @@ fn tracking_copy_add_named_key() {
     let associated_keys = AssociatedKeys::new(zero_public_key, Weight::new(1));
     let account = Account::new(
         zero_public_key,
-        BTreeMap::new(),
+        NamedKeys::new(),
         URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
@@ -195,7 +196,7 @@ fn tracking_copy_add_named_key() {
     let named_key = StoredValue::CLValue(CLValue::from_t((name1.clone(), u1)).unwrap());
     let name2 = "test2".to_string();
     let other_named_key = StoredValue::CLValue(CLValue::from_t((name2.clone(), u2)).unwrap());
-    let mut map: BTreeMap<String, Key> = BTreeMap::new();
+    let mut map = NamedKeys::new();
     map.insert(name1, u1);
 
     // adding the wrong type should fail
@@ -313,7 +314,7 @@ proptest! {
         hash in u8_slice_32(), // hash for contract key
     ) {
         let correlation_id = CorrelationId::new();
-        let mut named_keys = BTreeMap::new();
+        let mut named_keys = NamedKeys::new();
         named_keys.insert(name.clone(), k);
         let contract =
             StoredValue::Contract(Contract::new(
@@ -398,7 +399,7 @@ proptest! {
     ) {
         let correlation_id = CorrelationId::new();
         // create contract which knows about value
-        let mut contract_named_keys = BTreeMap::new();
+        let mut contract_named_keys = NamedKeys::new();
         contract_named_keys.insert(state_name.clone(), k);
         let contract =
             StoredValue::Contract(Contract::new(
@@ -411,7 +412,7 @@ proptest! {
         let contract_key = Key::Hash(hash);
 
         // create account which knows about contract
-        let mut account_named_keys = BTreeMap::new();
+        let mut account_named_keys = NamedKeys::new();
         account_named_keys.insert(contract_name.clone(), contract_key);
         let purse = URef::new([0u8; 32], AccessRights::READ_ADD_WRITE);
         let associated_keys = AssociatedKeys::new(pk, Weight::new(1));
@@ -500,7 +501,7 @@ fn query_for_circular_references_should_fail() {
     // itself in its named keys.
     let contract_key = Key::Hash([1; 32]);
     let contract_name = "contract".to_string();
-    let mut named_keys = BTreeMap::new();
+    let mut named_keys = NamedKeys::new();
     named_keys.insert(key_name.clone(), cl_value_key);
     named_keys.insert(contract_name.clone(), contract_key);
     let contract = StoredValue::Contract(Contract::new(

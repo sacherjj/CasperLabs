@@ -1,6 +1,5 @@
 use std::{
     any,
-    collections::BTreeMap,
     convert::TryFrom,
     default::Default,
     fmt::{self, Display, Formatter},
@@ -11,7 +10,8 @@ use num::traits::{AsPrimitive, WrappingAdd};
 
 use types::{
     bytesrepr::{self, FromBytes, ToBytes},
-    CLType, CLTyped, CLValue, CLValueError, Key, U128, U256, U512,
+    contracts::NamedKeys,
+    CLType, CLTyped, CLValue, CLValueError, U128, U256, U512,
 };
 
 use crate::{stored_value::StoredValue, TypeMismatch};
@@ -58,7 +58,7 @@ pub enum Transform {
     AddUInt128(U128),
     AddUInt256(U256),
     AddUInt512(U512),
-    AddKeys(BTreeMap<String, Key>),
+    AddKeys(NamedKeys),
     Failure(Error),
 }
 
@@ -89,7 +89,7 @@ from_try_from_impl!(u64, AddUInt64);
 from_try_from_impl!(U128, AddUInt128);
 from_try_from_impl!(U256, AddUInt256);
 from_try_from_impl!(U512, AddUInt512);
-from_try_from_impl!(BTreeMap<String, Key>, AddKeys);
+from_try_from_impl!(NamedKeys, AddKeys);
 from_try_from_impl!(Error, Failure);
 
 /// Attempts a wrapping addition of `to_add` to `stored_value`, assuming `stored_value` is
@@ -309,10 +309,11 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use types::{account::PublicKey, AccessRights, ContractWasm, URef, U128, U256, U512};
+    use types::{account::PublicKey, AccessRights, ContractWasm, Key, URef, U128, U256, U512};
 
     use super::*;
     use crate::account::{Account, ActionThresholds, AssociatedKeys};
+    use std::collections::BTreeMap;
 
     const ZERO_ARRAY: [u8; 32] = [0; 32];
     const ZERO_PUBLIC_KEY: PublicKey = PublicKey::ed25519_from(ZERO_ARRAY);
@@ -444,7 +445,7 @@ mod tests {
         let uref = URef::new(ZERO_ARRAY, AccessRights::READ);
         let account = StoredValue::Account(Account::new(
             ZERO_PUBLIC_KEY,
-            BTreeMap::new(),
+            NamedKeys::new(),
             uref,
             AssociatedKeys::default(),
             ActionThresholds::default(),

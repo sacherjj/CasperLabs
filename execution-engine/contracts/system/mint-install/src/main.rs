@@ -1,14 +1,11 @@
 #![no_std]
 #![no_main]
 
-extern crate alloc;
-
-use alloc::collections::BTreeMap;
 use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::CLValue;
+use types::{contracts::NamedKeys, CLValue};
 
 const HASH_KEY_NAME: &str = "mint_hash";
 const ACCESS_KEY_NAME: &str = "mint_access";
@@ -41,7 +38,7 @@ pub extern "C" fn install() {
     runtime::put_key(HASH_KEY_NAME, contract_package_hash.into());
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
-    let named_keys = BTreeMap::new();
+    let named_keys = NamedKeys::new();
 
     let (contract_key, _contract_version) =
         storage::add_contract_version(contract_package_hash, entry_points, named_keys);

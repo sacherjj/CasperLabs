@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     iter::{self, FromIterator},
     rc::Rc,
 };
@@ -23,6 +23,7 @@ use types::{
     account::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure, Weight,
     },
+    contracts::NamedKeys,
     AccessRights, BlockTime, CLValue, Contract, EntryPointType, EntryPoints, Key, Phase,
     ProtocolVersion, RuntimeArgs, URef, KEY_HASH_LENGTH,
 };
@@ -68,7 +69,7 @@ fn mock_account_with_purse(public_key: PublicKey, purse: [u8; 32]) -> (Key, Acco
     let associated_keys = AssociatedKeys::new(public_key, Weight::new(1));
     let account = Account::new(
         public_key,
-        BTreeMap::new(),
+        NamedKeys::new(),
         URef::new(purse, AccessRights::READ_ADD_WRITE),
         associated_keys,
         Default::default(),
@@ -111,7 +112,7 @@ fn random_hash<G: RngCore>(entropy_source: &mut G) -> Key {
 fn mock_runtime_context<'a>(
     account: &'a Account,
     base_key: Key,
-    named_keys: &'a mut BTreeMap<String, Key>,
+    named_keys: &'a mut NamedKeys,
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     hash_address_generator: AddressGenerator,
     uref_address_generator: AddressGenerator,
@@ -165,7 +166,7 @@ where
     let deploy_hash = [1u8; 32];
     let (base_key, account) = mock_account(PublicKey::ed25519_from([0u8; 32]));
 
-    let mut named_keys = BTreeMap::new();
+    let mut named_keys = NamedKeys::new();
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(
@@ -337,7 +338,7 @@ fn contract_key_addable_valid() {
     )));
     tracking_copy.borrow_mut().write(contract_key, contract);
 
-    let mut named_keys = BTreeMap::new();
+    let mut named_keys = NamedKeys::new();
     let uref = create_uref(&mut uref_address_generator, AccessRights::WRITE);
     let uref_name = "NewURef".to_owned();
     let named_uref_tuple =
@@ -408,7 +409,7 @@ fn contract_key_addable_invalid() {
 
     tracking_copy.borrow_mut().write(contract_key, contract);
 
-    let mut named_keys = BTreeMap::new();
+    let mut named_keys = NamedKeys::new();
 
     let uref = create_uref(&mut uref_address_generator, AccessRights::WRITE);
     let uref_name = "NewURef".to_owned();
@@ -800,7 +801,7 @@ fn validate_valid_purse_of_an_account() {
     let deploy_hash = [1u8; 32];
     let (base_key, account) =
         mock_account_with_purse(PublicKey::ed25519_from([0u8; 32]), mock_purse);
-    let mut named_keys = BTreeMap::new();
+    let mut named_keys = NamedKeys::new();
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let runtime_context = mock_runtime_context(

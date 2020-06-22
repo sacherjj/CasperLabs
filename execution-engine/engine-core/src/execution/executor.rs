@@ -1,8 +1,4 @@
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
-    rc::Rc,
-};
+use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
 use log::warn;
 use parity_wasm::elements::Module;
@@ -89,7 +85,7 @@ impl Executor {
         args: RuntimeArgs,
         base_key: Key,
         account: &Account,
-        mut named_keys: BTreeMap<String, Key>,
+        mut named_keys: NamedKeys,
         authorization_keys: BTreeSet<PublicKey>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
@@ -230,7 +226,7 @@ impl Executor {
         &self,
         parity_module: Module,
         args: RuntimeArgs,
-        named_keys: &mut BTreeMap<String, Key>,
+        named_keys: &mut NamedKeys,
         base_key: Key,
         account: &Account,
         authorization_keys: BTreeSet<PublicKey>,
@@ -378,7 +374,7 @@ impl Executor {
         module: Module,
         entry_point_type: EntryPointType,
         args: RuntimeArgs,
-        named_keys: &'a mut BTreeMap<String, Key>,
+        named_keys: &'a mut NamedKeys,
         base_key: Key,
         account: &'a Account,
         authorization_keys: BTreeSet<PublicKey>,

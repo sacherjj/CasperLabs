@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::ToString};
+use alloc::string::ToString;
 
 use contract::{
     contract_api::{runtime, storage},
@@ -72,13 +72,13 @@ fn store(named_keys: NamedKeys) -> (ContractHash, ContractVersion) {
 }
 
 fn install() -> Result<ContractHash, ApiError> {
-    let (contract_hash, _contract_version) = store(BTreeMap::new());
+    let (contract_hash, _contract_version) = store(NamedKeys::new());
 
-    let mut keys = BTreeMap::new();
+    let mut keys = NamedKeys::new();
     keys.insert(CONTRACT_KEY.to_string(), contract_hash.into());
     let (contract_hash, _contract_version) = store(keys);
 
-    let mut keys_2 = BTreeMap::new();
+    let mut keys_2 = NamedKeys::new();
     keys_2.insert(CONTRACT_KEY.to_string(), contract_hash.into());
     let (contract_hash, _contract_version) = store(keys_2);
 

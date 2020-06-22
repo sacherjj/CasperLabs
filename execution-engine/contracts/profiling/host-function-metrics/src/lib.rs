@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::BTreeMap, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use core::iter::{self, FromIterator};
 
 use rand::{distributions::Alphanumeric, rngs::SmallRng, Rng, SeedableRng};
@@ -13,6 +13,7 @@ use contract::{
 };
 use types::{
     account::{ActionType, PublicKey, Weight},
+    contracts::NamedKeys,
     runtime_args, ApiError, BlockTime, CLType, CLValue, ContractHash, ContractVersion, EntryPoint,
     EntryPointAccess, EntryPointType, EntryPoints, Key, Parameter, Phase, RuntimeArgs, U512,
 };
@@ -64,10 +65,7 @@ fn create_random_names<'a>(rng: &'a mut SmallRng) -> impl Iterator<Item = String
     .take(NAMED_KEY_COUNT)
 }
 
-fn truncate_named_keys(
-    named_keys: BTreeMap<String, Key>,
-    rng: &mut SmallRng,
-) -> BTreeMap<String, Key> {
+fn truncate_named_keys(named_keys: NamedKeys, rng: &mut SmallRng) -> NamedKeys {
     let truncated_len = rng.gen_range(1, named_keys.len() + 1);
     let mut vec = named_keys.into_iter().collect::<Vec<_>>();
     vec.truncate(truncated_len);
@@ -154,13 +152,13 @@ pub extern "C" fn call() {
     };
 
     let (contract_hash, _contract_version) = store_function(entry_point_name, None);
-    let named_keys: BTreeMap<String, Key> =
+    let named_keys: NamedKeys =
         runtime::call_contract(contract_hash, entry_point_name, runtime_args.clone());
 
     let (contract_hash, _contract_version) =
         store_function(entry_point_name, Some(named_keys.clone()));
     // Store large function with 10 named keys, then execute it.
-    runtime::call_contract::<BTreeMap<String, Key>>(contract_hash, entry_point_name, runtime_args);
+    runtime::call_contract::<NamedKeys>(contract_hash, entry_point_name, runtime_args);
 
     // Small function
     let small_function_name = String::from_iter(
@@ -173,7 +171,7 @@ pub extern "C" fn call() {
 
     // Store small function with no named keys, then execute it.
     let (contract_hash, _contract_version) =
-        store_function(entry_point_name, Some(BTreeMap::new()));
+        store_function(entry_point_name, Some(NamedKeys::new()));
     runtime::call_contract::<()>(contract_hash, entry_point_name, runtime_args.clone());
 
     let (contract_hash, _contract_version) = store_function(entry_point_name, Some(named_keys));
@@ -228,7 +226,7 @@ pub extern "C" fn call() {
 
 fn store_function(
     entry_point_name: &str,
-    named_keys: Option<BTreeMap<String, Key>>,
+    named_keys: Option<NamedKeys>,
 ) -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();

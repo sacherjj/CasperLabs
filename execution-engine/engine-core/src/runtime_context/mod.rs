@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     convert::{TryFrom, TryInto},
     fmt::Debug,
     rc::Rc,
@@ -20,9 +20,11 @@ use types::{
         ActionType, AddKeyFailure, PublicKey, RemoveKeyFailure, SetThresholdFailure,
         UpdateKeyFailure, Weight,
     },
-    bytesrepr, AccessRights, BlockTime, CLType, CLValue, Contract, ContractPackage,
-    ContractPackageHash, EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion,
-    RuntimeArgs, URef, KEY_HASH_LENGTH,
+    bytesrepr,
+    contracts::NamedKeys,
+    AccessRights, BlockTime, CLType, CLValue, Contract, ContractPackage, ContractPackageHash,
+    EntryPointAccess, EntryPointType, Key, Phase, ProtocolVersion, RuntimeArgs, URef,
+    KEY_HASH_LENGTH,
 };
 
 use crate::{
@@ -83,7 +85,7 @@ pub fn validate_entry_point_access_with(
 pub struct RuntimeContext<'a, R> {
     tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
     // Enables look up of specific uref based on human-readable name
-    named_keys: &'a mut BTreeMap<String, Key>,
+    named_keys: &'a mut NamedKeys,
     // Used to check uref is known before use (prevents forging urefs)
     access_rights: HashMap<Address, HashSet<AccessRights>>,
     // Original account for read only tasks taken before execution
@@ -115,7 +117,7 @@ where
     pub fn new(
         tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
         entry_point_type: EntryPointType,
-        named_keys: &'a mut BTreeMap<String, Key>,
+        named_keys: &'a mut NamedKeys,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
         args: RuntimeArgs,
         authorization_keys: BTreeSet<PublicKey>,
@@ -162,11 +164,11 @@ where
         self.named_keys.get(name)
     }
 
-    pub fn named_keys(&self) -> &BTreeMap<String, Key> {
+    pub fn named_keys(&self) -> &NamedKeys {
         &self.named_keys
     }
 
-    pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
+    pub fn named_keys_mut(&mut self) -> &mut NamedKeys {
         &mut self.named_keys
     }
 

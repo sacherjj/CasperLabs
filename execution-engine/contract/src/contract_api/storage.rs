@@ -1,17 +1,12 @@
 //! Functions for accessing and mutating local and global state.
 
-use alloc::{
-    collections::{BTreeMap, BTreeSet},
-    string::String,
-    vec,
-    vec::Vec,
-};
+use alloc::{collections::BTreeSet, string::String, vec, vec::Vec};
 use core::{convert::From, mem::MaybeUninit};
 
 use casperlabs_types::{
     api_error,
     bytesrepr::{self, FromBytes, ToBytes},
-    contracts::{ContractVersion, EntryPoints},
+    contracts::{ContractVersion, EntryPoints, NamedKeys},
     AccessRights, ApiError, CLTyped, CLValue, ContractHash, ContractPackageHash, Key, URef,
     UREF_SERIALIZED_LENGTH,
 };
@@ -143,7 +138,7 @@ pub fn new_uref<T: CLTyped + ToBytes>(init: T) -> URef {
 /// if `uref_name` is provided, puts access_uref in current context's named keys under `uref_name`
 pub fn new_contract(
     entry_points: EntryPoints,
-    named_keys: Option<BTreeMap<String, Key>>,
+    named_keys: Option<NamedKeys>,
     hash_name: Option<String>,
     uref_name: Option<String>,
 ) -> (ContractHash, ContractVersion) {
@@ -159,7 +154,7 @@ pub fn new_contract(
 
     let named_keys = match named_keys {
         Some(named_keys) => named_keys,
-        None => BTreeMap::new(),
+        None => NamedKeys::new(),
     };
 
     add_contract_version(contract_package_hash, entry_points, named_keys)
@@ -294,7 +289,7 @@ pub fn remove_contract_user_group(
 pub fn add_contract_version(
     contract_package_hash: ContractPackageHash,
     entry_points: EntryPoints,
-    named_keys: BTreeMap<String, Key>,
+    named_keys: NamedKeys,
 ) -> (ContractHash, ContractVersion) {
     let (contract_package_hash_ptr, contract_package_hash_size, _bytes1) =
         contract_api::to_ptr(contract_package_hash);

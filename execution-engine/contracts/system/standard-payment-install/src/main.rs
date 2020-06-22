@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, collections::BTreeMap, string::ToString, vec};
+use alloc::{boxed::Box, string::ToString, vec};
 
 use contract::{
     contract_api::{runtime, storage},
@@ -11,7 +11,7 @@ use contract::{
 };
 use standard_payment::ARG_AMOUNT;
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Parameter},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys, Parameter},
     CLType, CLValue,
 };
 
@@ -48,7 +48,7 @@ pub extern "C" fn install() {
     runtime::put_key(HASH_KEY_NAME, contract_package_hash.into());
     runtime::put_key(ACCESS_KEY_NAME, access_uref.into());
 
-    let named_keys = BTreeMap::new();
+    let named_keys = NamedKeys::new();
 
     let (contract_key, _contract_version) =
         storage::add_contract_version(contract_package_hash, entry_points, named_keys);

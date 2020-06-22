@@ -36,7 +36,7 @@ use types::{
 
 use crate::{
     engine_state::{system_contract_cache::SystemContractCache, EngineConfig},
-    execution::{Error, MINT_NAME, POS_NAME},
+    execution::Error,
     resolvers::{create_module_resolver, memory_resolver::MemoryResolver},
     runtime_context::{self, RuntimeContext},
     Address,
@@ -1111,7 +1111,7 @@ fn extract_urefs(cl_value: &CLValue) -> Result<Vec<URef>, Error> {
                 Ok(map.values().cloned().filter_map(Key::into_uref).collect())
             }
             (CLType::String, CLType::Key) => {
-                let map: BTreeMap<String, Key> = cl_value.to_owned().into_t()?;
+                let map: NamedKeys = cl_value.to_owned().into_t()?;
                 Ok(map.values().cloned().filter_map(Key::into_uref).collect())
             }
             (_, _) => Ok(vec![]),
@@ -1758,7 +1758,7 @@ where
         &mut self,
         protocol_version: ProtocolVersion,
         entry_point_name: &str,
-        mut named_keys: BTreeMap<String, Key>,
+        mut named_keys: NamedKeys,
         args: &RuntimeArgs,
         extra_urefs: &[Key],
     ) -> Result<CLValue, Error> {
@@ -2426,7 +2426,7 @@ where
         &mut self,
         contract_package_hash: ContractPackageHash,
         entry_points: EntryPoints,
-        mut named_keys: BTreeMap<String, Key>,
+        mut named_keys: NamedKeys,
         output_ptr: u32,
         output_size: usize,
         bytes_written_ptr: u32,
@@ -2859,22 +2859,7 @@ where
 
         match self.mint_transfer(mint_contract_hash, source, target_purse, amount) {
             Ok(_) => {
-                // After merging in EE-704 system contracts lookup internally uses protocol data and
-                // this is used for backwards compatibility with explorer to query mint/pos urefs.
-                let named_keys = vec![
-                    (String::from(MINT_NAME), Key::from(self.get_mint_contract())),
-                    (String::from(POS_NAME), Key::from(self.get_pos_contract())),
-                ]
-                .into_iter()
-                .map(|(name, key)| {
-                    if let Some(uref) = key.as_uref() {
-                        (name, Key::URef(URef::new(uref.addr(), AccessRights::READ)))
-                    } else {
-                        (name, key)
-                    }
-                })
-                .collect();
-                let account = Account::create(target, named_keys, target_purse);
+                let account = Account::create(target, Default::default(), target_purse);
                 self.context.write_account(target_key, account)?;
                 Ok(Ok(TransferredTo::NewAccount))
             }

@@ -1,7 +1,7 @@
 mod action_thresholds;
 mod associated_keys;
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use types::{
     account::{
@@ -9,7 +9,8 @@ use types::{
         UpdateKeyFailure, Weight,
     },
     bytesrepr::{self, Error, FromBytes, ToBytes},
-    AccessRights, Key, URef,
+    contracts::NamedKeys,
+    AccessRights, URef,
 };
 
 pub use action_thresholds::ActionThresholds;
@@ -18,7 +19,7 @@ pub use associated_keys::AssociatedKeys;
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Account {
     public_key: PublicKey,
-    named_keys: BTreeMap<String, Key>,
+    named_keys: NamedKeys,
     main_purse: URef,
     associated_keys: AssociatedKeys,
     action_thresholds: ActionThresholds,
@@ -27,7 +28,7 @@ pub struct Account {
 impl Account {
     pub fn new(
         public_key: PublicKey,
-        named_keys: BTreeMap<String, Key>,
+        named_keys: NamedKeys,
         main_purse: URef,
         associated_keys: AssociatedKeys,
         action_thresholds: ActionThresholds,
@@ -41,7 +42,7 @@ impl Account {
         }
     }
 
-    pub fn create(account: PublicKey, named_keys: BTreeMap<String, Key>, main_purse: URef) -> Self {
+    pub fn create(account: PublicKey, named_keys: NamedKeys, main_purse: URef) -> Self {
         let associated_keys = AssociatedKeys::new(account, Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
         Account::new(
@@ -53,15 +54,15 @@ impl Account {
         )
     }
 
-    pub fn named_keys_append(&mut self, keys: &mut BTreeMap<String, Key>) {
+    pub fn named_keys_append(&mut self, keys: &mut NamedKeys) {
         self.named_keys.append(keys);
     }
 
-    pub fn named_keys(&self) -> &BTreeMap<String, Key> {
+    pub fn named_keys(&self) -> &NamedKeys {
         &self.named_keys
     }
 
-    pub fn named_keys_mut(&mut self) -> &mut BTreeMap<String, Key> {
+    pub fn named_keys_mut(&mut self) -> &mut NamedKeys {
         &mut self.named_keys
     }
 
@@ -222,7 +223,7 @@ impl ToBytes for Account {
 impl FromBytes for Account {
     fn from_bytes(bytes: &[u8]) -> Result<(Self, &[u8]), Error> {
         let (public_key, rem) = PublicKey::from_bytes(bytes)?;
-        let (named_keys, rem) = BTreeMap::<String, Key>::from_bytes(rem)?;
+        let (named_keys, rem) = NamedKeys::from_bytes(rem)?;
         let (main_purse, rem) = URef::from_bytes(rem)?;
         let (associated_keys, rem) = AssociatedKeys::from_bytes(rem)?;
         let (action_thresholds, rem) = ActionThresholds::from_bytes(rem)?;
@@ -290,10 +291,7 @@ mod proptests {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        collections::{BTreeMap, BTreeSet},
-        iter::FromIterator,
-    };
+    use std::{collections::BTreeSet, iter::FromIterator};
 
     use types::{
         account::{
@@ -320,7 +318,7 @@ mod tests {
 
         let account = Account::new(
             PublicKey::ed25519_from([0u8; 32]),
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             keys,
             // deploy: 33 (3*11)
@@ -366,7 +364,7 @@ mod tests {
         };
         let account = Account::new(
             PublicKey::ed25519_from([0u8; 32]),
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
@@ -410,7 +408,7 @@ mod tests {
         };
         let account = Account::new(
             PublicKey::ed25519_from([0u8; 32]),
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
@@ -458,7 +456,7 @@ mod tests {
         };
         let mut account = Account::new(
             PublicKey::ed25519_from([0u8; 32]),
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
@@ -498,7 +496,7 @@ mod tests {
         };
         let mut account = Account::new(
             PublicKey::ed25519_from([0u8; 32]),
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
@@ -540,7 +538,7 @@ mod tests {
         let key_management_threshold = Weight::new(deployment_threshold.value() + 1);
         let mut account = Account::new(
             identity_key,
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             // deploy: 33 (3*11)
@@ -598,7 +596,7 @@ mod tests {
 
         let mut account = Account::new(
             identity_key,
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             ActionThresholds::new(Weight::new(1), Weight::new(254))
@@ -633,7 +631,7 @@ mod tests {
 
         let mut account = Account::new(
             identity_key,
-            BTreeMap::new(),
+            NamedKeys::new(),
             URef::new([0u8; 32], AccessRights::READ_ADD_WRITE),
             associated_keys,
             ActionThresholds::new(deployment_threshold, key_management_threshold)

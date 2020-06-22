@@ -12,8 +12,8 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
-    account::PublicKey, runtime_args, ContractHash, ContractPackageHash, Key, RuntimeArgs, URef,
-    U512,
+    account::PublicKey, contracts::NamedKeys, runtime_args, ContractHash, ContractPackageHash, Key,
+    RuntimeArgs, URef, U512,
 };
 
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
@@ -129,7 +129,7 @@ fn should_run_pos_install_contract() {
     assert_eq!(rewards_purse_balance, U512::zero());
 }
 
-fn get_purse(named_keys: &BTreeMap<String, Key>, name: &str) -> Option<URef> {
+fn get_purse(named_keys: &NamedKeys, name: &str) -> Option<URef> {
     named_keys
         .get(name)
         .expect("should have named key")

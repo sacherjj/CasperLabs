@@ -3,7 +3,7 @@
 
 extern crate alloc;
 
-use alloc::{collections::BTreeMap, string::ToString, vec::Vec};
+use alloc::{string::ToString, vec::Vec};
 use contract::{
     contract_api::{runtime, storage},
     unwrap_or_revert::UnwrapOrRevert,
@@ -11,7 +11,7 @@ use contract::{
 use core::convert::TryInto;
 
 use types::{
-    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints},
+    contracts::{EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys},
     CLType, Key, URef,
 };
 
@@ -54,7 +54,7 @@ pub extern "C" fn call() {
     let (contract_hash, contract_version) = storage::add_contract_version(
         do_nothing_package_hash.into_hash().unwrap(),
         entry_points,
-        BTreeMap::new(),
+        NamedKeys::new(),
     );
     runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
     runtime::put_key("end of upgrade", contract_hash.into());
