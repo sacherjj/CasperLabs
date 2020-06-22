@@ -277,7 +277,7 @@ steps:
   commands:
   - "sbt test"
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make docker-build/node docker-build/client"
+  - "make docker-build/node"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -438,6 +438,7 @@ steps:
 - name: docker-build-ee-int-bors
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
+  - "make build-client-contracts"
   - "./integration-testing/build_contracts.sh"
   - "make docker-build/execution-engine"
   - "make docker-build/integration-testing"
@@ -649,12 +650,10 @@ steps:
   commands:
   - "make build-client-contracts build-node-contracts"
   - "rm -rf project/target project/project/target"
-  - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+  - "sbt update test node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make docker-build/node docker-build/client"
+  - "make docker-build/node"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
-  - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-  - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
   - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   environment:
@@ -748,26 +747,22 @@ steps:
         REF=${DRONE_BRANCH}
       fi
       docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:"$REF"
-      docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:"$REF"
       docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:"$REF"
       docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:"$REF"
       docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:"$REF"
       docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:"$REF"
       docker push casperlabs/node:"$REF"
-      docker push casperlabs/client:"$REF"
       docker push casperlabs/execution-engine:"$REF"
       docker push casperlabs/key-generator:"$REF"
       docker push casperlabs/explorer:"$REF"
       docker push casperlabs/grpcwebproxy:"$REF"
       if [ "${DRONE_BRANCH}" = "master" ]; then
         docker tag casperlabs/node:DRONE-${DRONE_BUILD_NUMBER} casperlabs/node:latest
-        docker tag casperlabs/client:DRONE-${DRONE_BUILD_NUMBER} casperlabs/client:latest
         docker tag casperlabs/execution-engine:DRONE-${DRONE_BUILD_NUMBER} casperlabs/execution-engine:latest
         docker tag casperlabs/key-generator:DRONE-${DRONE_BUILD_NUMBER} casperlabs/key-generator:latest
         docker tag casperlabs/explorer:DRONE-${DRONE_BUILD_NUMBER} casperlabs/explorer:latest
         docker tag casperlabs/grpcwebproxy:DRONE-${DRONE_BUILD_NUMBER} casperlabs/grpcwebproxy:latest
         docker push casperlabs/node:latest
-        docker push casperlabs/client:latest
         docker push casperlabs/execution-engine:latest
         docker push casperlabs/key-generator:latest
         docker push casperlabs/explorer:latest
@@ -930,10 +925,8 @@ steps:
 - name: package-sbt-artifacts-tag
   commands:
   - "make build-client-contracts build-node-contracts"
-  - "sbt update test client/debian:packageBin client/universal:packageZipTarball client/rpm:packageBin node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
+  - "sbt update test node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
-  - "cp client/target/casperlabs-client_*_all.deb client/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
-  - "cp client/target/rpm/RPMS/noarch/casperlabs-client-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
   - "cp node/target/rpm/RPMS/noarch/casperlabs-node-*.noarch.rpm artifacts/${DRONE_BRANCH}"
   environment:
@@ -981,7 +974,6 @@ steps:
   commands:
   - "export DOCKER_LATEST_TAG=${DRONE_TAG}"
   - "make docker-build/node"
-  - "make docker-build/client"
   - "make docker-build/execution-engine"
   - "make docker-build/key-generator"
   - "make docker-build/explorer"
@@ -1010,7 +1002,6 @@ steps:
   - |
       echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin
       docker push casperlabs/node:"${DRONE_TAG}"
-      docker push casperlabs/client:"${DRONE_TAG}"
       docker push casperlabs/execution-engine:"${DRONE_TAG}"
       docker push casperlabs/key-generator:"${DRONE_TAG}"
       docker push casperlabs/explorer:"${DRONE_TAG}"
