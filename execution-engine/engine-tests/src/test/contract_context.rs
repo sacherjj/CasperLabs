@@ -19,6 +19,7 @@ const ADD_NEW_KEY_AS_SESSION: &str = "add_new_key_as_session";
 const NEW_KEY: &str = "new_key";
 const SESSION_CODE_CALLER_AS_CONTRACT: &str = "session_code_caller_as_contract";
 const ARG_AMOUNT: &str = "amount";
+const CONTRACT_VERSION: &str = "contract_version";
 
 #[ignore]
 #[test]
@@ -116,6 +117,20 @@ fn should_enforce_intended_execution_contexts() {
         .named_keys()
         .get(NEW_KEY)
         .expect("new key should be there");
+
+    // Check version
+
+    let contract_version_stored = builder
+        .query(
+            None,
+            Key::Account(DEFAULT_ACCOUNT_ADDR),
+            &[CONTRACT_VERSION],
+        )
+        .expect("should query account")
+        .as_cl_value()
+        .cloned()
+        .expect("should be cl value");
+    assert_eq!(contract_version_stored.into_t::<u32>().unwrap(), 1u32);
 }
 
 #[ignore]

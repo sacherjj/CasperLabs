@@ -49,7 +49,7 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    let contract_hash = storage::new_contract(
+    let (contract_hash, _contract_version) = storage::new_contract(
         entry_points,
         None,
         Some(HASH_KEY_NAME.to_string()),

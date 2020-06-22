@@ -39,11 +39,11 @@ export function call(): void {
 
     let entryPoint = new CL.EntryPoint(ENTRY_FUNCTION_NAME, args, new CLType(CLTypeTag.Unit), new CL.PublicAccess(), CL.EntryPointType.Session);
     entryPoints.addEntryPoint(entryPoint);
-    let contractHash = CL.newContract(
+    let newResult = CL.newContract(
       entryPoints,
       null,
       PACKAGE_HASH_KEY_NAME,
       ACCESS_KEY_NAME,
     );
-    CL.putKey(HASH_KEY_NAME, Key.fromHash(contractHash));
+    CL.putKey(HASH_KEY_NAME, Key.fromHash(newResult.contractHash));
 }

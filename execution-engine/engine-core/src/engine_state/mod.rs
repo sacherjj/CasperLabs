@@ -20,6 +20,7 @@ use std::{
     rc::Rc,
 };
 
+use log::{debug, warn};
 use num_traits::Zero;
 use parity_wasm::elements::Module;
 
@@ -298,8 +299,6 @@ where
                 system_contract_cache,
             )?
         };
-
-        log::trace!("PoS hash: {:?}", proof_of_stake_hash);
 
         // Execute standard payment installer wasm code
         //
@@ -658,18 +657,6 @@ where
                         .put_protocol_data(new_protocol_version, &new_protocol_data)
                         .map_err(Into::into)?;
                 }
-                // *system_account.named_keys_mut() = keys;
-
-                // let key = Key::Account(SYSTEM_ACCOUNT_ADDR);
-                // let value = StoredValue::Account(system_account);
-
-                // tracking_copy.borrow_mut().write(key, value);
-
-                // Find package hashes updates
-
-                // let effects = tracking_copy.borrow().effect();
-                // effects.transforms.get(mint_package_hash).expect("mint package should be
-                // changed");
             }
         }
 
@@ -820,21 +807,21 @@ where
                     version.map(|ver| ContractVersionKey::new(protocol_version.value().major, ver));
 
                 let contract_version_key = maybe_version_key
-                    .or_else(|| contract_package.get_current_contract_version().cloned())
+                    .or_else(|| contract_package.current_contract_version())
                     .ok_or_else(|| {
                         error::Error::Exec(execution::Error::NoActiveContractVersions(
                             contract_package_hash,
                         ))
                     })?;
 
-                if !contract_package.is_contract_version_in_use(contract_version_key) {
+                if !contract_package.is_version_enabled(contract_version_key) {
                     return Err(error::Error::Exec(
                         execution::Error::InvalidContractVersion(contract_version_key),
                     ));
                 }
 
                 let contract_hash = *contract_package
-                    .get_contract(contract_version_key)
+                    .lookup_contract_hash(contract_version_key)
                     .ok_or_else(|| {
                         error::Error::Exec(execution::Error::InvalidContractVersion(
                             contract_version_key,
@@ -857,7 +844,7 @@ where
         let entry_point_name = deploy_item.entry_point_name();
 
         let entry_point = contract
-            .get_entry_point(entry_point_name)
+            .entry_point(entry_point_name)
             .cloned()
             .ok_or_else(|| {
                 error::Error::Exec(execution::Error::NoSuchMethod(entry_point_name.to_owned()))
@@ -1366,7 +1353,7 @@ where
                 Ok(args) => args,
                 Err(e) => {
                     let exec_err: crate::execution::Error = e.into();
-                    log::warn!("Unable to deserialize arguments: {:?}", exec_err);
+                    warn!("Unable to deserialize arguments: {:?}", exec_err);
                     return Ok(ExecutionResult::precondition_failure(exec_err.into()));
                 }
             };
@@ -1446,7 +1433,7 @@ where
             }
         };
 
-        log::debug!("Payment result: {:?}", payment_result);
+        debug!("Payment result: {:?}", payment_result);
 
         let payment_result_cost = payment_result.cost();
         // payment_code_spec_3: fork based upon payment purse balance and cost of
@@ -1562,7 +1549,7 @@ where
             Ok(args) => args,
             Err(e) => {
                 let exec_err: crate::execution::Error = e.into();
-                log::warn!("Unable to deserialize session arguments: {:?}", exec_err);
+                warn!("Unable to deserialize session arguments: {:?}", exec_err);
                 return Ok(ExecutionResult::precondition_failure(exec_err.into()));
             }
         };
@@ -1596,7 +1583,7 @@ where
                 &session_package,
             )
         };
-        log::debug!("Session result: {:?}", session_result);
+        debug!("Session result: {:?}", session_result);
 
         let post_session_rc = if session_result.is_failure() {
             // If session code fails we do not include its effects,

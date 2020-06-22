@@ -13,8 +13,8 @@ use contract::{
 };
 use types::{
     account::{ActionType, PublicKey, Weight},
-    runtime_args, ApiError, BlockTime, CLType, CLValue, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Key, Parameter, Phase, RuntimeArgs, U512,
+    runtime_args, ApiError, BlockTime, CLType, CLValue, ContractHash, ContractVersion, EntryPoint,
+    EntryPointAccess, EntryPointType, EntryPoints, Key, Parameter, Phase, RuntimeArgs, U512,
 };
 
 const MIN_FUNCTION_NAME_LENGTH: usize = 1;
@@ -153,18 +153,14 @@ pub extern "C" fn call() {
         ARG_BYTES => random_bytes.clone()
     };
 
-    let named_keys: BTreeMap<String, Key> = runtime::call_contract(
-        store_function(entry_point_name, None),
-        entry_point_name,
-        runtime_args.clone(),
-    );
+    let (contract_hash, _contract_version) = store_function(entry_point_name, None);
+    let named_keys: BTreeMap<String, Key> =
+        runtime::call_contract(contract_hash, entry_point_name, runtime_args.clone());
 
+    let (contract_hash, _contract_version) =
+        store_function(entry_point_name, Some(named_keys.clone()));
     // Store large function with 10 named keys, then execute it.
-    runtime::call_contract::<BTreeMap<String, Key>>(
-        store_function(entry_point_name, Some(named_keys.clone())),
-        entry_point_name,
-        runtime_args,
-    );
+    runtime::call_contract::<BTreeMap<String, Key>>(contract_hash, entry_point_name, runtime_args);
 
     // Small function
     let small_function_name = String::from_iter(
@@ -176,18 +172,13 @@ pub extern "C" fn call() {
     let runtime_args = runtime_args! {};
 
     // Store small function with no named keys, then execute it.
-    runtime::call_contract::<()>(
-        store_function(entry_point_name, Some(BTreeMap::new())),
-        entry_point_name,
-        runtime_args.clone(),
-    );
+    let (contract_hash, _contract_version) =
+        store_function(entry_point_name, Some(BTreeMap::new()));
+    runtime::call_contract::<()>(contract_hash, entry_point_name, runtime_args.clone());
 
+    let (contract_hash, _contract_version) = store_function(entry_point_name, Some(named_keys));
     // Store small function with 10 named keys, then execute it.
-    runtime::call_contract::<()>(
-        store_function(entry_point_name, Some(named_keys)),
-        entry_point_name,
-        runtime_args,
-    );
+    runtime::call_contract::<()>(contract_hash, entry_point_name, runtime_args);
 
     // ========== functions from `account` module ==================================================
 
@@ -238,7 +229,7 @@ pub extern "C" fn call() {
 fn store_function(
     entry_point_name: &str,
     named_keys: Option<BTreeMap<String, Key>>,
-) -> ContractHash {
+) -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 

@@ -8,11 +8,12 @@ use alloc::string::ToString;
 
 use contract::contract_api::{runtime, storage};
 use types::{
-    account::PublicKey, CLType, CLTyped, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Parameter,
+    account::PublicKey, CLType, CLTyped, ContractHash, ContractVersion, EntryPoint,
+    EntryPointAccess, EntryPointType, EntryPoints, Parameter,
 };
 
 const CONTRACT_NAME: &str = "transfer_to_account";
+const CONTRACT_VERSION_KEY: &str = "contract_version";
 const ENTRY_POINT_NAME: &str = "transfer";
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";
@@ -25,7 +26,7 @@ pub extern "C" fn transfer() {
     transfer_to_account_u512::delegate();
 }
 
-fn store() -> ContractHash {
+fn store() -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 
@@ -54,6 +55,8 @@ fn store() -> ContractHash {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_hash = store();
+    let (contract_hash, contract_version) = store();
+    let version_uref = storage::new_uref(contract_version);
+    runtime::put_key(CONTRACT_VERSION_KEY, version_uref.into());
     runtime::put_key(CONTRACT_NAME, contract_hash.into());
 }

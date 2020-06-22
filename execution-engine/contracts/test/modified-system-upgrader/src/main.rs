@@ -13,8 +13,8 @@ use contract::{
 };
 use types::{
     contracts::{NamedKeys, Parameters},
-    CLType, CLValue, ContractHash, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints,
-    Parameter, URef,
+    CLType, CLValue, ContractHash, ContractVersion, EntryPoint, EntryPointAccess, EntryPointType,
+    EntryPoints, Parameter, URef,
 };
 
 pub const MODIFIED_MINT_EXT_FUNCTION_NAME: &str = "modified_mint_ext";
@@ -53,7 +53,7 @@ pub extern "C" fn call() {
     standard_payment::delegate();
 }
 
-fn upgrade_mint() -> ContractHash {
+fn upgrade_mint() -> (ContractHash, ContractVersion) {
     const HASH_KEY_NAME: &str = "mint_hash";
     const ACCESS_KEY_NAME: &str = "mint_access";
 
@@ -80,7 +80,7 @@ fn upgrade_mint() -> ContractHash {
     storage::add_contract_version(mint_package_hash, entry_points, named_keys)
 }
 
-fn upgrade_proof_of_stake() -> ContractHash {
+fn upgrade_proof_of_stake() -> (ContractHash, ContractVersion) {
     use pos::{
         ARG_ACCOUNT_KEY, ARG_AMOUNT, ARG_PURSE, METHOD_BOND, METHOD_FINALIZE_PAYMENT,
         METHOD_GET_PAYMENT_PURSE, METHOD_GET_REFUND_PURSE, METHOD_SET_REFUND_PURSE, METHOD_UNBOND,
@@ -199,7 +199,7 @@ pub extern "C" fn finalize_payment() {
     pos::finalize_payment();
 }
 
-fn upgrade_standard_payment() -> ContractHash {
+fn upgrade_standard_payment() -> (ContractHash, ContractVersion) {
     const HASH_KEY_NAME: &str = "standard_payment_hash";
     const ACCESS_KEY_NAME: &str = "standard_payment_access";
     const ARG_AMOUNT: &str = "amount";
@@ -238,23 +238,23 @@ fn upgrade_standard_payment() -> ContractHash {
 
 #[no_mangle]
 pub extern "C" fn upgrade() {
-    let mut upgrades = BTreeMap::new();
+    let mut upgrades: BTreeMap<ContractHash, ContractHash> = BTreeMap::new();
 
     {
         let old_mint_hash = system::get_mint();
-        let new_mint_hash = upgrade_mint();
+        let (new_mint_hash, _new_mint_version) = upgrade_mint();
         upgrades.insert(old_mint_hash, new_mint_hash);
     }
 
     {
         let old_pos_hash = system::get_proof_of_stake();
-        let new_pos_hash = upgrade_proof_of_stake();
+        let (new_pos_hash, _new_pos_version) = upgrade_proof_of_stake();
         upgrades.insert(old_pos_hash, new_pos_hash);
     }
 
     {
         let old_standard_payment_hash = system::get_standard_payment();
-        let new_standard_payment_hash = upgrade_standard_payment();
+        let (new_standard_payment_hash, _new_standard_payment_version) = upgrade_standard_payment();
         upgrades.insert(old_standard_payment_hash, new_standard_payment_hash);
     }
 
