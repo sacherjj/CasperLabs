@@ -86,8 +86,10 @@ class SECP256K1Key(KeyHolder):
         # .sign provides entropy.
         # .sign_deterministic wants to hash
         # this is method after .sign_deterministic should have hashed.
-        return private_key.sign_digest_deterministic(
-            data, sigencode=ecdsa.util.sigencode_der_canonize
+        sigencode = ecdsa.util.sigencode_der_canonize
+        hashfunc = NoChangeHasher
+        return private_key.sign_deterministic(
+            data, sigencode=sigencode, hashfunc=hashfunc, extra_entropy=b""
         )
 
     @staticmethod
