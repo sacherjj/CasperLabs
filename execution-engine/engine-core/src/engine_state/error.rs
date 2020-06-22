@@ -42,6 +42,8 @@ pub enum Error {
     InvalidKeyVariant(String),
     #[fail(display = "Invalid upgrade result value")]
     InvalidUpgradeResult,
+    #[fail(display = "Unsupported deploy item variant: {}", _0)]
+    InvalidDeployItemVariant(String),
 }
 
 impl From<engine_wasm_prep::PreprocessingError> for Error {

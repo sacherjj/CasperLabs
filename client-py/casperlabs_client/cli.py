@@ -16,9 +16,8 @@ from casperlabs_client import (
     DEFAULT_HOST,
     DEFAULT_PORT,
     DEFAULT_INTERNAL_PORT,
-    bundled_contract,
 )
-from casperlabs_client.commands import deploy_cmd
+from casperlabs_client.commands import deploy_cmd, transfer_cmd
 from casperlabs_client.utils import hexify, jsonify
 from casperlabs_client.abi import ABI
 from casperlabs_client.crypto import (
@@ -76,39 +75,6 @@ def _show_blocks(response, element_name="block"):
 
 def _show_block(response):
     print(hexify(response))
-
-
-def _set_session(args, file_name):
-    """
-    Use bundled contract unless one of the session* args is set.
-    """
-    if not any((args.session, args.session_hash, args.session_name, args.session_uref)):
-        args.session = bundled_contract(file_name)
-
-
-@guarded_command
-def transfer_command(casperlabs_client, args):
-    _set_session(args, "transfer_to_account_u512.wasm")
-
-    if not args.session_args:
-        target_account_bytes = base64.b64decode(args.target_account)
-        if len(target_account_bytes) != 32:
-            target_account_bytes = bytes.fromhex(args.target_account)
-            if len(target_account_bytes) != 32:
-                raise Exception(
-                    "--target_account must be 32 bytes base64 or base16 encoded"
-                )
-
-        args.session_args = ABI.args_to_json(
-            ABI.args(
-                [
-                    ABI.account("account", target_account_bytes),
-                    ABI.u512("amount", args.amount),
-                ]
-            )
-        )
-
-    return deploy_command(casperlabs_client, args)
 
 
 def _deploy_kwargs(args, private_key_accepted=True):
@@ -496,10 +462,10 @@ def cli(*arguments) -> int:
     parser = Parser()
 
     # fmt: off
-    parser.addCommand(deploy_cmd.COMMAND_NAME, deploy_command, deploy_cmd.HELP_TEXT, deploy_cmd.DEPLOY_OPTIONS_PRIVATE)
+    parser.addCommand(deploy_cmd.NAME, deploy_command, deploy_cmd.HELP, deploy_cmd.OPTIONS_PRIVATE)
 
     parser.addCommand('make-deploy', make_deploy_command, "Constructs a deploy that can be signed and sent to a node.",
-                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_cmd.DEPLOY_OPTIONS)
+                      [[('-o', '--deploy-path'), dict(required=False, help="Path to the file where deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")]] + deploy_cmd.OPTIONS)
 
     parser.addCommand('sign-deploy', sign_deploy_command, "Cryptographically signs a deploy. The signature is appended to existing approvals.",
                       [[('-o', '--signed-deploy-path'), dict(required=False, default=None, help="Path to the file where signed deploy will be saved. Optional, if not provided the deploy will be printed to STDOUT.")],
@@ -510,10 +476,7 @@ def cli(*arguments) -> int:
     parser.addCommand('send-deploy', send_deploy_command, "Deploy a smart contract source file to Casper on an existing running node. The deploy will be packaged and sent as a block to the network depending on the configuration of the Casper instance.",
                       [[('-i', '--deploy-path'), dict(required=False, default=None, help="Path to the file with signed deploy.")]])
 
-    parser.addCommand('transfer', transfer_command, 'Transfers funds between accounts',
-                      [[('-a', '--amount'), dict(required=True, default=None, type=int, help='Amount of motes to transfer. Note: a mote is the smallest, indivisible unit of a token.')],
-                       [('-t', '--target-account'), dict(required=True, type=str, help="base64 or base16 representation of target account's public key")],
-                       ] + deploy_cmd.DEPLOY_OPTIONS_PRIVATE)
+    parser.addCommand(transfer_cmd.NAME, transfer_cmd.method, transfer_cmd.HELP, transfer_cmd.OPTIONS)
 
     parser.addCommand('propose', propose_command, '[DEPRECATED] Force a node to propose a block based on its accumulated deploys.', [])
 

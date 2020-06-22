@@ -43,27 +43,27 @@ pub trait Mint: RuntimeProvider + StorageProvider {
         }
     }
 
-    fn transfer(&mut self, source: URef, dest: URef, amount: U512) -> Result<(), Error> {
-        if !source.is_writeable() || !dest.is_addable() {
+    fn transfer(&mut self, source: URef, target: URef, amount: U512) -> Result<(), Error> {
+        if !source.is_writeable() || !target.is_addable() {
             return Err(Error::InvalidAccessRights);
         }
-        let source_bal: URef = match self.read_local(&source.addr())? {
+        let source_balance: URef = match self.read_local(&source.addr())? {
             Some(key) => TryFrom::<Key>::try_from(key).map_err(|_| Error::InvalidAccessRights)?,
             None => return Err(Error::SourceNotFound),
         };
-        let source_value: U512 = match self.read(source_bal)? {
+        let source_value: U512 = match self.read(source_balance)? {
             Some(source_value) => source_value,
             None => return Err(Error::SourceNotFound),
         };
         if amount > source_value {
             return Err(Error::InsufficientFunds);
         }
-        let dest_bal: URef = match self.read_local(&dest.addr())? {
+        let target_balance: URef = match self.read_local(&target.addr())? {
             Some(key) => TryFrom::<Key>::try_from(key).map_err(|_| Error::InvalidAccessRights)?,
             None => return Err(Error::DestNotFound),
         };
-        self.write(source_bal, source_value - amount)?;
-        self.add(dest_bal, amount)?;
+        self.write(source_balance, source_value - amount)?;
+        self.add(target_balance, amount)?;
         Ok(())
     }
 }

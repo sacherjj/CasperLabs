@@ -15,7 +15,8 @@ use types::{
 
 use crate::{
     engine_state::{
-        execution_result::ExecutionResult, system_contract_cache::SystemContractCache, EngineConfig,
+        execution_effect::ExecutionEffect, execution_result::ExecutionResult,
+        system_contract_cache::SystemContractCache, EngineConfig,
     },
     execution::{address_generator::AddressGenerator, Error},
     runtime::{extract_access_rights_from_keys, instance_and_memory, Runtime},
@@ -222,8 +223,9 @@ impl Executor {
         }
     }
 
-    pub fn exec_finalize<R>(
+    pub fn exec_system_contract<R>(
         &self,
+        direct_system_contract_call: DirectSystemContractCall,
         parity_module: Module,
         args: RuntimeArgs,
         named_keys: &mut NamedKeys,
@@ -244,8 +246,17 @@ impl Executor {
         R: StateReader<Key, StoredValue>,
         R::Error: Into<Error>,
     {
-        if protocol_data.proof_of_stake() != base_key.into_seed() {
-            panic!("exec_finalize should only be called with the proof of stake contract");
+        match direct_system_contract_call {
+            DirectSystemContractCall::FinalizePayment => {
+                if protocol_data.proof_of_stake() != base_key.into_seed() {
+                    panic!("exec_finalize should only be called with the proof of stake contract");
+                }
+            }
+            DirectSystemContractCall::Transfer => {
+                if protocol_data.mint() != base_key.into_seed() {
+                    panic!("exec_finalize should only be called with the mint contract");
+                }
+            }
         }
 
         let mut named_keys = named_keys.clone();
@@ -300,33 +311,24 @@ impl Executor {
             context,
         );
 
-        let finalize_entry_point = "finalize_payment";
+        let named_keys = runtime.context().named_keys().to_owned();
 
         if !self.config.use_system_contracts() {
-            match runtime.call_host_proof_of_stake(
+            return direct_system_contract_call.host_exec(
+                runtime,
                 protocol_version,
-                finalize_entry_point,
-                runtime.context().named_keys().to_owned(),
+                named_keys,
                 &args,
                 Default::default(),
-            ) {
-                Ok(_value) => {
-                    return ExecutionResult::Success {
-                        effect: runtime.context().effect(),
-                        cost: runtime.context().gas_counter(),
-                    };
-                }
-                Err(error) => {
-                    return ExecutionResult::Failure {
-                        error: error.into(),
-                        effect: effects_snapshot,
-                        cost: runtime.context().gas_counter(),
-                    };
-                }
-            }
+                effects_snapshot,
+            );
         }
 
-        let error = match instance.invoke_export(finalize_entry_point, &[], &mut runtime) {
+        let error = match instance.invoke_export(
+            direct_system_contract_call.entry_point_name(),
+            &[],
+            &mut runtime,
+        ) {
             Err(error) => error,
             Ok(_) => {
                 return ExecutionResult::Success {
@@ -435,7 +437,9 @@ impl Executor {
         Ok((instance, runtime))
     }
 
-    pub fn exec_system<R, T>(
+    /// Used to execute arbitrary wasm; necessary for running system contract installers / upgraders
+    /// This is not meant to be used for executing system contracts.
+    pub fn exec_wasm_direct<R, T>(
         &self,
         module: Module,
         entry_point_name: &str,
@@ -516,5 +520,63 @@ impl Executor {
         let ret = return_value.into_t()?;
         *account.named_keys_mut() = named_keys;
         Ok(ret)
+    }
+}
+
+pub enum DirectSystemContractCall {
+    FinalizePayment,
+    Transfer,
+}
+
+impl DirectSystemContractCall {
+    fn entry_point_name(&self) -> &str {
+        match self {
+            DirectSystemContractCall::FinalizePayment => "finalize_payment",
+            DirectSystemContractCall::Transfer => "transfer",
+        }
+    }
+
+    fn host_exec<R>(
+        &self,
+        mut runtime: Runtime<R>,
+        protocol_version: ProtocolVersion,
+        named_keys: NamedKeys,
+        args: &RuntimeArgs,
+        extra_urefs: &[Key],
+        execution_effect: ExecutionEffect,
+    ) -> ExecutionResult
+    where
+        R: StateReader<Key, StoredValue>,
+        R::Error: Into<Error>,
+    {
+        let entry_point_name = self.entry_point_name();
+        let result = match self {
+            DirectSystemContractCall::FinalizePayment => runtime.call_host_proof_of_stake(
+                protocol_version,
+                entry_point_name,
+                named_keys,
+                args,
+                extra_urefs,
+            ),
+            DirectSystemContractCall::Transfer => runtime.call_host_mint(
+                protocol_version,
+                entry_point_name,
+                named_keys,
+                args,
+                extra_urefs,
+            ),
+        };
+
+        match result {
+            Ok(_value) => ExecutionResult::Success {
+                effect: runtime.context().effect(),
+                cost: runtime.context().gas_counter(),
+            },
+            Err(error) => ExecutionResult::Failure {
+                error: error.into(),
+                effect: execution_effect,
+                cost: runtime.context().gas_counter(),
+            },
+        }
     }
 }

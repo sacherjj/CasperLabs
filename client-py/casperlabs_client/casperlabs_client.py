@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-
 from pathlib import Path
 import os
 import time
+from typing import Union
+
 import grpc
 import functools
 import logging
@@ -12,6 +13,8 @@ from casperlabs_client.commands import deploy_cmd
 
 # Hack to fix the relative imports problems with grpc #
 import sys
+
+from .reformat import optional_base64_base16_to_bytes
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 # end of hack #
@@ -52,7 +55,6 @@ from . import empty_pb2
 from . import vdag
 from . import abi
 from casperlabs_client.utils import (
-    bundled_contract,
     extract_common_name,
     key_variant,
     make_deploy,
@@ -303,6 +305,7 @@ class CasperLabsClient:
         ttl_millis: int = 0,
         dependencies: list = None,
         chain_name: str = None,
+        transfer_args: bytes = None,
     ):
         """
         Create a protobuf deploy object. See deploy for description of parameters.
@@ -331,6 +334,7 @@ class CasperLabsClient:
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
+            transfer_args=transfer_args,
         )
 
     @api
@@ -360,6 +364,7 @@ class CasperLabsClient:
         session_package_name: str = None,
         session_entry_point: str = None,
         session_version: int = None,
+        transfer_args: bytes = None,
         ttl_millis: int = 0,
         dependencies: list = None,
         chain_name: str = None,
@@ -407,8 +412,10 @@ class CasperLabsClient:
         :param chain_name:          Name of the chain to optionally restrict the
                                     deploy from being accidentally included
                                     anywhere else.
+        :param transfer_args:       Arguments to use with transfer endpoint.  Call transfer method for this.
         :return:                    deploy hash in base16 format
         """
+        # TODO: Make payment_amount required
 
         deploy = self.make_deploy(
             from_addr=from_addr,
@@ -431,10 +438,10 @@ class CasperLabsClient:
             session_package_name=session_package_name,
             session_entry_point=session_entry_point,
             session_version=session_version,
+            transfer_args=transfer_args,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
-            private_key=private_key,
         )
 
         deploy = self.sign_deploy(
@@ -444,16 +451,49 @@ class CasperLabsClient:
         return deploy.deploy_hash.hex()
 
     @api
-    def transfer(self, target_account_hex, amount, **deploy_args):
-        target_account_bytes = bytes.fromhex(target_account_hex)
-        deploy_args["session"] = bundled_contract("transfer_to_account_u512.wasm")
-        deploy_args["session_args"] = abi.ABI.args(
-            [
-                abi.ABI.account("account", target_account_bytes),
-                abi.ABI.u512("amount", amount),
-            ]
+    def transfer(
+        self,
+        amount: int,
+        target_account: Union[str, bytes] = None,
+        target_purse: Union[str, bytes] = None,
+        source_purse: Union[str, bytes] = None,
+        from_addr: Union[str, bytes] = None,
+        ttl_millis: int = 0,
+        dependencies=None,
+        chain_name: str = None,
+        private_key: str = None,
+    ):
+        if len(list(filter(None, (target_purse, target_account)))) != 1:
+            raise ValueError("must include either target_account or target_purse")
+
+        target_account_bytes = optional_base64_base16_to_bytes(
+            target_account, "target_account"
         )
-        return self.deploy(**deploy_args)
+        target_purse_bytes = optional_base64_base16_to_bytes(
+            target_purse, "target_purse"
+        )
+        source_purse_bytes = optional_base64_base16_to_bytes(
+            source_purse, "source_purse"
+        )
+
+        target_send_bytes = target_account_bytes or target_purse_bytes
+
+        arg_list = [
+            abi.ABI.fixed_list("target", target_send_bytes),
+            abi.ABI.u512("amount", amount),
+        ]
+        if source_purse_bytes:
+            arg_list.append(abi.ABI.fixed_list("source", source_purse_bytes))
+
+        transfer_args = abi.ABI.args(arg_list)
+        return self.deploy(
+            from_addr=from_addr,
+            private_key=private_key,
+            ttl_millis=ttl_millis,
+            dependencies=dependencies,
+            chain_name=chain_name,
+            transfer_args=transfer_args,
+        )
 
     @api
     def send_deploy(self, deploy):

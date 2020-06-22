@@ -1,7 +1,7 @@
 from ..arg_types import positive_integer
 
-COMMAND_NAME = "deploy"
-HELP_TEXT = (
+NAME = "deploy"
+HELP = (
     "Deploy a smart contract source file to Casper on an existing running node. "
     "The deploy will be packaged and sent as a block to the network depending "
     "on the configuration of the Casper instance."
@@ -10,7 +10,7 @@ STATUS_CHECK_DELAY = 0.5
 STATUS_TIMEOUT = 180  # 3 minutes
 
 # fmt: off
-DEPLOY_OPTIONS = [
+OPTIONS = [
     [('-f', '--from'), dict(required=False, type=str, help="The public key of the account which is the context of this deployment, base16 encoded.")],
     [('--chain-name',), dict(required=False, type=str, help="Name of the chain to optionally restrict the deploy from being accidentally included anywhere else.")],
     [('--dependencies',), dict(required=False, nargs="+", default=None, help="List of deploy hashes (base16 encoded) which must be executed before this deploy.")],
@@ -37,7 +37,7 @@ DEPLOY_OPTIONS = [
     [('--timeout-seconds',), dict(type=int, default=STATUS_TIMEOUT, help='Timeout in seconds')],
     [('--public-key',), dict(required=False, default=None, type=str, help='Path to the file with account public key (Ed25519)')]
 ]
-DEPLOY_OPTIONS_PRIVATE = [
+OPTIONS_PRIVATE = [
     [('--private-key',), dict(required=True, default=None, type=str, help='Path to the file with account private key (Ed25519)')]
-] + DEPLOY_OPTIONS
+] + OPTIONS
 # fmt:on

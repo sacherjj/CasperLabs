@@ -62,8 +62,8 @@ def key_variant(key_type):
     return variant
 
 
-def _encode_contract(contract_options, contract_args, version=None, entry_point=None):
-    file_name, contract_hash, contract_name, package_hash, package_name = (
+def _encode_contract(contract_options, contract_args, version=0, entry_point=None):
+    file_name, contract_hash, contract_name, package_hash, package_name, transfer_args = (
         contract_options
     )
     if file_name:
@@ -93,11 +93,14 @@ def _encode_contract(contract_options, contract_args, version=None, entry_point=
             name=package_name, entry_point=entry_point, version=version
         )
         return consensus.Deploy.Code(args=contract_args, stored_versioned_contract=svc)
+    elif transfer_args:
+        transfer_contract = consensus.Deploy.Code.TransferContract()
+        return consensus.Deploy.Code(
+            args=transfer_args, transfer_contract=transfer_contract
+        )
     # If we fall through, this is standard payment
     # TODO: Is this still valid with contract headers?
-    return consensus.Deploy.Code(
-        args=contract_args, wasm_contract=consensus.Deploy.Code.WasmContract()
-    )
+    return consensus.Deploy.Code(args=contract_args)
 
 
 def _serialize(o) -> bytes:
@@ -129,6 +132,7 @@ def make_deploy(
     ttl_millis: int = 0,
     dependencies: list = None,
     chain_name: str = None,
+    transfer_args: bytes = None,
 ):
     """
     Create a protobuf deploy object. See deploy for description of parameters.
@@ -150,6 +154,7 @@ def make_deploy(
         session_name,
         session_package_hash,
         session_package_name,
+        transfer_args,
     )
     payment_options = (
         payment,
@@ -157,6 +162,7 @@ def make_deploy(
         payment_name,
         payment_package_hash,
         payment_package_name,
+        None,
     )
 
     # TODO: Move error checking much earlier in the process

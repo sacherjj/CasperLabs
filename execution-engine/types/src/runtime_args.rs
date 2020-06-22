@@ -94,6 +94,14 @@ impl RuntimeArgs {
         self.0.push(NamedArg(key.into(), cl_value));
     }
 
+    /// Insert new named argument into the collection.
+    pub fn insert_cl_value<K>(&mut self, key: K, cl_value: CLValue)
+    where
+        K: Into<String>,
+    {
+        self.0.push(NamedArg(key.into(), cl_value));
+    }
+
     /// Returns values held regardless of the variant.
     pub fn to_values(&self) -> Vec<&CLValue> {
         self.0.iter().map(|NamedArg(_name, value)| value).collect()

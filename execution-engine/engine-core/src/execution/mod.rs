@@ -8,5 +8,5 @@ mod tests;
 pub use self::{
     address_generator::{AddressGenerator, AddressGeneratorBuilder},
     error::Error,
-    executor::Executor,
+    executor::{DirectSystemContractCall, Executor},
 };

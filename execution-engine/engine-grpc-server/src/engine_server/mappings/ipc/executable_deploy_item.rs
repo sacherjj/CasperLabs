@@ -66,6 +66,9 @@ impl TryFrom<DeployPayload_oneof_payload> for ExecutableDeployItem {
                     args: pb_stored_package_by_hash.args,
                 }
             }
+            DeployPayload_oneof_payload::transfer(pb_transfer) => ExecutableDeployItem::Transfer {
+                args: pb_transfer.args,
+            },
         })
     }
 }
@@ -125,6 +128,10 @@ impl From<ExecutableDeployItem> for DeployPayload {
                     inner.set_version(ver)
                 }
                 inner.set_entry_point_name(entry_point);
+                inner.set_args(args);
+            }
+            ExecutableDeployItem::Transfer { args } => {
+                let inner = result.mut_transfer();
                 inner.set_args(args);
             }
         }
