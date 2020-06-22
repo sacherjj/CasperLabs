@@ -10,8 +10,8 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    contracts::Parameters, ApiError, CLType, CLValue, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Phase, RuntimeArgs,
+    contracts::Parameters, ApiError, CLType, CLValue, ContractHash, ContractVersion, EntryPoint,
+    EntryPointAccess, EntryPointType, EntryPoints, Phase, RuntimeArgs,
 };
 
 const ARG_TARGET: &str = "target_contract";
@@ -35,7 +35,7 @@ pub extern "C" fn noop_ext() {
     runtime::ret(CLValue::from_t(()).unwrap_or_revert())
 }
 
-fn store() -> ContractHash {
+fn store() -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 
@@ -78,11 +78,11 @@ pub extern "C" fn call() {
             }
         }
         "do-nothing" => {
-            let reference = store();
+            let (reference, _contract_version) = store();
             runtime::call_contract(reference, NOOP_EXT, RuntimeArgs::default())
         }
         "do-something" => {
-            let reference = store();
+            let (reference, _contract_version) = store();
             let phase: Phase =
                 runtime::call_contract(reference, GET_PHASE_EXT, RuntimeArgs::default());
             if phase != Phase::Session {

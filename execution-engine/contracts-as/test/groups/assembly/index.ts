@@ -223,7 +223,7 @@ function installVersion1(
 
   let entryPoints = createEntryPoints();
 
-  let bytes = CL.addContractVersion(
+  const result = CL.addContractVersion(
     contractPackageHash,
     entryPoints,
     namedKeys,

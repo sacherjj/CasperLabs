@@ -18,6 +18,7 @@ use types::{
 const ENTRY_FUNCTION_NAME: &str = "delegate";
 const DO_NOTHING_PACKAGE_HASH_KEY_NAME: &str = "do_nothing_package_hash";
 const DO_NOTHING_ACCESS_KEY_NAME: &str = "do_nothing_access";
+const CONTRACT_VERSION: &str = "contract_version";
 
 #[no_mangle]
 pub extern "C" fn delegate() {
@@ -50,10 +51,11 @@ pub extern "C" fn call() {
         .try_into()
         .unwrap_or_revert();
 
-    let key = storage::add_contract_version(
+    let (contract_hash, contract_version) = storage::add_contract_version(
         do_nothing_package_hash.into_hash().unwrap(),
         entry_points,
         BTreeMap::new(),
     );
-    runtime::put_key("end of upgrade", key.into());
+    runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
+    runtime::put_key("end of upgrade", contract_hash.into());
 }

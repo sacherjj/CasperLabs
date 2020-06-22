@@ -8,7 +8,7 @@ use contract::{
     contract_api::{runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{contracts::NamedKeys, CLValue, ContractHash, URef};
+use types::{contracts::NamedKeys, CLValue, ContractHash, ContractVersion, URef};
 
 pub const MODIFIED_MINT_EXT_FUNCTION_NAME: &str = "modified_mint_ext";
 pub const POS_EXT_FUNCTION_NAME: &str = "pos_ext";
@@ -34,7 +34,7 @@ pub extern "C" fn transfer() {
     modified_mint::transfer();
 }
 
-fn upgrade_mint() -> ContractHash {
+fn upgrade_mint() -> (ContractHash, ContractVersion) {
     const HASH_KEY_NAME: &str = "mint_hash";
     const ACCESS_KEY_NAME: &str = "mint_access";
 
@@ -54,11 +54,11 @@ fn upgrade_mint() -> ContractHash {
 
 #[no_mangle]
 pub extern "C" fn upgrade() {
-    let mut upgrades = BTreeMap::new();
+    let mut upgrades: BTreeMap<ContractHash, ContractHash> = BTreeMap::new();
 
     {
         let old_mint_hash = system::get_mint();
-        let new_mint_hash = upgrade_mint();
+        let (new_mint_hash, _contract_version) = upgrade_mint();
         upgrades.insert(old_mint_hash, new_mint_hash);
     }
 

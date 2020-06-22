@@ -41,6 +41,10 @@ pub extern "C" fn call() {
         entry_points
     };
 
-    let contract_hash = storage::new_contract(entry_points, None, None, None);
+    let (contract_hash, contract_version) = storage::new_contract(entry_points, None, None, None);
+    runtime::put_key(
+        "contract_version",
+        storage::new_uref(contract_version).into(),
+    );
     runtime::put_key("expensive-calculation", contract_hash.into());
 }

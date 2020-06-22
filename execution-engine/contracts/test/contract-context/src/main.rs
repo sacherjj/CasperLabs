@@ -13,7 +13,7 @@ use types::{
     contracts::{
         EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, CONTRACT_INITIAL_VERSION,
     },
-    runtime_args, CLType, ContractHash, ContractPackageHash, Key, RuntimeArgs,
+    runtime_args, CLType, ContractHash, ContractPackageHash, ContractVersion, Key, RuntimeArgs,
 };
 
 const PACKAGE_HASH_KEY: &str = "package_hash_key";
@@ -23,6 +23,7 @@ const CONTRACT_CODE: &str = "contract_code_test";
 const SESSION_CODE: &str = "session_code_test";
 const NEW_KEY: &str = "new_key";
 const NAMED_KEY: &str = "contract_named_key";
+const CONTRACT_VERSION: &str = "contract_version";
 
 #[no_mangle]
 pub extern "C" fn session_code_test() {
@@ -146,7 +147,7 @@ fn create_entrypoints_1() -> EntryPoints {
     entry_points
 }
 
-fn install_version_1(package_hash: ContractPackageHash) -> ContractHash {
+fn install_version_1(package_hash: ContractPackageHash) -> (ContractHash, ContractVersion) {
     let contract_named_keys = {
         let contract_variable = storage::new_uref(0);
 
@@ -166,6 +167,7 @@ pub extern "C" fn call() {
 
     runtime::put_key(PACKAGE_HASH_KEY, contract_package_hash.into());
     runtime::put_key(PACKAGE_ACCESS_KEY, access_uref.into());
-    let contract_hash = install_version_1(contract_package_hash);
+    let (contract_hash, contract_version) = install_version_1(contract_package_hash);
+    runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
     runtime::put_key(CONTRACT_HASH_KEY, Key::Hash(contract_hash));
 }

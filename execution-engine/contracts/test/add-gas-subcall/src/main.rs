@@ -9,8 +9,8 @@ use alloc::string::String;
 use contract::contract_api::{runtime, storage};
 
 use types::{
-    runtime_args, ApiError, CLType, ContractHash, EntryPoint, EntryPointAccess, EntryPointType,
-    EntryPoints, Parameter, RuntimeArgs,
+    runtime_args, ApiError, CLType, ContractHash, ContractVersion, EntryPoint, EntryPointAccess,
+    EntryPointType, EntryPoints, Parameter, RuntimeArgs,
 };
 
 // This is making use of the undocumented "FFI" function `gas()` which is used by the Wasm
@@ -39,7 +39,7 @@ pub extern "C" fn add_gas() {
     safe_gas(amount);
 }
 
-fn store() -> ContractHash {
+fn store() -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
         let entry_point = EntryPoint::new(
@@ -65,7 +65,7 @@ pub extern "C" fn call() {
     match method_name.as_str() {
         ADD_GAS_FROM_SESSION => safe_gas(amount),
         ADD_GAS_VIA_SUBCALL => {
-            let contract_hash = store();
+            let (contract_hash, _contract_version) = store();
             runtime::call_contract(
                 contract_hash,
                 SUBCALL_NAME,

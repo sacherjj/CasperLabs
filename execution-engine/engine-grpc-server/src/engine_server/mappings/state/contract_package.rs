@@ -3,6 +3,7 @@ use std::{
     convert::{TryFrom, TryInto},
 };
 use types::{
+    contracts::{ContractVersions, DisabledVersions, Groups},
     ContractPackage, ContractVersionKey, EntryPoint, EntryPointAccess, EntryPointType, Group,
     Parameter,
 };
@@ -49,7 +50,12 @@ impl TryFrom<state::ContractPackage> for ContractPackage {
     type Error = ParsingError;
     fn try_from(mut value: state::ContractPackage) -> Result<ContractPackage, Self::Error> {
         let access_uref = value.take_access_key().try_into()?;
-        let mut contract_package = ContractPackage::new(access_uref);
+        let mut contract_package = ContractPackage::new(
+            access_uref,
+            ContractVersions::default(),
+            DisabledVersions::default(),
+            Groups::default(),
+        );
         for mut active_version in value.take_active_versions().into_iter() {
             let version = active_version.take_version().try_into()?;
             let header = active_version.take_contract_hash().as_slice().try_into()?;
@@ -184,5 +190,22 @@ impl TryFrom<state::ContractVersionKey> for ContractVersionKey {
             value.protocol_version_major,
             contract_version,
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::proptest;
+
+    use super::*;
+    use crate::engine_server::mappings::test_utils;
+    use types::gens;
+
+    proptest! {
+
+        #[test]
+        fn round_trip(contract in gens::contract_package_arb()) {
+            test_utils::protobuf_round_trip::<ContractPackage, state::ContractPackage>(contract);
+        }
     }
 }

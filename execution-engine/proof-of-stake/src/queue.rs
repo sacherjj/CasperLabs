@@ -67,7 +67,7 @@ impl CLTyped for QueueEntry {
 }
 
 /// A queue of bonding or unbonding requests, sorted by timestamp in ascending order.
-#[derive(Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Queue(pub Vec<QueueEntry>);
 
 impl Queue {

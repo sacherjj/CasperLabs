@@ -208,16 +208,15 @@ pub mod gens {
 
     use super::StoredValue;
     use crate::account::gens::account_arb;
-    use types::gens::contract_wasm_arb;
+    use types::gens::{contract_arb, contract_package_arb, contract_wasm_arb};
 
     pub fn stored_value_arb() -> impl Strategy<Value = StoredValue> {
         prop_oneof![
             cl_value_arb().prop_map(StoredValue::CLValue),
             account_arb().prop_map(StoredValue::Account),
+            contract_package_arb().prop_map(StoredValue::ContractPackage),
+            contract_arb().prop_map(StoredValue::Contract),
             contract_wasm_arb().prop_map(StoredValue::ContractWasm),
-            /* TODO: implement additional arbs
-             * contract_arb().prop_map(StoredValue::Contract),
-             * contract_package_arb().prop_map(StoredValue::ContractPackage), */
         ]
     }
 }

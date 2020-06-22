@@ -45,11 +45,11 @@ export function call(): void {
     return;
   }
 
-  let key = CL.addContractVersion(
+  const result = CL.addContractVersion(
     <Uint8Array>doNothingPackageHash.hash,
     entryPoints,
     new Array<Pair<String, Key>>(),
   );
 
-  CL.putKey("end of upgrade", Key.fromHash(key));
+  CL.putKey("end of upgrade", Key.fromHash(result.contractHash));
 }

@@ -41,7 +41,7 @@ use crate::{
     runtime_context::{self, RuntimeContext},
     Address,
 };
-use contracts::{ContractVersion, NamedKeys};
+use contracts::{ContractVersion, ContractVersions, DisabledVersions, Groups, NamedKeys};
 use scoped_instrumenter::ScopedInstrumenter;
 
 pub struct Runtime<'a, R> {
@@ -1904,7 +1904,7 @@ where
         };
 
         let entry_point = contract
-            .get_entry_point(entry_point_name)
+            .entry_point(entry_point_name)
             .cloned()
             .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
@@ -1947,15 +1947,15 @@ where
             Some(version) => {
                 ContractVersionKey::new(self.context.protocol_version().value().major, version)
             }
-            None => match contract_package.get_current_contract_version() {
-                Some(v) => *v,
+            None => match contract_package.current_contract_version() {
+                Some(v) => v,
                 None => return Err(Error::NoActiveContractVersions(contract_package_hash)),
             },
         };
 
         // Get contract entry point hash
         let contract_hash = contract_package
-            .get_contract(contract_version_key)
+            .lookup_contract_hash(contract_version_key)
             .cloned()
             .ok_or_else(|| Error::InvalidContractVersion(contract_version_key))?;
 
@@ -1972,7 +1972,7 @@ where
         };
 
         let entry_point = contract
-            .get_entry_point(&entry_point_name)
+            .entry_point(&entry_point_name)
             .cloned()
             .ok_or_else(|| Error::NoSuchMethod(entry_point_name.to_owned()))?;
 
@@ -2229,18 +2229,21 @@ where
         entry_point_name: String,
         args_bytes: Vec<u8>,
         result_size_ptr: u32,
+        scoped_instrumenter: &mut ScopedInstrumenter,
     ) -> Result<Result<(), ApiError>, Error> {
         // Exit early if the host buffer is already occupied
         if let Err(err) = self.check_host_buffer() {
             return Ok(Err(err));
         }
         let args: RuntimeArgs = bytesrepr::deserialize(args_bytes)?;
+        scoped_instrumenter.pause();
         let result = self.call_versioned_contract(
             contract_package_hash,
             contract_version,
             entry_point_name,
             args,
         )?;
+        scoped_instrumenter.unpause();
         self.manage_call_contract_host_buffer(result_size_ptr, result)
     }
 
@@ -2323,7 +2326,12 @@ where
 
     fn create_contract_value(&mut self) -> Result<(StoredValue, URef), Error> {
         let access_key = self.context.new_unit_uref()?;
-        let contract_package = ContractPackage::new(access_key);
+        let contract_package = ContractPackage::new(
+            access_key,
+            ContractVersions::default(),
+            DisabledVersions::default(),
+            Groups::default(),
+        );
 
         let value = StoredValue::ContractPackage(contract_package);
 
@@ -2422,6 +2430,7 @@ where
         output_ptr: u32,
         output_size: usize,
         bytes_written_ptr: u32,
+        version_ptr: u32,
     ) -> Result<Result<(), ApiError>, Error> {
         let contract_package_key = contract_package_hash.into();
         self.context.validate_key(&contract_package_key)?;
@@ -2443,8 +2452,8 @@ where
         let protocol_version = self.context.protocol_version();
         let major = protocol_version.value().major;
 
-        // TODO: Implement different ways of carrying on existing named keys
-        if let Some(&previous_contract_hash) = contract_package.get_current_contract_hash() {
+        // TODO: EE-1032 - Implement different ways of carrying on existing named keys
+        if let Some(previous_contract_hash) = contract_package.current_contract_hash() {
             let previous_contract: Contract =
                 self.context.read_gs_typed(&previous_contract_hash.into())?;
 
@@ -2460,9 +2469,7 @@ where
             protocol_version,
         );
 
-        // Michal: is there a way to communicate the contract version back, or should we throw it
-        // away?
-        let _contract_version = contract_package.insert_contract_version(major, contract_hash);
+        let insert_contract_result = contract_package.insert_contract_version(major, contract_hash);
 
         self.context
             .state()
@@ -2500,6 +2507,12 @@ where
             let bytes_size = key_bytes.len() as u32;
             let size_bytes = bytes_size.to_le_bytes(); // Wasm is little-endian
             if let Err(error) = self.memory.set(bytes_written_ptr, &size_bytes) {
+                return Err(Error::Interpreter(error.into()));
+            }
+
+            let version_value: u32 = insert_contract_result.contract_version();
+            let version_bytes = version_value.to_le_bytes();
+            if let Err(error) = self.memory.set(version_ptr, &version_bytes) {
                 return Err(Error::Interpreter(error.into()));
             }
         }
@@ -3178,7 +3191,8 @@ where
 
         Ok(Ok(()))
     }
-    pub fn validate_entry_point_access(
+
+    fn validate_entry_point_access(
         &self,
         package: &ContractPackage,
         access: &EntryPointAccess,

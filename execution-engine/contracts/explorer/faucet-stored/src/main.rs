@@ -7,8 +7,8 @@ use alloc::{string::ToString, vec};
 
 use contract::contract_api::{runtime, storage};
 use types::{
-    account::PublicKey, CLType, CLTyped, ContractHash, EntryPoint, EntryPointAccess,
-    EntryPointType, EntryPoints, Parameter,
+    account::PublicKey, CLType, CLTyped, ContractHash, ContractVersion, EntryPoint,
+    EntryPointAccess, EntryPointType, EntryPoints, Parameter,
 };
 
 const CONTRACT_NAME: &str = "faucet";
@@ -17,13 +17,14 @@ const ACCESS_KEY_NAME: &str = "faucet_package_access";
 const ENTRY_POINT_NAME: &str = "call_faucet";
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";
+const CONTRACT_VERSION: &str = "contract_version";
 
 #[no_mangle]
 pub extern "C" fn call_faucet() {
     faucet::delegate();
 }
 
-fn store() -> ContractHash {
+fn store() -> (ContractHash, ContractVersion) {
     let entry_points = {
         let mut entry_points = EntryPoints::new();
 
@@ -52,6 +53,7 @@ fn store() -> ContractHash {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let contract_hash = store();
+    let (contract_hash, contract_version) = store();
+    runtime::put_key(CONTRACT_VERSION, storage::new_uref(contract_version).into());
     runtime::put_key(CONTRACT_NAME, contract_hash.into());
 }
