@@ -63,7 +63,7 @@ def faucet_fund_account(casperlabs_client, account_hash_hex, amount=1000000000):
     deploy_hash = casperlabs_client.deploy(
         private_key=FAUCET_PRIVATE_KEY_PEM_PATH,
         session=faucet_wasm_path,
-        session_args=ABI.args_to_json(session_args),
+        session_args=session_args,
     )
     result = casperlabs_client.show_deploy(deploy_hash, wait_for_processed=True)
     block_hash = result.processing_results[0].block_info.summary.block_hash
@@ -211,28 +211,3 @@ def test_vdag(casperlabs_client):
 def test_vdag_cli(casperlabs_client):
     args = {"depth": 10}
     visualize_dag_cmd.method(casperlabs_client, args)
-
-
-def test_key():
-    private_key_hex = "19765489110fca970517bd9dd1789890a30121ef342674334996c3c5a6f7bd04"
-    key = SECP256K1Key(private_key=bytes.fromhex(private_key_hex))
-    sign_data = b"\x00\x00"
-    sign_data_hash = crypto.blake2b_hash(sign_data)
-    # print(f"data: {base64.b64encode(sign_data_hash)}")
-    # print(f"Public: {key.public_key.hex()}")
-    # print(f"Private: {key.private_key.hex()}")
-    # print(f"Private Base64: {base64.b64encode(key.private_key)}")
-    # print(f"Data: {sign_data.hex()}")
-    # print(f"Signing: {sign_data_hash.hex()}")
-    # print(f"Sign b111: {key.sign(sign_data_hash).hex()}")
-    # print(f"{key.private_key_pem}")
-    # print(f"{key.public_key_pem}")
-    signed_a = key.sign(sign_data_hash).hex()
-    # from eth_keys import KeyAPI
-    # keys = KeyAPI()
-    # pk = keys.PrivateKey(bytes.fromhex(private_key_hex))
-    # signed_b = keys.ecdsa_sign_non_recoverable(sign_data_hash, pk)[2:]
-    # assert signed_a == signed_b
-    expected = "304402201714f45fc691ea45d822e6e180d183a757bc41141e3ec7c49fc12524d9785994022030fade47b36a089c1c932741505ca4c28b3fcb30a6d4b7e2d5fcc9febe639b40"
-    # print(f"{len(signed_a)} - {len(signed_b)} - {len(expected)}")
-    assert signed_a == expected

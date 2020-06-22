@@ -21,6 +21,9 @@ class NoChangeHasher:
     def copy(self):
         return NoChangeHasher(self.data)
 
+    def name(self):
+        return "bob"
+
     def __call__(self, data=None):
         if data:
             self.data = data
@@ -78,18 +81,13 @@ class SECP256K1Key(KeyHolder):
 
     def _public_key_from_private_key(self) -> bytes:
         private_key = ecdsa.SigningKey.from_string(self.private_key, curve=self.CURVE)
-        return private_key.verifying_key.to_string("uncompressed")
+        return private_key.verifying_key.to_string(self.UNCOMPRESSED)
 
-    def sign(self, data: bytes) -> bytes:
+    def sign(self, hashed_data: bytes) -> bytes:
         """ Return signature of data given """
         private_key = ecdsa.SigningKey.from_string(self.private_key, curve=self.CURVE)
-        # .sign provides entropy.
-        # .sign_deterministic wants to hash
-        # this is method after .sign_deterministic should have hashed.
-        sigencode = ecdsa.util.sigencode_der_canonize
-        hashfunc = NoChangeHasher
-        return private_key.sign_deterministic(
-            data, sigencode=sigencode, hashfunc=hashfunc, extra_entropy=b""
+        return private_key.sign_digest(
+            hashed_data, sigencode=ecdsa.util.sigencode_der_canonize
         )
 
     @staticmethod
