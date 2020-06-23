@@ -83,7 +83,7 @@ def run_protoc(file_names, PROTO_DIR=PROTO_DIR):
     import grpc_tools
     from grpc_tools import protoc
 
-    print(f"Run protoc...")
+    print("Run protoc...")
     google_proto = join(dirname(grpc_tools.__file__), "_proto")
     for file_name in file_names:
         print(f"   {file_name}")

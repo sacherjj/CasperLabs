@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import base64
 import functools
 from pathlib import Path
 import time
@@ -10,7 +9,7 @@ from typing import List, Union
 # to get keys and signatures in hex when printed
 import google.protobuf.text_format
 
-from .consts import ED25519_KEY_ALGORITHM, DEFAULT_PAYMENT_AMOUNT
+from .consts import ED25519_KEY_ALGORITHM
 from .reformat import optional_base64_base16_to_bytes
 
 CEscape = google.protobuf.text_format.text_encoding.CEscape
@@ -37,7 +36,6 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from . import io, common, vdag, abi, key_holders
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
-from .contract import bundled_contract_path
 from .query_state import key_variant
 from .deploy import DeployData, sign_deploy
 

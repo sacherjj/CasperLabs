@@ -1,24 +1,12 @@
-import os
 import abc
 from dataclasses import dataclass
 from typing import Dict, Union, Optional
 
 from casperlabs_client.io import read_binary_file
 from . import consensus_pb2 as consensus
-import pkg_resources
 
 from .abi import ABI
 from .consts import DEFAULT_PAYMENT_AMOUNT
-
-
-def bundled_contract_path(file_name):
-    """
-    Return path to contract file bundled with the package.
-    """
-    p = pkg_resources.resource_filename(__name__, file_name)
-    if not os.path.exists(p):
-        raise Exception(f"Missing bundled contract {file_name} ({p})")
-    return p
 
 
 @dataclass

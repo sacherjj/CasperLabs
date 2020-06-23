@@ -26,4 +26,3 @@ def test_sign_deploy(account_keys_directory, algorithm):
         key_holder=key_holder, algorithm=algorithm, deploy=deploy
     )
     assert signed_by_pem == signed_by_key_holder
-
