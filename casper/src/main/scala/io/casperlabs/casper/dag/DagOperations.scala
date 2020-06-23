@@ -670,20 +670,28 @@ object DagOperations {
   }
 
   /**
-    * Returns latest messages per era.
+    * Returns latest messages per era, including empty sets for silent validators.
     *
     * We start collecting from the youngest era to avoid situation
     * where concurrent addition of a message in the parent era causes
     * j-past-cone of the child era to contain this message transitively
     * when latestMessage(parentEra) doesn't.
     */
-  def latestMessagesInEras[F[_]: Monad](
+  def latestMessagesInEras[F[_]: MonadThrowable: EraStorage](
       dag: DagRepresentation[F],
       keyBlocks: List[Message]
   ): F[Map[ByteString, Map[DagRepresentation.Validator, Set[Message]]]] =
     keyBlocks
       .sortBy(_.jRank)(jRankOrdering.reverse)
-      .traverse(kb => dag.latestMessagesInEra(kb.messageHash).map(kb.messageHash -> _))
+      .traverse { kb =>
+        for {
+          era    <- EraStorage[F].getEraUnsafe(kb.messageHash)
+          latest <- dag.latestMessagesInEra(kb.messageHash)
+          // Add empty sets for validators who haven't produced anything.
+          base     = era.bonds.map(b => b.validatorPublicKey -> Set.empty[Message]).toMap
+          messages = base |+| latest
+        } yield kb.messageHash -> messages
+      }
       .map(_.toMap)
 
   /**
