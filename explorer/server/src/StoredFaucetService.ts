@@ -57,7 +57,7 @@ export class StoredFaucetService {
       CONTRACT_NAME,
       null,
       this.paymentAmount,
-      this.contractKeys.publicKeyHash,
+      Keys.Ed25519.publicKeyHash(this.contractKeys.publicKey),
       dependencies,
       ENTRY_POINT_NAME
     );
