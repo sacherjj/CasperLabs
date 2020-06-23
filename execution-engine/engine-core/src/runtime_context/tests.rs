@@ -164,7 +164,7 @@ where
     F: FnOnce(RuntimeContext<InMemoryGlobalStateView>) -> Result<T, Error>,
 {
     let deploy_hash = [1u8; 32];
-    let (base_key, account) = mock_account(PublicKey::ed25519_from([0u8; 32]));
+    let (base_key, account) = mock_account(AccountHash::new([0u8; 32]));
 
     let mut named_keys = NamedKeys::new();
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
@@ -765,7 +765,7 @@ fn remove_uref_works() {
 
     let access_rights = HashMap::new();
     let deploy_hash = [1u8; 32];
-    let (base_key, account) = mock_account(PublicKey::ed25519_from([0u8; 32]));
+    let (base_key, account) = mock_account(AccountHash::new([0u8; 32]));
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let mut uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_name = "Foo".to_owned();
@@ -799,8 +799,7 @@ fn validate_valid_purse_of_an_account() {
     let mock_purse = [42u8; 32];
     let access_rights = HashMap::new();
     let deploy_hash = [1u8; 32];
-    let (base_key, account) =
-        mock_account_with_purse(PublicKey::ed25519_from([0u8; 32]), mock_purse);
+    let (base_key, account) = mock_account_with_purse(AccountHash::new([0u8; 32]), mock_purse);
     let mut named_keys = NamedKeys::new();
     let hash_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);
     let uref_address_generator = AddressGenerator::new(&deploy_hash, Phase::Session);

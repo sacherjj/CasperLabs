@@ -12,8 +12,8 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
-    account::AccountHash, contracts::NamedKeys, runtime_args, ContractHash, ContractPackageHash, Key,
-    RuntimeArgs, URef, U512,
+    account::AccountHash, contracts::NamedKeys, runtime_args, ContractHash, ContractPackageHash,
+    Key, RuntimeArgs, URef, U512,
 };
 
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
@@ -62,7 +62,7 @@ fn should_run_pos_install_contract() {
     let mint_package_hash = mint_package.contract_package_hash();
 
     let genesis_validators: BTreeMap<AccountHash, U512> = (1u8..=N_VALIDATORS)
-        .map(|i| (AccoutHash::new([i; 32]), U512::from(i)))
+        .map(|i| (AccountHash::new([i; 32]), U512::from(i)))
         .collect();
 
     let total_bond = genesis_validators.values().fold(U512::zero(), |x, y| x + y);

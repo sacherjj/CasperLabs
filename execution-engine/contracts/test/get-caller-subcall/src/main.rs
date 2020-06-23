@@ -11,8 +11,8 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::AccountHash, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints,
-    RuntimeArgs,
+    account::AccountHash, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType,
+    EntryPoints, RuntimeArgs,
 };
 
 const ENTRY_POINT_NAME: &str = "get_caller_ext";

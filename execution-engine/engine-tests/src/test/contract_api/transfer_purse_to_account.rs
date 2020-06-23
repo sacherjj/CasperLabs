@@ -10,7 +10,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::AccountHash, runtime_args, ApiError, CLValue, Key, RuntimeArgs, TransferResult, TransferredTo, U512};
+use types::{
+    account::AccountHash, runtime_args, ApiError, CLValue, Key, RuntimeArgs, TransferResult,
+    TransferredTo, U512,
+};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
 const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);

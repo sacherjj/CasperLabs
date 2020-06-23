@@ -50,7 +50,11 @@ impl ExecuteRequestBuilder {
         self.execute_request
     }
 
-    pub fn standard(account_hash: AccountHash, session_file: &str, session_args: RuntimeArgs) -> Self {
+    pub fn standard(
+        account_hash: AccountHash,
+        session_file: &str,
+        session_args: RuntimeArgs,
+    ) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 

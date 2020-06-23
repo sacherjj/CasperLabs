@@ -309,7 +309,7 @@ pub mod gens {
 mod tests {
     use num::{Bounded, Num};
 
-    use types::{account::AccountHash, AccessRights, ProtocolVersion, ContractWasm, Key, URef, U128, U256, U512};
+    use types::{account::AccountHash, AccessRights, ContractWasm, Key, URef, U128, U256, U512};
 
     use super::*;
     use crate::account::{Account, ActionThresholds, AssociatedKeys};

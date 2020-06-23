@@ -8,7 +8,7 @@ use engine_storage::global_state::StateReader;
 use engine_wasm_prep::Preprocessor;
 use types::{
     account::AccountHash, CLValue, Contract, ContractHash, ContractPackage, ContractPackageHash,
-    ContractWasm, ContractWasmHash, Key, U512
+    ContractWasm, ContractWasmHash, Key, U512,
 };
 
 use crate::{execution, tracking_copy::TrackingCopy};
