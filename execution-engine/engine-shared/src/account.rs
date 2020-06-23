@@ -42,11 +42,11 @@ impl Account {
         }
     }
 
-    pub fn create(account: PublicKey, named_keys: NamedKeys, main_purse: URef) -> Self {
-        let associated_keys = AssociatedKeys::new(account, Weight::new(1));
+    pub fn create(public_key: PublicKey, named_keys: NamedKeys, main_purse: URef) -> Self {
+        let associated_keys = AssociatedKeys::new(public_key, Weight::new(1));
         let action_thresholds: ActionThresholds = Default::default();
         Account::new(
-            account,
+            public_key,
             named_keys,
             main_purse,
             associated_keys,

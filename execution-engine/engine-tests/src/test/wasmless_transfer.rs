@@ -431,11 +431,11 @@ fn transfer_wasmless_should_create_target_if_it_doesnt_exist() {
         .expect_success()
         .commit();
 
-    let account_2_purse = builder
+    let account_2 = builder
         .get_account(ACCOUNT_2_ADDR)
-        .expect("should get account 2")
-        .main_purse();
-    let account_2_starting_balance = builder.get_purse_balance(account_2_purse);
+        .expect("account 2 should exist");
+
+    let account_2_starting_balance = builder.get_purse_balance(account_2.main_purse());
 
     assert_eq!(
         account_1_starting_balance - transfer_amount,
@@ -443,8 +443,7 @@ fn transfer_wasmless_should_create_target_if_it_doesnt_exist() {
         "account 1 ending balance incorrect"
     );
     assert_eq!(
-        account_2_starting_balance + transfer_amount,
-        builder.get_purse_balance(account_2_purse),
+        account_2_starting_balance, transfer_amount,
         "account 2 ending balance incorrect"
     );
 }

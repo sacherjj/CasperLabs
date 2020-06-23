@@ -24,6 +24,13 @@ pub trait TrackingCopyExt<R> {
         public_key: PublicKey,
     ) -> Result<Account, Self::Error>;
 
+    /// Reads the account at a given account address.
+    fn read_account(
+        &mut self,
+        correlation_id: CorrelationId,
+        public_key: PublicKey,
+    ) -> Result<Account, Self::Error>;
+
     /// Gets the purse balance key for a given purse id
     fn get_purse_balance_key(
         &mut self,
@@ -82,6 +89,25 @@ where
     ) -> Result<Account, Self::Error> {
         let account_key = Key::Account(public_key);
         match self.get(correlation_id, &account_key).map_err(Into::into)? {
+            Some(StoredValue::Account(account)) => Ok(account),
+            Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
+                "Account".to_string(),
+                other.type_name(),
+            ))),
+            None => Err(execution::Error::KeyNotFound(account_key)),
+        }
+    }
+
+    fn read_account(
+        &mut self,
+        correlation_id: CorrelationId,
+        public_key: PublicKey,
+    ) -> Result<Account, Self::Error> {
+        let account_key = Key::Account(public_key);
+        match self
+            .read(correlation_id, &account_key)
+            .map_err(Into::into)?
+        {
             Some(StoredValue::Account(account)) => Ok(account),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
                 "Account".to_string(),

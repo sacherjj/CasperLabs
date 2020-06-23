@@ -1,7 +1,7 @@
 use engine_shared::{account::Account, newtypes::CorrelationId, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 use std::{cell::RefCell, rc::Rc};
-use types::{AccessRights, ApiError, Key, RuntimeArgs, URef, U512};
+use types::{account::PublicKey, AccessRights, ApiError, Key, RuntimeArgs, URef, U512};
 
 use crate::{
     engine_state::Error,
@@ -13,15 +13,41 @@ const SOURCE: &str = "source";
 const TARGET: &str = "target";
 const AMOUNT: &str = "amount";
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum TransferTargetMode {
+    Unknown,
+    PurseExists(URef),
+    CreateAccount(PublicKey),
+}
+
 pub struct TransferRuntimeArgsBuilder {
     inner: RuntimeArgs,
+    transfer_target_mode: TransferTargetMode,
 }
 
 impl TransferRuntimeArgsBuilder {
     pub fn new(imputed_runtime_args: RuntimeArgs) -> TransferRuntimeArgsBuilder {
         TransferRuntimeArgsBuilder {
             inner: imputed_runtime_args,
+            transfer_target_mode: TransferTargetMode::Unknown,
         }
+    }
+
+    fn purse_exists<R>(
+        &self,
+        uref: URef,
+        correlation_id: CorrelationId,
+        tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
+    ) -> bool
+    where
+        R: StateReader<Key, StoredValue>,
+        R::Error: Into<ExecError>,
+    {
+        // it is a URef but is it a purse URef?
+        tracking_copy
+            .borrow_mut()
+            .get_purse_balance_key(correlation_id, uref.into())
+            .is_ok()
     }
 
     fn resolve_source_uref<R>(
@@ -57,10 +83,14 @@ impl TransferRuntimeArgsBuilder {
                     Some(Key::URef(found_uref)) => {
                         if found_uref.is_writeable() {
                             // it is a URef and caller has access but is it a purse URef?
-                            tracking_copy
-                                .borrow_mut()
-                                .get_purse_balance_key(correlation_id, found_uref.to_owned().into())
-                                .map_err(|_| ExecError::Revert(ApiError::InvalidPurse))?;
+                            if !self.purse_exists(
+                                found_uref.to_owned(),
+                                correlation_id,
+                                tracking_copy,
+                            ) {
+                                return Err(Error::Exec(ExecError::Revert(ApiError::InvalidPurse)));
+                            }
+
                             Ok(uref)
                         } else {
                             Err(Error::Exec(ExecError::InvalidAccess {
@@ -82,11 +112,11 @@ impl TransferRuntimeArgsBuilder {
         }
     }
 
-    fn resolve_target_uref<R>(
+    fn resolve_transfer_target_mode<R>(
         &self,
         correlation_id: CorrelationId,
         tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
-    ) -> Result<URef, Error>
+    ) -> Result<TransferTargetMode, Error>
     where
         R: StateReader<Key, StoredValue>,
         R::Error: Into<ExecError>,
@@ -102,13 +132,11 @@ impl TransferRuntimeArgsBuilder {
                     }
                 };
 
-                // it is a URef but is it a purse URef?
-                tracking_copy
-                    .borrow_mut()
-                    .get_purse_balance_key(correlation_id, uref.into())
-                    .map_err(|_| ExecError::Revert(ApiError::InvalidPurse))?;
+                if !self.purse_exists(uref, correlation_id, tracking_copy) {
+                    return Err(Error::Exec(ExecError::Revert(ApiError::InvalidPurse)));
+                }
 
-                Ok(uref)
+                Ok(TransferTargetMode::PurseExists(uref))
             }
             Some(cl_value)
                 if *cl_value.cl_type()
@@ -127,10 +155,12 @@ impl TransferRuntimeArgsBuilder {
                     Some(public_key) => {
                         match tracking_copy
                             .borrow_mut()
-                            .get_account(correlation_id, public_key)
+                            .read_account(correlation_id, public_key)
                         {
-                            Ok(account) => Ok(account.main_purse()),
-                            Err(error) => Err(Error::Exec(error)),
+                            Ok(account) => {
+                                Ok(TransferTargetMode::PurseExists(account.main_purse()))
+                            }
+                            Err(_) => Ok(TransferTargetMode::CreateAccount(public_key)),
                         }
                     }
                     None => Err(Error::Exec(ExecError::Revert(ApiError::Transfer))),
@@ -147,10 +177,12 @@ impl TransferRuntimeArgsBuilder {
                     Some(public_key) => {
                         match tracking_copy
                             .borrow_mut()
-                            .get_account(correlation_id, public_key)
+                            .read_account(correlation_id, public_key)
                         {
-                            Ok(account) => Ok(account.main_purse()),
-                            Err(error) => Err(Error::Exec(error)),
+                            Ok(account) => {
+                                Ok(TransferTargetMode::PurseExists(account.main_purse()))
+                            }
+                            Err(_) => Ok(TransferTargetMode::CreateAccount(public_key)),
                         }
                     }
                     None => Err(Error::Exec(ExecError::Revert(ApiError::Transfer))),
@@ -190,30 +222,57 @@ impl TransferRuntimeArgsBuilder {
         }
     }
 
+    pub fn transfer_target_mode<R>(
+        &mut self,
+        correlation_id: CorrelationId,
+        tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
+    ) -> Result<TransferTargetMode, Error>
+    where
+        R: StateReader<Key, StoredValue>,
+        R::Error: Into<ExecError>,
+    {
+        let mode = self.transfer_target_mode;
+        if mode != TransferTargetMode::Unknown {
+            return Ok(mode);
+        }
+        match self.resolve_transfer_target_mode(correlation_id, tracking_copy) {
+            Ok(mode) => {
+                self.transfer_target_mode = mode;
+                Ok(mode)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     pub fn build<R>(
         self,
-        correlation_id: CorrelationId,
         account: &Account,
+        correlation_id: CorrelationId,
         tracking_copy: Rc<RefCell<TrackingCopy<R>>>,
     ) -> Result<RuntimeArgs, Error>
     where
         R: StateReader<Key, StoredValue>,
         R::Error: Into<ExecError>,
     {
+        let target_uref =
+            match self.resolve_transfer_target_mode(correlation_id, Rc::clone(&tracking_copy))? {
+                TransferTargetMode::PurseExists(uref) => uref,
+                _ => {
+                    return Err(Error::Exec(ExecError::Revert(ApiError::Transfer)));
+                }
+            };
+
+        let source_uref =
+            self.resolve_source_uref(account, correlation_id, Rc::clone(&tracking_copy))?;
+
+        if source_uref.addr() == target_uref.addr() {
+            return Err(ExecError::Revert(ApiError::InvalidPurse).into());
+        }
+
+        let amount = self.resolve_amount()?;
+
         let runtime_args = {
             let mut runtime_args = RuntimeArgs::new();
-
-            let source_uref =
-                self.resolve_source_uref(account, correlation_id, Rc::clone(&tracking_copy))?;
-
-            let target_uref =
-                self.resolve_target_uref(correlation_id, Rc::clone(&tracking_copy))?;
-
-            if source_uref.addr() == target_uref.addr() {
-                return Err(ExecError::Revert(ApiError::InvalidPurse).into());
-            }
-
-            let amount = self.resolve_amount()?;
 
             runtime_args.insert(SOURCE, source_uref);
             runtime_args.insert(TARGET, target_uref);
