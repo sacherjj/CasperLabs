@@ -30,7 +30,7 @@ const TEST_UNBOND: &str = "unbond";
 
 const ARG_AMOUNT: &str = "amount";
 const ARG_ENTRY_POINT: &str = "entry_point";
-const ARG_ACCOUNT_PK: &str = "account_public_key";
+const ARG_ACCOUNT_PK: &str = "account_hash";
 
 fn get_pos_purse_by_name(builder: &InMemoryWasmTestBuilder, purse_name: &str) -> Option<URef> {
     let pos_contract = builder.get_pos_contract();
@@ -477,7 +477,11 @@ fn should_fail_bonding_with_insufficient_funds() {
     let error_message = utils::get_error_message(response);
 
     if !cfg!(feature = "enable-bonding") {
-        assert!(error_message.contains(&format!("{:?}", ApiError::Unhandled)));
+        assert!(
+            error_message.contains(&format!("{:?}", ApiError::Unhandled)),
+            "error is {:?}",
+            error_message
+        );
     } else {
         // pos::Error::BondTransferFailed => 8
         assert!(error_message.contains(&format!("{:?}", ApiError::ProofOfStake(8))));

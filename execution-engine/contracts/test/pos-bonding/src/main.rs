@@ -17,7 +17,6 @@ const ARG_PURSE: &str = "purse";
 const ARG_ENTRY_POINT: &str = "entry_point";
 const ARG_BOND: &str = "bond";
 const ARG_UNBOND: &str = "unbond";
-// TODO: Changed from "account_public_key" might cause issues.
 const ARG_ACCOUNT_HASH: &str = "account_hash";
 const TEST_BOND_FROM_MAIN_PURSE: &str = "bond-from-main-purse";
 const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";

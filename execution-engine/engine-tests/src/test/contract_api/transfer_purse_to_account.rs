@@ -29,7 +29,7 @@ fn should_run_purse_to_account_transfer() {
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        runtime_args! { "target" => account_1_account_hash, "account" => *ACCOUNT_1_INITIAL_FUND },
+        runtime_args! { "target" => account_1_account_hash, "amount" => *ACCOUNT_1_INITIAL_FUND },
     )
     .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
