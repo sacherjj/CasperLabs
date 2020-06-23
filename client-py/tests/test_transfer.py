@@ -28,4 +28,3 @@ def test_not_only_one_target_arguments(target_account, target_purse):
         CasperLabsClient().transfer(
             amount=100, target_purse=target_purse, target_account=target_account
         )
-

@@ -29,9 +29,9 @@ def test_secp256k1_sign():
     public_key = ecdsa.VerifyingKey.from_string(
         key_holder.public_key, curve=SECP256K1Key.CURVE
     )
-    assert public_key.verify(signature, data) is True, "good signature verification"
+    assert public_key.verify_digest(signature, data, sigdecode=ecdsa.util.sigdecode_der) is True, "good signature verification"
     with pytest.raises(BadSignatureError):
-        public_key.verify(signature, data + b"1")
+        public_key.verify_digest(signature, data + b"1", sigdecode=ecdsa.util.sigdecode_der)
 
 
 def test_secp256k1_round_trip_private_key():

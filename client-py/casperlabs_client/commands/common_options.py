@@ -1,6 +1,6 @@
 from casperlabs_client import consts
 from casperlabs_client.consts import SUPPORTED_KEY_ALGORITHMS, ED25519_KEY_ALGORITHM
-from casperlabs_client.arg_types import algorithm, directory_for_write
+from casperlabs_client.arg_types import algorithm, directory_for_write, positive_integer
 
 ALGORITHM_OPTION = (
     ("-a", "--algorithm"),
@@ -39,6 +39,18 @@ PAYMENT_OPTIONS = [
         ),
     ],
     [
+        ("--payment-amount",),
+        dict(
+            required=False,
+            type=int,
+            default=None,
+            help=(
+                "Standard payment amount. Use this with the default payment, or override with --payment-args "
+                "if custom payment code is used. By default --payment-amount is set to 10000000"
+            ),
+        ),
+    ],
+    [
         ("--payment-hash",),
         dict(
             required=False,
@@ -57,12 +69,39 @@ PAYMENT_OPTIONS = [
         ),
     ],
     [
-        ("--payment-uref",),
+        ("--payment-package-hash",),
         dict(
             required=False,
             type=str,
             default=None,
-            help="URef of the stored contract to be called in the payment; base16 encoded",
+            help="Hash of the stored package to be called in the payment; base16 encoded",
+        ),
+    ],
+    [
+        ("--payment-package-name",),
+        dict(
+            required=False,
+            type=str,
+            default=None,
+            help="Name of the stored package (associated with the executing account) to be called in the payment",
+        ),
+    ],
+    [
+        ("--payment-entry-point",),
+        dict(
+            required=False,
+            type=str,
+            default=None,
+            help="Name of the method that will be used when calling the payment contract.",
+        ),
+    ],
+    [
+        ("--payment-version",),
+        dict(
+            required=False,
+            type=positive_integer,
+            default=None,
+            help="Version of the called payment contract.  Latest will be used by default",
         ),
     ],
     [
@@ -70,22 +109,7 @@ PAYMENT_OPTIONS = [
         dict(
             required=False,
             type=str,
-            help=(
-                "JSON encoded list of payment args, e.g.: "
-                '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'
-            ),
-        ),
-    ],
-    [
-        ("--payment-amount",),
-        dict(
-            required=False,
-            type=int,
-            default=None,
-            help=(
-                "Standard payment amount. Use this with the default payment, or override with --payment-args "
-                "if custom payment code is used. By default --payment-amount is set to 10000000"
-            ),
+            help="""JSON encoded list of payment args, e.g.: '[{"name": "amount", "value": {"big_int": {"value": "123456", "bit_width": 512}}}]'""",
         ),
     ],
 ]
@@ -119,12 +143,39 @@ SESSION_OPTIONS = [
         ),
     ],
     [
-        ("--session-uref",),
+        ("--session-package-hash",),
         dict(
             required=False,
             type=str,
             default=None,
-            help="URef of the stored contract to be called in the session; base16 encoded",
+            help="Hash of the stored package to be called in the session; base16 encoded",
+        ),
+    ],
+    [
+        ("--session-package-name",),
+        dict(
+            required=False,
+            type=str,
+            default=None,
+            help="Name of the stored package (associated with the executing account) to be called in the session",
+        ),
+    ],
+    [
+        ("--session-entry-point",),
+        dict(
+            required=False,
+            type=str,
+            default=None,
+            help="Name of the method that will be used when calling the session contract.",
+        ),
+    ],
+    [
+        ("--session-version",),
+        dict(
+            required=False,
+            type=positive_integer,
+            default=None,
+            help="Version of the called session contract. Latest will be used by default.",
         ),
     ],
     [

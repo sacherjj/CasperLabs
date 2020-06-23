@@ -20,6 +20,7 @@ protobuf = "==3.11.3"
 tox = "*"
 pre-commit = "*"
 ecdsa = "==0.15"
+black = "*"
 
 [requires]
 python_version = "3.7"
