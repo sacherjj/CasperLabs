@@ -3,17 +3,12 @@
 #![no_std]
 #![no_main]
 
-use contract::{
-    contract_api::{runtime, system},
-    unwrap_or_revert::UnwrapOrRevert,
-};
+use contract::contract_api::{runtime, system};
 use types::{account::AccountHash, ApiError, TransferredTo, U512};
 
-enum Arg {
-    Account1Hash = 0,
-    Account1Amount = 1,
-    Account2Hash = 2,
-}
+const ARG_ACCOUNT1_ACCOUNT_HASH: &str = "account_1_account_hash";
+const ARG_ACCOUNT1_AMOUNT: &str = "account_1_amount";
+const ARG_ACCOUNT2_ACCOUNT_HASH: &str = "account_2_account_hash";
 
 #[repr(u16)]
 enum Error {
@@ -32,16 +27,10 @@ fn create_account_with_amount(account: AccountHash, amount: U512) {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account_hash1: AccountHash = runtime::get_arg(Arg::Account1Hash as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
-    let amount: U512 = runtime::get_arg(Arg::Account1Amount as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let account_hash1: AccountHash = runtime::get_named_arg(ARG_ACCOUNT1_ACCOUNT_HASH);
+    let amount: U512 = runtime::get_named_arg(ARG_ACCOUNT1_AMOUNT);
     create_account_with_amount(account_hash1, amount);
 
-    let account_hash2: AccountHash = runtime::get_arg(Arg::Account2Hash as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let account_hash2: AccountHash = runtime::get_named_arg(ARG_ACCOUNT2_ACCOUNT_HASH);
     create_account_with_amount(account_hash2, U512::zero());
 }

@@ -7,6 +7,7 @@ import monix.eval.Task
 import org.scalatest._
 import scala.concurrent.duration.FiniteDuration
 import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.comm.discovery.Node
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
@@ -40,7 +41,7 @@ trait HighwayNetworkFixture { self: HighwayFixture =>
     val relayedRef: Ref[Task, Set[BlockHash]] = Ref.unsafe(Set.empty)
 
     override lazy val blockRelaying = new BlockRelaying[Task] {
-      override def relay(hashes: List[BlockHash]): Task[WaitHandle[Task]] =
+      override def relay(hashes: List[BlockHash], sources: Set[Node]): Task[WaitHandle[Task]] =
         for {
           _           <- relayedRef.update(_ ++ hashes)
           blocks      <- hashes.traverse(h => db.getBlockMessage(h).map(_.get))

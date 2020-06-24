@@ -5,13 +5,10 @@ import {removeAssociatedKey, RemoveKeyFailure} from "../../../../contract-as/ass
 import {typedToArray} from "../../../../contract-as/assembly/utils";
 import {AccountHash} from "../../../../contract-as/assembly/key";
 
-export function call(): void {
-  let accountBytes = CL.getArg(0);
-  if (accountBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+const ARG_ACCOUNT = "account";
 
+export function call(): void {
+  let accountBytes = CL.getNamedArg(ARG_ACCOUNT);
   const accountResult = AccountHash.fromBytes(accountBytes);
   if (accountResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();

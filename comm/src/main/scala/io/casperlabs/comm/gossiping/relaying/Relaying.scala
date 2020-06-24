@@ -15,15 +15,16 @@ import io.casperlabs.metrics.implicits._
 import io.casperlabs.shared.Log
 import monix.execution.Scheduler
 import simulacrum.typeclass
-
+import scala.util.control.NonFatal
 import scala.util.Random
 
 @typeclass
 trait Relaying[F[_]] {
 
-  /** Notify peers about the availability of some data by hashes (blocks or deploys).
+  /** Notify peers about the availability of some data by hashes (blocks or deploys),
+    * except if they were already part of the sources that told us about the item.
     * Return a handle that can be waited upon. */
-  def relay(hashes: List[ByteString]): F[WaitHandle[F]]
+  def relay(hashes: List[ByteString], sources: Set[Node] = Set.empty): F[WaitHandle[F]]
 }
 
 abstract class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metrics: NodeAsk](
@@ -43,7 +44,7 @@ abstract class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metri
   // For logs
   val requestName: String
 
-  override def relay(hashes: List[ByteString]): F[WaitHandle[F]] = {
+  override def relay(hashes: List[ByteString], sources: Set[Node]): F[WaitHandle[F]] = {
     def loop(hash: ByteString, peers: List[Node], relayed: Int, contacted: Int): F[Unit] = {
       val parallelism = math.min(relayFactor - relayed, maxToTry - contacted)
       if (parallelism > 0 && peers.nonEmpty) {
@@ -59,7 +60,7 @@ abstract class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metri
     val run = {
       for {
         peers <- nodeDiscovery.recentlyAlivePeersAscendingDistance
-        _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers), 0, 0))
+        _     <- hashes.parTraverse(hash => loop(hash, Random.shuffle(peers.filterNot(sources)), 0, 0))
       } yield ()
     }.timerGauge("relay")
 
@@ -87,10 +88,11 @@ abstract class RelayingImpl[F[_]: ContextShift: Concurrent: Parallel: Log: Metri
                     .debug(s"${peer.show -> "peer"} rejected ${hex(hash) -> "message"}")
                     .as("relay_rejected")
       _ <- Metrics[F].incrementCounter(counter)
-    } yield isNew).handleErrorWith { ex =>
-      for {
-        _ <- Log[F].debug(s"$requestName request failed ${peer.show -> "peer"}, $ex")
-        _ <- Metrics[F].incrementCounter("relay_failed")
-      } yield false
+    } yield isNew).recoverWith {
+      case NonFatal(ex) =>
+        for {
+          _ <- Log[F].debug(s"$requestName request failed ${peer.show -> "peer"}, $ex")
+          _ <- Metrics[F].incrementCounter("relay_failed")
+        } yield false
     }
 }

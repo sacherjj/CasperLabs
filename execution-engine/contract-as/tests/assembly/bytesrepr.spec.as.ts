@@ -7,7 +7,7 @@ import { fromBytesU64, toBytesU64,
          toBytesString, fromBytesString,
          toBytesVecT,
          Error } from "../../assembly/bytesrepr";
-import { CLValue } from "../../assembly/clvalue";
+import { CLValue, CLType, CLTypeTag } from "../../assembly/clvalue";
 import { Key, KeyVariant, AccountHash } from "../../assembly/key";
 import { URef, AccessRights } from "../../assembly/uref";
 import { Option } from "../../assembly/option";
@@ -15,6 +15,7 @@ import { hex2bin } from "../utils/helpers";
 import { checkArraysEqual, checkTypedArrayEqual, checkItemsEqual } from "../../assembly/utils";
 import { typedToArray, arrayToTyped } from "../../assembly/utils";
 import { Pair } from "../../assembly/pair";
+import { EntryPointAccess, PublicAccess, GroupAccess, EntryPoint, EntryPoints, EntryPointType } from "../../assembly";
 
 // adding the prefix xtest to one of these functions will cause the test to
 // be ignored via the defineTestsFromModule function in spec.tsgit
@@ -164,12 +165,10 @@ export function testSerializeMap(): bool {
     const truth = hex2bin(
         "02000000040000004b6579310600000056616c756531040000004b6579320600000056616c756532"
     );
-    const map: u8[][] = [
-        toBytesPair(toBytesString("Key1"), toBytesString("Value1")),
-        toBytesPair(toBytesString("Key2"), toBytesString("Value2")),
-    ];
-
-    const serialized = toBytesMap(map);
+    const pairs = new Array<Pair<String, String>>();
+    pairs.push(new Pair("Key1", "Value1"));
+    pairs.push(new Pair("Key2", "Value2"));
+    const serialized = toBytesMap(pairs, toBytesString, toBytesString);
     assert(checkArraysEqual(serialized, typedToArray(truth)));
 
     const deser = fromBytesMap<String, String>(
@@ -199,9 +198,10 @@ export function testSerializeMap(): bool {
 export function testToBytesVecT(): bool {
     // let args = ("get_payment_purse",).parse().unwrap().to_bytes().unwrap();
     const truth = hex2bin("0100000015000000110000006765745f7061796d656e745f70757273650a");
+    let serialize = function(item: CLValue): Array<u8> { return item.toBytes(); };
     let serialized = toBytesVecT<CLValue>([
         CLValue.fromString("get_payment_purse"),
-    ]);
+    ], serialize);
     return checkArraysEqual(serialized, typedToArray(truth));
 }
 
@@ -287,7 +287,8 @@ export function testDecodedOptionalIsSome(): bool {
     let unwrapped = res.unwrap();
     assert(unwrapped !== null, "unwrapped should not be null");
     let values = <Uint8Array>unwrapped;
-    return checkArraysEqual(typedToArray(values), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    let rhs: Array<u8> = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+    return checkArraysEqual(typedToArray(values), rhs);
 };
 
 export function testDeserMapOfNamedKeys(): bool {
@@ -361,5 +362,47 @@ export function testDeserMapOfNamedKeys(): bool {
     assert(checkArraysEqual(truthObj, deser));
     assert(checkItemsEqual(truthObj, deser));
 
+    return true;
+}
+
+function useEntryPointAccess(entryPointAccess: EntryPointAccess): Array<u8> {
+    return entryPointAccess.toBytes();
+}
+
+export function testPublicEntryPointAccess(): bool {
+    let publicTruth = hex2bin("01");
+    let publicAccess = new PublicAccess();
+    let bytes = useEntryPointAccess(publicAccess);
+    assert(bytes.length == 1);
+    assert(checkArraysEqual(typedToArray(publicTruth), bytes));
+    return true;
+}
+
+export function testGroupEntryPointAccess(): bool {
+    let publicTruth = hex2bin("02030000000700000047726f757020310700000047726f757020320700000047726f75702033");
+    let publicAccess = new GroupAccess(["Group 1", "Group 2", "Group 3"]);
+    let bytes = useEntryPointAccess(publicAccess);
+    assert(checkArraysEqual(typedToArray(publicTruth), bytes));
+    return true;
+}
+
+export function testComplexCLType(): bool {
+    let type = CLType.fixedList(new CLType(CLTypeTag.U8), 32);
+    let bytes = type.toBytes();
+    let truth = hex2bin("0f0320000000");
+    assert(checkArraysEqual(typedToArray(truth), bytes));
+
+    return true;
+}
+
+export function testToBytesEntryPoint(): bool {
+    let entryPoints = new EntryPoints();
+    let args = new Array<Pair<String, CLType>>();
+    args.push(new Pair("param1", new CLType(CLTypeTag.U512)));
+    let entryPoint = new EntryPoint("delegate", args, new CLType(CLTypeTag.Unit), new PublicAccess(), EntryPointType.Contract);
+    entryPoints.addEntryPoint(entryPoint);
+    let bytes = entryPoints.toBytes();
+    let truth = hex2bin("010000000800000064656c65676174650800000064656c65676174650100000006000000706172616d3108090101");
+    assert(checkArraysEqual(typedToArray(truth), bytes));
     return true;
 }

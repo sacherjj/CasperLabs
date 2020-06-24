@@ -1,7 +1,6 @@
 import argparse
 import os
 from pathlib import Path
-import semver
 
 from casperlabs_client.consts import SUPPORTED_KEY_ALGORITHMS
 
@@ -23,21 +22,8 @@ def positive_integer(number):
     return n
 
 
-def sem_ver(sem_ver_str):
-    """Check string is a valid Sem Ver"""
-    error_str = f"{sem_ver_str} is not a valid format. Should be `major.minor.patch`"
-    try:
-        version = semver.VersionInfo.parse(sem_ver_str)
-    except ValueError:
-        raise argparse.ArgumentTypeError(error_str)
-    # We are not using prerelease or build numbers, so should be None
-    if version.prerelease is not None or version.build is not None:
-        raise argparse.ArgumentTypeError(error_str)
-    return version
-
-
 def directory_for_write(path):
-    """  """
+    """ Check directory exists and is writable. """
     if not os.path.exists(path):
         raise argparse.ArgumentTypeError(f"Directory '{path}' does not exist")
     if not os.path.isdir(path):

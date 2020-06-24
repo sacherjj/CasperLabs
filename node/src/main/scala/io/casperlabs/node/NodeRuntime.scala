@@ -542,12 +542,12 @@ object NodeRuntime {
   class RelayingProxy[F[_]: Monad](
       underlyingRef: Ref[F, Option[BlockRelaying[F]]]
   ) extends BlockRelaying[F] {
-    override def relay(hashes: List[ByteString]): F[WaitHandle[F]] =
+    override def relay(hashes: List[ByteString], sources: Set[Node]): F[WaitHandle[F]] =
       underlyingRef.get.flatMap {
         case None =>
           ().pure[F].pure[F]
         case Some(underlying) =>
-          underlying.relay(hashes)
+          underlying.relay(hashes, sources)
       }
 
     def set(underlying: BlockRelaying[F]) =

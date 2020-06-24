@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import base64
 import functools
 from pathlib import Path
 import time
@@ -11,6 +10,7 @@ from typing import List, Union
 import google.protobuf.text_format
 
 from .consts import ED25519_KEY_ALGORITHM
+from .reformat import optional_base64_base16_to_bytes
 
 CEscape = google.protobuf.text_format.text_encoding.CEscape
 
@@ -36,7 +36,6 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 from . import io, common, vdag, abi, key_holders
 from .insecure_grpc_service import InsecureGRPCService
 from .secure_grpc_service import SecureGRPCService
-from .contract import bundled_contract_path
 from .query_state import key_variant
 from .deploy import DeployData, sign_deploy
 
@@ -116,13 +115,15 @@ class CasperLabsClient:
         """
         CasperLabs client's constructor.
 
-        :param host:                Hostname or IP of node on which gRPC service is running
-        :param port:                Port used for external gRPC API
-        :param certificate_file:    Certificate file for TLS
-        :param node_id:             node_id of the node, for gRPC encryption
+        :param host:            Hostname or IP of node on which gRPC service is running
+        :param port:            Port used for external gRPC API
+        :param port_internal:   Port used for internal gRPC API
+        :param certificate_file:      Certificate file for TLS
+        :param node_id:         node_id of the node, for gRPC encryption
         """
         self.host = host
         self.port = port
+        self.port_internal = port_internal
         self.node_id = node_id
         self.certificate_file = certificate_file
 
@@ -166,7 +167,6 @@ class CasperLabsClient:
     def make_deploy(
         self,
         from_addr: bytes = None,
-        gas_price: int = 10,
         payment: str = None,
         session: str = None,
         public_key: str = None,
@@ -175,13 +175,20 @@ class CasperLabsClient:
         payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
-        payment_uref: bytes = None,
+        payment_package_hash: bytes = None,
+        payment_package_name: str = None,
+        payment_entry_point: str = None,
+        payment_version: int = None,
         session_hash: bytes = None,
         session_name: str = None,
-        session_uref: bytes = None,
+        session_package_hash: bytes = None,
+        session_package_name: str = None,
+        session_entry_point: str = None,
+        session_version: int = None,
         ttl_millis: int = 0,
         dependencies: list = None,
         chain_name: str = None,
+        transfer_args: bytes = None,
         algorithm: str = ED25519_KEY_ALGORITHM,
     ):
         """
@@ -199,14 +206,10 @@ class CasperLabsClient:
                                session; base16 encoded.
         :param session_name:   Name of the stored contract (associated with the
                                executing account) to be called in the session.
-        :param session_uref:   URef of the stored contract to be called in the
-                               session; base16 encoded.
         :param payment_hash:   Hash of the stored contract to be called in the
                                payment; base16 encoded.
         :param payment_name:   Name of the stored contract (associated with the
                                executing account) to be called in the payment.
-        :param payment_uref:   URef of the stored contract to be called in the
-                               payment; base16 encoded.
         :param ttl_millis:     Time to live. Time (in milliseconds) that the
                                deploy will remain valid for.
         :param dependencies:   List of deploy hashes (base16 encoded) which
@@ -219,7 +222,6 @@ class CasperLabsClient:
         deploy_data = DeployData.from_args(
             dict(
                 from_addr=from_addr,
-                gas_price=gas_price,
                 payment=payment,
                 session=session,
                 public_key=public_key,
@@ -228,13 +230,20 @@ class CasperLabsClient:
                 payment_amount=payment_amount,
                 payment_hash=payment_hash,
                 payment_name=payment_name,
-                payment_uref=payment_uref,
+                payment_package_hash=payment_package_hash,
+                payment_package_name=payment_package_name,
+                payment_entry_point=payment_entry_point,
+                payment_version=payment_version,
                 session_hash=session_hash,
                 session_name=session_name,
-                session_uref=session_uref,
+                session_package_hash=session_package_hash,
+                session_package_name=session_package_name,
+                session_entry_point=session_entry_point,
+                session_version=session_version,
                 ttl_millis=ttl_millis,
                 dependencies=dependencies,
                 chain_name=chain_name,
+                transfer_args=transfer_args,
                 algorithm=algorithm,
             )
         )
@@ -277,17 +286,23 @@ class CasperLabsClient:
         from_addr: Union[bytes, str] = None,
         payment: str = None,
         session: str = None,
-        public_key: str = None,
         private_key: str = None,
         session_args: bytes = None,
         payment_args: bytes = None,
         payment_amount: int = None,
         payment_hash: bytes = None,
         payment_name: str = None,
-        payment_uref: bytes = None,
+        payment_package_hash: bytes = None,
+        payment_package_name: str = None,
+        payment_entry_point: str = None,
+        payment_version: int = None,
         session_hash: bytes = None,
         session_name: str = None,
-        session_uref: bytes = None,
+        session_package_hash: bytes = None,
+        session_package_name: str = None,
+        session_entry_point: str = None,
+        session_version: int = None,
+        transfer_args: bytes = None,
         ttl_millis: int = 0,
         dependencies=None,
         chain_name: str = None,
@@ -298,34 +313,45 @@ class CasperLabsClient:
         The deploy will be packaged and sent as a block to the network depending
         on the configuration of the Casper instance.
 
-        :param from_addr:      Purse address that will be used to pay for the deployment.
-        :param payment:        Path to the file with payment code.
-        :param session:        Path to the file with session code.
-        :param public_key:     Path to a file with public key (Ed25519)
-        :param private_key:    Path to a file with private key (Ed25519)
-        :param session_args:   List of ABI encoded arguments of session contract
-        :param payment_args:   List of ABI encoded arguments of payment contract
-        :param payment_amount: Amount to be used with standard payment
-        :param session_hash:   Hash of the stored contract to be called in the
-                               session; base16 encoded.
-        :param session_name:   Name of the stored contract (associated with the
-                               executing account) to be called in the session.
-        :param session_uref:   URef of the stored contract to be called in the
-                               session; base16 encoded.
-        :param payment_hash:   Hash of the stored contract to be called in the
-                               payment; base16 encoded.
-        :param payment_name:   Name of the stored contract (associated with the
-                               executing account) to be called in the payment.
-        :param payment_uref:   URef of the stored contract to be called in the
-                               payment; base16 encoded.
-        :param ttl_millis:     Time to live. Time (in milliseconds) that the
-                               deploy will remain valid for.
-        :param dependencies:   List of deploy hashes (base16 encoded) which
-                               must be executed before this deploy.
-        :param chain_name:     Name of the chain to optionally restrict the
-                               deploy from being accidentally included anywhere else.
-        :param algorithm:      Algorithm used for
-        :return:               deploy hash in base16 format
+        :param from_addr:           Purse address that will be used to pay for the deployment.
+        :param gas_price:           The price of gas for this transaction in units dust/gas.
+                                    Must be positive integer.
+        :param payment:             Path to the file with payment code.
+        :param session:             Path to the file with session code.
+        :param private_key:         Path to a file with private key (if not ed25519, provide algorithm)
+        :param session_args:        List of ABI encoded arguments of session contract
+        :param payment_args:        List of ABI encoded arguments of payment contract
+        :param session_hash:        Hash of the stored contract to be called in the
+                                    session; base16 encoded.
+        :param session_name:        Name of the stored contract (associated with the
+                                    executing account) to be called in the session.
+        :param session_package_hash Hash of the package to be called in the sesson.
+        :param session_package_name Name of the package to be called in the sesson.
+        :param session_entry_point: Name of Entrypoint in contract to call.
+                                    Defaults to `call` if not given.
+        :param session_version:     Version of the session contract or package to use,
+                                    Defaults to latest versionf if not given.
+        :param payment_amount       Amount to be used for payment in the standard payment contract.
+        :param payment_hash:        Hash of the stored contract to be called in the
+                                    payment; base16 encoded.
+        :param payment_name:        Name of the stored contract (associated with the
+                                    executing account) to be called in the payment.
+        :param payment_package_hash Hash of the package to be called in the payment.
+        :param payment_package_name Name of the package to be called in the payment.
+        :param payment_entry_point: Name of Entrypoint in contract or package to call.
+                                    Defaults to `call` if not given.
+        :param payment_version:     Version of the payment contract or package to use,
+                                    defaults to latest if omitted
+        :param ttl_millis:          Time to live. Time (in milliseconds) that the
+                                    deploy will remain valid for.
+        :param dependencies:        List of deploy hashes (base16 encoded) which
+                                    must be executed before this deploy.
+        :param chain_name:          Name of the chain to optionally restrict the
+                                    deploy from being accidentally included
+                                    anywhere else.
+        :param transfer_args:       Arguments to use with transfer endpoint.  Call transfer method for this.
+        :param algorithm:           Algorithm used for key, defaults to ed25519.  See consts.SUPPORTED_KEY_ALGORITHMS
+        :return:                    deploy hash in base16 format
         """
 
         # Using from_args to get validation on build of object
@@ -334,20 +360,26 @@ class CasperLabsClient:
                 from_addr=from_addr,
                 payment=payment,
                 session=session,
-                public_key=public_key,
+                private_key=private_key,
                 session_args=session_args,
                 payment_args=payment_args,
                 payment_amount=payment_amount,
                 payment_hash=payment_hash,
                 payment_name=payment_name,
-                payment_uref=payment_uref,
+                payment_package_hash=payment_package_hash,
+                payment_package_name=payment_package_name,
+                payment_entry_point=payment_entry_point,
+                payment_version=payment_version,
                 session_hash=session_hash,
                 session_name=session_name,
-                session_uref=session_uref,
+                session_package_hash=session_package_hash,
+                session_package_name=session_package_name,
+                session_entry_point=session_entry_point,
+                session_version=session_version,
+                transfer_args=transfer_args,
                 ttl_millis=ttl_millis,
                 dependencies=dependencies,
                 chain_name=chain_name,
-                private_key=private_key,
                 algorithm=algorithm,
             )
         )
@@ -363,50 +395,46 @@ class CasperLabsClient:
     @api
     def transfer(
         self,
-        target_account: Union[str, bytes],
         amount: int,
+        target_account: Union[str, bytes] = None,
+        target_purse: Union[str, bytes] = None,
+        source_purse: Union[str, bytes] = None,
         from_addr: Union[str, bytes] = None,
-        payment: str = None,
-        public_key: str = None,
-        private_key: str = None,
-        payment_args: bytes = None,
-        payment_amount: int = None,
-        payment_hash: bytes = None,
-        payment_name: str = None,
-        payment_uref: bytes = None,
         ttl_millis: int = 0,
         dependencies=None,
         chain_name: str = None,
+        private_key: str = None,
     ):
-        target_account_bytes = base64.b64decode(target_account)
-        if len(target_account_bytes) != 32:
-            target_account_bytes = bytes.fromhex(target_account)
-            if len(target_account_bytes) != 32:
-                raise ValueError(
-                    "--target_account must be 32 bytes base64 or base16 encoded"
-                )
+        if len(list(filter(None, (target_purse, target_account)))) != 1:
+            raise ValueError("must include either target_account or target_purse")
 
-        session_args = abi.ABI.args(
-            [
-                abi.ABI.account("account", target_account_bytes),
-                abi.ABI.u512("amount", amount),
-            ]
+        target_account_bytes = optional_base64_base16_to_bytes(
+            target_account, "target_account"
         )
+        target_purse_bytes = optional_base64_base16_to_bytes(
+            target_purse, "target_purse"
+        )
+        source_purse_bytes = optional_base64_base16_to_bytes(
+            source_purse, "source_purse"
+        )
+
+        target_send_bytes = target_account_bytes or target_purse_bytes
+
+        arg_list = [
+            abi.ABI.fixed_list("target", target_send_bytes),
+            abi.ABI.u512("amount", amount),
+        ]
+        if source_purse_bytes:
+            arg_list.append(abi.ABI.fixed_list("source", source_purse_bytes))
+
+        transfer_args = abi.ABI.args(arg_list)
         return self.deploy(
             from_addr=from_addr,
-            payment=payment,
-            public_key=public_key,
             private_key=private_key,
-            session=bundled_contract_path(consts.BUNDLED_TRANSFER_WASM),
-            session_args=session_args,
-            payment_args=payment_args,
-            payment_amount=payment_amount,
-            payment_hash=payment_hash,
-            payment_name=payment_name,
-            payment_uref=payment_uref,
             ttl_millis=ttl_millis,
             dependencies=dependencies,
             chain_name=chain_name,
+            transfer_args=transfer_args,
         )
 
     @api
@@ -662,7 +690,7 @@ class CasperLabsClient:
            {filename_prefix}-hash         # Hash of public key to use in the system as hex
            {filename_prefix}-private.pem  # private key
            {filename_prefix}-public.pem   # public key"""
-
+        # TODO: Should we do pk and id to match keygen?
         directory = Path(directory).resolve()
         key_holder_generator = key_holders.class_from_algorithm(algorithm)
         key_holder = key_holder_generator.generate()
@@ -681,6 +709,7 @@ class CasperLabsClient:
         :param address:    Public key address of account.
         :param block_hash: Hash of block from which to return balance.
         """
+        # TODO: Should add ability to get balance of other purse with URef
         value = self.query_state(block_hash, address, "", "address")
         try:
             account = value.account
@@ -689,20 +718,9 @@ class CasperLabsClient:
                 "balance", f"Expected Account type value under {address}."
             )
 
-        urefs = [u for u in account.named_keys if u.name == "mint"]
-        if len(urefs) == 0:
-            raise InternalError(
-                "balance",
-                "Account's named_keys map did not contain Mint contract address.",
-            )
-
-        mint_public = urefs[0]
-
-        mint_public_hex = mint_public.key.uref.uref.hex()
         purse_addr_hex = account.main_purse.uref.hex()
-        local_key_value = f"{mint_public_hex}:{purse_addr_hex}"
 
-        balance_u_ref = self.query_state(block_hash, local_key_value, "", "local")
+        balance_u_ref = self.query_state(block_hash, purse_addr_hex, "", "hash")
         balance_u_ref_hex = balance_u_ref.cl_value.value.key.uref.uref.hex()
         balance = self.query_state(block_hash, balance_u_ref_hex, "", "uref")
         balance_str_value = balance.cl_value.value.u512.value
@@ -806,7 +824,7 @@ class CasperLabsClient:
         deploy_processed: bool = False,
         deploy_finalized: bool = False,
         deploy_orphaned: bool = False,
-        account_public_key_hashes=None,
+        account_public_key_hashes: list = None,
         deploy_hashes=None,
         min_event_id: int = 0,
         max_event_id: int = 0,

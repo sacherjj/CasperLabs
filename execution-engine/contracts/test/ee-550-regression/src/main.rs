@@ -14,10 +14,6 @@ use types::{
     ApiError,
 };
 
-enum Arg {
-    Pass = 0,
-}
-
 #[repr(u16)]
 enum Error {
     AddKey1 = 0,
@@ -37,11 +33,11 @@ impl Into<ApiError> for Error {
 const KEY_1_ADDR: [u8; 32] = [100; 32];
 const KEY_2_ADDR: [u8; 32] = [101; 32];
 
+const ARG_PASS: &str = "pass";
+
 #[no_mangle]
 pub extern "C" fn call() {
-    let pass: String = runtime::get_arg(Arg::Pass as u32)
-        .unwrap_or_revert_with(ApiError::MissingArgument)
-        .unwrap_or_revert_with(ApiError::InvalidArgument);
+    let pass: String = runtime::get_named_arg(ARG_PASS);
     match pass.as_str() {
         "init_remove" => {
             account::add_associated_key(AccountHash::new(KEY_1_ADDR), Weight::new(2))

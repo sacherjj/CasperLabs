@@ -3,13 +3,11 @@ import {Error, ErrorCode} from "../../../../contract-as/assembly/error";
 import {typedToArray, checkArraysEqual} from "../../../../contract-as/assembly/utils";
 import {AccountHash} from "../../../../contract-as/assembly/key";
 
+const ARG_ACCOUNT = "account";
+
 export function call(): void {
-  const knownAssemblyHashBytes = CL.getArg(0);
-  if (knownAssemblyHashBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
-  let knownAccountHashResult = AccountHash.fromBytes(knownAssemblyHashBytes);
+  const knownAccountHashBytes = CL.getNamedArg(ARG_ACCOUNT);
+  let knownAccountHashResult = AccountHash.fromBytes(knownAccountHashBytes);
   if (knownAccountHashResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();
     return;

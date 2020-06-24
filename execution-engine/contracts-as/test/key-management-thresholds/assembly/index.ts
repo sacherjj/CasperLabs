@@ -8,13 +8,10 @@ import {addAssociatedKey, AddKeyFailure,
         updateAssociatedKey, UpdateKeyFailure,
         removeAssociatedKey, RemoveKeyFailure} from "../../../../contract-as/assembly/account";
 
-export function call(): void {
-  let stageBytes = CL.getArg(0);
-  if (stageBytes === null) {
-    Error.fromErrorCode(ErrorCode.MissingArgument).revert();
-    return;
-  }
+const ARG_STAGE = "stage";
 
+export function call(): void {
+  let stageBytes = CL.getNamedArg(ARG_STAGE);
   let stageResult = fromBytesString(stageBytes);
   if (stageResult.hasError()) {
     Error.fromErrorCode(ErrorCode.InvalidArgument).revert();

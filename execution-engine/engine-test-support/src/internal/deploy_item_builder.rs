@@ -1,11 +1,13 @@
 use std::{collections::BTreeSet, path::Path};
 
-use contract::args_parser::ArgsParser;
 use engine_core::{
     engine_state::{deploy_item::DeployItem, executable_deploy_item::ExecutableDeployItem},
     DeployHash,
 };
-use types::{account::AccountHash, bytesrepr::ToBytes, URef};
+use types::{
+    account::AccountHash, bytesrepr::ToBytes, contracts::ContractVersion, ContractHash, HashAddr,
+    RuntimeArgs,
+};
 
 use crate::internal::utils;
 
@@ -33,106 +35,160 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_payment_bytes(mut self, module_bytes: Vec<u8>, args: impl ArgsParser) -> Self {
+    pub fn with_payment_bytes(mut self, module_bytes: Vec<u8>, args: RuntimeArgs) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code =
             Some(ExecutableDeployItem::ModuleBytes { module_bytes, args });
         self
     }
 
-    pub fn with_empty_payment_bytes(self, args: impl ArgsParser) -> Self {
+    pub fn with_empty_payment_bytes(self, args: RuntimeArgs) -> Self {
         self.with_payment_bytes(vec![], args)
     }
 
-    pub fn with_payment_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
+    pub fn with_payment_code<T: AsRef<Path>>(self, file_name: T, args: RuntimeArgs) -> Self {
         let module_bytes = utils::read_wasm_file_bytes(file_name);
         self.with_payment_bytes(module_bytes, args)
     }
 
-    pub fn with_stored_payment_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        self.deploy_item.payment_code =
-            Some(ExecutableDeployItem::StoredContractByHash { hash, args });
-        self
-    }
-
-    pub(crate) fn with_stored_payment_uref_addr(
+    pub fn with_stored_payment_hash(
         mut self,
-        uref_addr: Vec<u8>,
-        args: impl ArgsParser,
+        hash: ContractHash,
+        entry_point: &str,
+        args: RuntimeArgs,
     ) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref_addr,
+        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByHash {
+            hash,
+            entry_point: entry_point.into(),
             args,
         });
         self
     }
 
-    pub fn with_stored_payment_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref.addr().to_vec(),
-            args,
-        });
-        self
-    }
-
-    pub fn with_stored_payment_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_stored_payment_named_key(
+        mut self,
+        uref_name: &str,
+        entry_point_name: &str,
+        args: RuntimeArgs,
+    ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredContractByName {
             name: uref_name.to_owned(),
+            entry_point: entry_point_name.into(),
             args,
         });
         self
     }
 
-    pub fn with_session_bytes(mut self, module_bytes: Vec<u8>, args: impl ArgsParser) -> Self {
+    pub fn with_session_bytes(mut self, module_bytes: Vec<u8>, args: RuntimeArgs) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code =
             Some(ExecutableDeployItem::ModuleBytes { module_bytes, args });
         self
     }
 
-    pub fn with_session_code<T: AsRef<Path>>(self, file_name: T, args: impl ArgsParser) -> Self {
+    pub fn with_session_code<T: AsRef<Path>>(self, file_name: T, args: RuntimeArgs) -> Self {
         let module_bytes = utils::read_wasm_file_bytes(file_name);
         self.with_session_bytes(module_bytes, args)
     }
 
-    pub fn with_stored_session_hash(mut self, hash: Vec<u8>, args: impl ArgsParser) -> Self {
+    pub fn with_transfer_args(mut self, args: RuntimeArgs) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.session_code =
-            Some(ExecutableDeployItem::StoredContractByHash { hash, args });
+        self.deploy_item.session_code = Some(ExecutableDeployItem::Transfer { args });
         self
     }
 
-    pub(crate) fn with_stored_session_uref_addr(
+    pub fn with_stored_session_hash(
         mut self,
-        uref_addr: Vec<u8>,
-        args: impl ArgsParser,
+        hash: ContractHash,
+        entry_point: &str,
+        args: RuntimeArgs,
     ) -> Self {
         let args = Self::serialize_args(args);
-        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref_addr,
+        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByHash {
+            hash,
+            entry_point: entry_point.into(),
             args,
         });
         self
     }
 
-    pub fn with_stored_session_uref(mut self, uref: URef, args: impl ArgsParser) -> Self {
-        let args = Self::serialize_args(args);
-        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByURef {
-            uref: uref.addr().to_vec(),
-            args,
-        });
-        self
-    }
-
-    pub fn with_stored_session_named_key(mut self, uref_name: &str, args: impl ArgsParser) -> Self {
+    pub fn with_stored_session_named_key(
+        mut self,
+        name: &str,
+        entry_point: &str,
+        args: RuntimeArgs,
+    ) -> Self {
         let args = Self::serialize_args(args);
         self.deploy_item.session_code = Some(ExecutableDeployItem::StoredContractByName {
-            name: uref_name.to_owned(),
+            name: name.to_owned(),
+            entry_point: entry_point.into(),
             args,
+        });
+        self
+    }
+
+    pub fn with_stored_versioned_contract_by_name(
+        mut self,
+        name: &str,
+        version: Option<ContractVersion>,
+        entry_point: &str,
+        args: RuntimeArgs,
+    ) -> Self {
+        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredVersionedContractByName {
+            name: name.to_owned(),
+            version,
+            entry_point: entry_point.to_owned(),
+            args: args.to_bytes().expect("should serialize runtime args"),
+        });
+        self
+    }
+
+    pub fn with_stored_versioned_contract_by_hash(
+        mut self,
+        hash: HashAddr,
+        version: Option<ContractVersion>,
+        entry_point: &str,
+        args: RuntimeArgs,
+    ) -> Self {
+        self.deploy_item.session_code = Some(ExecutableDeployItem::StoredVersionedContractByHash {
+            hash,
+            version,
+            entry_point: entry_point.to_owned(),
+            args: args.to_bytes().expect("should serialize runtime args"),
+        });
+        self
+    }
+
+    pub fn with_stored_versioned_payment_contract_by_name(
+        mut self,
+        key_name: &str,
+        version: Option<ContractVersion>,
+        entry_point: &str,
+        args: RuntimeArgs,
+    ) -> Self {
+        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredVersionedContractByName {
+            name: key_name.to_owned(),
+            version,
+            entry_point: entry_point.to_owned(),
+            args: args.to_bytes().expect("should serialize runtime args"),
+        });
+        self
+    }
+
+    pub fn with_stored_versioned_payment_contract_by_hash(
+        mut self,
+        hash: HashAddr,
+        version: Option<ContractVersion>,
+        entry_point: &str,
+        args: RuntimeArgs,
+    ) -> Self {
+        self.deploy_item.payment_code = Some(ExecutableDeployItem::StoredVersionedContractByHash {
+            hash,
+            version,
+            entry_point: entry_point.to_owned(),
+            args: args.to_bytes().expect("should serialize runtime args"),
         });
         self
     }
@@ -165,19 +221,22 @@ impl DeployItemBuilder {
                 .deploy_item
                 .address
                 .unwrap_or_else(|| AccountHash::new([0u8; 32])),
-            session: self.deploy_item.session_code.unwrap(),
-            payment: self.deploy_item.payment_code.unwrap(),
+            session: self
+                .deploy_item
+                .session_code
+                .expect("should have session code"),
+            payment: self
+                .deploy_item
+                .payment_code
+                .expect("should have payment code"),
             gas_price: self.deploy_item.gas_price,
             authorization_keys: self.deploy_item.authorization_keys,
             deploy_hash: self.deploy_item.deploy_hash,
         }
     }
 
-    fn serialize_args(args: impl ArgsParser) -> Vec<u8> {
-        args.parse()
-            .expect("should convert to `Vec<CLValue>`")
-            .into_bytes()
-            .expect("should serialize args")
+    fn serialize_args(args: RuntimeArgs) -> Vec<u8> {
+        args.into_bytes().expect("should serialize args")
     }
 }
 
