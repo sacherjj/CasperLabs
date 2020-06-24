@@ -2,7 +2,7 @@ import sys
 from typing import Dict
 
 from casperlabs_client import io, CasperLabsClient
-from casperlabs_client.commands import deploy_cmd
+from casperlabs_client.commands.common_options import public_key_option, DEPLOY_OPTIONS
 from casperlabs_client.decorators import guarded_command
 
 
@@ -18,8 +18,9 @@ OPTIONS = [
                 "Optional, if not provided the deploy will be printed to STDOUT."
             ),
         ),
-    ]
-] + deploy_cmd.OPTIONS
+    ],
+    public_key_option(required=False),
+] + DEPLOY_OPTIONS
 
 
 @guarded_command
@@ -29,16 +30,17 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
         payment=args.get("payment"),
         session=args.get("session"),
         public_key=args.get("public_key"),
-        private_key=args.get("private_key"),
         session_args=args.get("session_args"),
         payment_args=args.get("payment_args"),
         payment_amount=args.get("payment_amount"),
         payment_hash=args.get("payment_hash"),
         payment_name=args.get("payment_name"),
-        payment_uref=args.get("payment_uref"),
+        payment_package_hash=args.get("payment_package_hash"),
+        payment_package_name=args.get("payment_package_name"),
         session_hash=args.get("session_hash"),
         session_name=args.get("session_name"),
-        session_uref=args.get("session_uref"),
+        session_package_hash=args.get("session_package_hash"),
+        session_package_name=args.get("session_package_name"),
         ttl_millis=args.get("ttl_millis"),
         dependencies=args.get("dependencies"),
         chain_name=args.get("chain_name"),

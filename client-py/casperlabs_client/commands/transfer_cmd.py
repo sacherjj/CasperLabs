@@ -4,7 +4,7 @@ from casperlabs_client.commands.common_options import (
     CHAINNAME_OPTION,
     DEPENDENCIES_OPTION,
     TTL_MILLIS_OPTION,
-    PRIVATE_KEY_OPTION,
+    private_key_option,
     WAIT_PROCESSED_OPTION,
     TIMEOUT_SECONDS_OPTION,
 )
@@ -53,7 +53,7 @@ OPTIONS = [
     TTL_MILLIS_OPTION,
     WAIT_PROCESSED_OPTION,
     TIMEOUT_SECONDS_OPTION,
-    PRIVATE_KEY_OPTION,
+    private_key_option(required=True),
 ]
 
 

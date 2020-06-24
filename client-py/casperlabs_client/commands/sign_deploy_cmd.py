@@ -3,7 +3,7 @@ from typing import Dict
 
 from casperlabs_client import consensus_pb2 as consensus, io, CasperLabsClient
 from casperlabs_client.commands.common_options import (
-    PRIVATE_KEY_OPTION,
+    private_key_option,
     ALGORITHM_OPTION,
 )
 
@@ -27,7 +27,7 @@ OPTIONS = [
         ("-i", "--deploy-path"),
         dict(required=False, default=None, help="Path to the deploy file."),
     ],
-    PRIVATE_KEY_OPTION,
+    private_key_option(required=True),
     ALGORITHM_OPTION,
 ]
 
@@ -47,7 +47,7 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
         private_key_pem_file=private_key,
         algorithm=algorithm,
         deploy=deploy,
-        deploy_path=deploy_path,
+        deploy_file=deploy_path,
     )
     serialized_deploy = signed_deploy.SerializeToString()
     if signed_deploy_path is None:

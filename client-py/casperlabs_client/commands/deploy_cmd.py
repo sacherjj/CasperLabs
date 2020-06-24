@@ -1,18 +1,7 @@
 from typing import Dict
 
 from casperlabs_client import consts, reformat, CasperLabsClient
-from casperlabs_client.commands.common_options import (
-    ALGORITHM_OPTION,
-    FROM_OPTION,
-    PAYMENT_OPTIONS,
-    PRIVATE_KEY_OPTION,
-    CHAINNAME_OPTION,
-    DEPENDENCIES_OPTION,
-    SESSION_OPTIONS,
-    TTL_MILLIS_OPTION,
-    WAIT_PROCESSED_OPTION,
-    TIMEOUT_SECONDS_OPTION,
-)
+from casperlabs_client.commands.common_options import private_key_option, DEPLOY_OPTIONS
 from casperlabs_client.decorators import guarded_command
 
 NAME: str = "deploy"
@@ -22,20 +11,7 @@ HELP: str = (
     "on the configuration of the Casper instance."
 )
 
-OPTIONS = (
-    [
-        FROM_OPTION,
-        CHAINNAME_OPTION,
-        DEPENDENCIES_OPTION,
-        TTL_MILLIS_OPTION,
-        WAIT_PROCESSED_OPTION,
-        TIMEOUT_SECONDS_OPTION,
-        ALGORITHM_OPTION,
-    ]
-    + SESSION_OPTIONS
-    + PAYMENT_OPTIONS
-)
-OPTIONS_WITH_PRIVATE = [PRIVATE_KEY_OPTION] + OPTIONS
+OPTIONS = DEPLOY_OPTIONS + [private_key_option(required=True)]
 
 
 @guarded_command
@@ -44,7 +20,6 @@ def method(casperlabs_client: CasperLabsClient, args: Dict):
         from_addr=args.get("from"),
         payment=args.get("payment"),
         session=args.get("session"),
-        public_key=args.get("public_key"),
         private_key=args.get("private_key"),
         session_args=args.get("session_args"),
         payment_args=args.get("payment_args"),
