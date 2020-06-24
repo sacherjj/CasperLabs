@@ -208,6 +208,7 @@ setup(
         "pyblake2==1.1.2",
         "cryptography==2.8",
         "ecdsa==0.15",
+        "pycryptodome==3.9.4",
     ],
     cmdclass={"install": CInstall, "develop": CDevelop},
     description="Python Client for interacting with a CasperLabs Node",
@@ -226,7 +227,6 @@ setup(
         "Operating System :: OS Independent",
         "Intended Audience :: Developers",
     ],
-    python_requires="==3.7.0",
     url="https://casperlabs.io/",
     project_urls={
         "Source": "https://github.com/CasperLabs/CasperLabs/tree/dev/integration-testing/client/CasperLabsClient",
