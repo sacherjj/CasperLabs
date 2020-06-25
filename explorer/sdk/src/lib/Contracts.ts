@@ -25,9 +25,9 @@ export class Contract {
 
   constructor(sessionPath: string, paymentPath?: string) {
     this.sessionWasm = fs.readFileSync(sessionPath);
-    if(!paymentPath){
-      this.paymentWasm = Buffer.from("");
-    }else {
+    if (!paymentPath) {
+      this.paymentWasm = Buffer.from('');
+    } else {
       this.paymentWasm = fs.readFileSync(paymentPath);
     }
   }
@@ -36,9 +36,16 @@ export class Contract {
     args: Deploy.Arg[],
     paymentAmount: bigint,
     accountPublicKeyHash: ByteArray,
-    signingKeyPair: nacl.SignKeyPair,
+    signingKeyPair: nacl.SignKeyPair
   ): Deploy {
-    const deploy = makeDeploy(args, ContractType.WASM, this.sessionWasm, this.paymentWasm, paymentAmount, accountPublicKeyHash);
+    const deploy = makeDeploy(
+      args,
+      ContractType.WASM,
+      this.sessionWasm,
+      this.paymentWasm,
+      paymentAmount,
+      accountPublicKeyHash
+    );
     return signDeploy(deploy, signingKeyPair);
   }
 }

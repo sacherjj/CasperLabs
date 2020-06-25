@@ -377,7 +377,6 @@ where
         if query_response.has_failure() {
             return Err(query_response.take_failure());
         }
-
         bytesrepr::deserialize(query_response.take_success()).map_err(|err| format!("{}", err))
     }
 
@@ -619,14 +618,12 @@ where
     }
 
     pub fn get_account(&self, account_hash: AccountHash) -> Option<Account> {
-        let account_value = self
-            .query(None, Key::Account(account_hash), &[])
-            .expect("should query account");
-
-        if let StoredValue::Account(account) = account_value {
-            Some(account)
-        } else {
-            None
+        match self.query(None, Key::Account(account_hash), &[]) {
+            Ok(account_value) => match account_value {
+                StoredValue::Account(account) => Some(account),
+                _ => None,
+            },
+            Err(_) => None,
         }
     }
 

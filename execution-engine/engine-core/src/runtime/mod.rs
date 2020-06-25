@@ -1668,9 +1668,9 @@ where
         &mut self,
         protocol_version: ProtocolVersion,
         entry_point_name: &str,
-        mut named_keys: NamedKeys,
-        args: &RuntimeArgs,
-        extra_urefs: &[Key],
+        named_keys: &mut NamedKeys,
+        runtime_args: &RuntimeArgs,
+        extra_keys: &[Key],
     ) -> Result<CLValue, Error> {
         const METHOD_MINT: &str = "mint";
         const METHOD_CREATE: &str = "create";
@@ -1680,7 +1680,7 @@ where
         let state = self.context.state();
         let access_rights = {
             let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-            keys.extend(extra_urefs);
+            keys.extend(extra_keys);
             keys.push(self.get_mint_contract().into());
             keys.push(self.get_pos_contract().into());
             extract_access_rights_from_keys(keys)
@@ -1692,8 +1692,8 @@ where
         let deploy_hash = self.context.get_deploy_hash();
         let gas_limit = self.context.gas_limit();
         let gas_counter = self.context.gas_counter();
-        let fn_store_id = self.context.fn_store_id();
-        let address_generator = self.context.address_generator();
+        let hash_address_generator = self.context.hash_address_generator();
+        let uref_address_generator = self.context.uref_address_generator();
         let correlation_id = self.context.correlation_id();
         let phase = self.context.phase();
         let protocol_data = self.context.protocol_data();
@@ -1701,9 +1701,9 @@ where
         let mut mint_context = RuntimeContext::new(
             state,
             EntryPointType::Contract,
-            &mut named_keys,
+            named_keys,
             access_rights,
-            args.to_owned(),
+            runtime_args.to_owned(),
             authorization_keys,
             account,
             base_key,
@@ -1711,8 +1711,8 @@ where
             deploy_hash,
             gas_limit,
             gas_counter,
-            fn_store_id,
-            address_generator,
+            hash_address_generator,
+            uref_address_generator,
             protocol_version,
             correlation_id,
             phase,
@@ -1722,7 +1722,7 @@ where
         let ret: CLValue = match entry_point_name {
             // Type: `fn mint(amount: U512) -> Result<URef, Error>`
             METHOD_MINT => {
-                let amount: U512 = Self::get_named_argument(&args, "amount")?;
+                let amount: U512 = Self::get_named_argument(&runtime_args, "amount")?;
                 let result: Result<URef, mint::Error> = mint_context.mint(amount);
                 CLValue::from_t(result)?
             }
@@ -1733,16 +1733,16 @@ where
             }
             // Type: `fn balance(purse: URef) -> Option<U512>`
             METHOD_BALANCE => {
-                let uref: URef = Self::get_named_argument(&args, "purse")?;
+                let uref: URef = Self::get_named_argument(&runtime_args, "purse")?;
                 let maybe_balance: Option<U512> =
                     mint_context.balance(uref).map_err(Self::reverter)?;
                 CLValue::from_t(maybe_balance).map_err(Self::reverter)?
             }
             // Type: `fn transfer(source: URef, target: URef, amount: U512) -> Result<(), Error>`
             METHOD_TRANSFER => {
-                let source: URef = Self::get_named_argument(&args, "source")?;
-                let target: URef = Self::get_named_argument(&args, "target")?;
-                let amount: U512 = Self::get_named_argument(&args, "amount")?;
+                let source: URef = Self::get_named_argument(&runtime_args, "source")?;
+                let target: URef = Self::get_named_argument(&runtime_args, "target")?;
+                let amount: U512 = Self::get_named_argument(&runtime_args, "amount")?;
                 let result: Result<(), mint::Error> = mint_context.transfer(source, target, amount);
                 CLValue::from_t(result).map_err(Self::reverter)?
             }
@@ -1758,9 +1758,9 @@ where
         &mut self,
         protocol_version: ProtocolVersion,
         entry_point_name: &str,
-        mut named_keys: NamedKeys,
-        args: &RuntimeArgs,
-        extra_urefs: &[Key],
+        named_keys: &mut NamedKeys,
+        runtime_args: &RuntimeArgs,
+        extra_keys: &[Key],
     ) -> Result<CLValue, Error> {
         const METHOD_BOND: &str = "bond";
         const METHOD_UNBOND: &str = "unbond";
@@ -1774,7 +1774,7 @@ where
         let state = self.context.state();
         let access_rights = {
             let mut keys: Vec<Key> = named_keys.values().cloned().collect();
-            keys.extend(extra_urefs);
+            keys.extend(extra_keys);
             keys.push(self.get_mint_contract().into());
             keys.push(self.get_pos_contract().into());
             extract_access_rights_from_keys(keys)
@@ -1786,8 +1786,8 @@ where
         let deploy_hash = self.context.get_deploy_hash();
         let gas_limit = self.context.gas_limit();
         let gas_counter = self.context.gas_counter();
-        let fn_store_id = self.context.fn_store_id();
-        let address_generator = self.context.address_generator();
+        let fn_store_id = self.context.hash_address_generator();
+        let address_generator = self.context.uref_address_generator();
         let correlation_id = self.context.correlation_id();
         let phase = self.context.phase();
         let protocol_data = self.context.protocol_data();
@@ -1795,9 +1795,9 @@ where
         let runtime_context = RuntimeContext::new(
             state,
             EntryPointType::Contract,
-            &mut named_keys,
+            named_keys,
             access_rights,
-            args.to_owned(),
+            runtime_args.to_owned(),
             authorization_keys,
             account,
             base_key,
@@ -1829,8 +1829,8 @@ where
                 }
 
                 let validator: AccountHash = runtime.context.get_caller();
-                let amount: U512 = Self::get_named_argument(&args, ARG_AMOUNT)?;
-                let source_uref: URef = Self::get_named_argument(&args, ARG_PURSE)?;
+                let amount: U512 = Self::get_named_argument(&runtime_args, ARG_AMOUNT)?;
+                let source_uref: URef = Self::get_named_argument(&runtime_args, ARG_PURSE)?;
                 runtime
                     .bond(validator, amount, source_uref)
                     .map_err(Self::reverter)?;
@@ -1843,7 +1843,7 @@ where
                 }
 
                 let validator: AccountHash = runtime.context.get_caller();
-                let maybe_amount: Option<U512> = Self::get_named_argument(&args, "amount")?;
+                let maybe_amount: Option<U512> = Self::get_named_argument(&runtime_args, "amount")?;
                 runtime
                     .unbond(validator, maybe_amount)
                     .map_err(Self::reverter)?;
@@ -1855,7 +1855,7 @@ where
                 CLValue::from_t(rights_controlled_purse).map_err(Self::reverter)?
             }
             METHOD_SET_REFUND_PURSE => {
-                let purse: URef = Self::get_named_argument(&args, "purse")?;
+                let purse: URef = Self::get_named_argument(&runtime_args, "purse")?;
                 runtime.set_refund_purse(purse).map_err(Self::reverter)?;
                 CLValue::from_t(()).map_err(Self::reverter)?
             }
@@ -1864,8 +1864,8 @@ where
                 CLValue::from_t(maybe_purse).map_err(Self::reverter)?
             }
             METHOD_FINALIZE_PAYMENT => {
-                let amount_spent: U512 = Self::get_named_argument(&args, "amount")?;
-                let account: AccountHash = Self::get_named_argument(&args, "account")?;
+                let amount_spent: U512 = Self::get_named_argument(&runtime_args, "amount")?;
+                let account: AccountHash = Self::get_named_argument(&runtime_args, "account")?;
                 runtime
                     .finalize_payment(amount_spent, account)
                     .map_err(Self::reverter)?;
@@ -2023,6 +2023,13 @@ where
         }
     }
 
+    pub(crate) fn access_rights_extend(
+        &mut self,
+        access_rights: HashMap<Address, HashSet<AccessRights>>,
+    ) {
+        self.context.access_rights_extend(access_rights)
+    }
+
     fn execute_contract(
         &mut self,
         key: Key,
@@ -2039,6 +2046,12 @@ where
                 expected: protocol_version.value().major,
             });
         }
+
+        // TODO: should we be using named_keys_mut() instead?
+        let mut named_keys = match entry_point.entry_point_type() {
+            EntryPointType::Session => self.context.account().named_keys().clone(),
+            EntryPointType::Contract => contract.named_keys().clone(),
+        };
 
         let extra_keys = {
             let mut extra_keys = vec![];
@@ -2059,7 +2072,7 @@ where
                     return self.call_host_mint(
                         self.context.protocol_version(),
                         entry_point.name(),
-                        contract.take_named_keys(),
+                        &mut named_keys,
                         &args,
                         &extra_keys,
                     );
@@ -2067,7 +2080,7 @@ where
                     return self.call_host_proof_of_stake(
                         self.context.protocol_version(),
                         entry_point.name(),
-                        contract.take_named_keys(),
+                        &mut named_keys,
                         &args,
                         &extra_keys,
                     );
@@ -2095,11 +2108,6 @@ where
                 Some(module) => module,
                 None => parity_wasm::deserialize_buffer(contract_wasm.bytes())?,
             }
-        };
-
-        let mut named_keys = match entry_point.entry_point_type() {
-            EntryPointType::Session => self.context.account().named_keys().clone(),
-            EntryPointType::Contract => contract.take_named_keys(),
         };
 
         let entry_point_name = entry_point.name();
@@ -2133,8 +2141,8 @@ where
             self.context.get_deploy_hash(),
             self.context.gas_limit(),
             self.context.gas_counter(),
-            self.context.fn_store_id(),
-            self.context.address_generator(),
+            self.context.hash_address_generator(),
+            self.context.uref_address_generator(),
             protocol_version,
             self.context.correlation_id(),
             self.context.phase(),

@@ -67,6 +67,7 @@ use crate::{
         },
         query::{QueryRequest, QueryResult},
         system_contract_cache::SystemContractCache,
+        transfer::TransferTargetMode,
         upgrade::{UpgradeConfig, UpgradeResult},
     },
     execution::{
@@ -97,7 +98,6 @@ pub enum GetModuleResult {
     Session {
         module: Module,
         contract_package: ContractPackage,
-        // named_keys (from account)
         entry_point: EntryPoint,
     },
     Contract {
@@ -106,7 +106,6 @@ pub enum GetModuleResult {
         module: Module,
         contract: Contract,
         contract_package: ContractPackage,
-        // named_keys (from contract)
         entry_point: EntryPoint,
     },
 }
@@ -435,6 +434,7 @@ where
                         EntryPointType::Contract,
                         args.clone(),
                         &mut named_keys_exec,
+                        Default::default(),
                         base_key.into(),
                         &virtual_system_account,
                         authorization_keys,
@@ -972,25 +972,6 @@ where
             Err(e) => return Ok(ExecutionResult::precondition_failure(e)),
         };
 
-        let input_runtime_args = match deploy_item.session.into_runtime_args() {
-            Ok(runtime_args) => runtime_args,
-            Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
-        };
-
-        let runtime_args_builder = TransferRuntimeArgsBuilder::new(input_runtime_args);
-
-        let runtime_args =
-            match runtime_args_builder.build(correlation_id, &account, Rc::clone(&tracking_copy)) {
-                Ok(runtime_args) => runtime_args,
-                Err(error) => {
-                    return Ok(ExecutionResult::Failure {
-                        error,
-                        effect: Default::default(),
-                        cost: Gas::default(),
-                    });
-                }
-            };
-
         let mint_contract = match tracking_copy
             .borrow_mut()
             .get_contract(correlation_id, protocol_data.mint())
@@ -1001,8 +982,7 @@ where
             }
         };
 
-        let direct_system_contract_call = DirectSystemContractCall::Transfer;
-        let parity_module = {
+        let mint_module = {
             let contract_wasm_hash = mint_contract.contract_wasm_hash();
             let use_system_contracts = self.config.use_system_contracts();
             match tracking_copy.borrow_mut().get_system_module(
@@ -1019,30 +999,99 @@ where
         };
 
         let mut named_keys = mint_contract.named_keys().to_owned();
+        let mut extra_keys: Vec<Key> = vec![];
         let base_key = Key::from(protocol_data.mint());
-        let deploy_hash = deploy_item.deploy_hash;
         let gas_limit = Gas::new(U512::from(std::u64::MAX));
-        let phase = Phase::Session;
-        let system_contract_cache = SystemContractCache::clone(&self.system_contract_cache);
 
-        Ok(executor.exec_system_contract(
-            direct_system_contract_call,
-            parity_module,
-            runtime_args,
-            &mut named_keys,
-            base_key,
-            &account,
-            authorization_keys,
-            blocktime,
-            deploy_hash,
-            gas_limit,
-            protocol_version,
-            correlation_id,
-            tracking_copy,
-            phase,
-            protocol_data,
-            system_contract_cache,
-        ))
+        let input_runtime_args = match deploy_item.session.into_runtime_args() {
+            Ok(runtime_args) => runtime_args,
+            Err(error) => return Ok(ExecutionResult::precondition_failure(error.into())),
+        };
+
+        let mut runtime_args_builder = TransferRuntimeArgsBuilder::new(input_runtime_args);
+        match runtime_args_builder.transfer_target_mode(correlation_id, Rc::clone(&tracking_copy)) {
+            Ok(mode) => match mode {
+                TransferTargetMode::Unknown | TransferTargetMode::PurseExists(_) => { /* noop */ }
+                TransferTargetMode::CreateAccount(public_key) => {
+                    let (maybe_uref, execution_result): (Option<URef>, ExecutionResult) = executor
+                        .exec_system_contract(
+                            DirectSystemContractCall::CreatePurse,
+                            mint_module.clone(),
+                            runtime_args! {}, // mint create takes no arguments
+                            &mut named_keys,
+                            Default::default(),
+                            base_key,
+                            &account,
+                            authorization_keys.clone(),
+                            blocktime,
+                            deploy_item.deploy_hash,
+                            gas_limit,
+                            protocol_version,
+                            correlation_id,
+                            Rc::clone(&tracking_copy),
+                            Phase::Session,
+                            protocol_data,
+                            SystemContractCache::clone(&self.system_contract_cache),
+                        );
+                    match maybe_uref {
+                        Some(main_purse) => {
+                            let new_account =
+                                Account::create(public_key, Default::default(), main_purse);
+                            extra_keys.push(Key::from(main_purse));
+                            // write new account
+                            tracking_copy
+                                .borrow_mut()
+                                .write(Key::Account(public_key), StoredValue::Account(new_account))
+                        }
+                        None => {
+                            return Ok(execution_result);
+                        }
+                    }
+                }
+            },
+            Err(error) => {
+                return Ok(ExecutionResult::Failure {
+                    error,
+                    effect: Default::default(),
+                    cost: Gas::default(),
+                });
+            }
+        }
+
+        let runtime_args =
+            match runtime_args_builder.build(&account, correlation_id, Rc::clone(&tracking_copy)) {
+                Ok(runtime_args) => runtime_args,
+                Err(error) => {
+                    return Ok(ExecutionResult::Failure {
+                        error,
+                        effect: Default::default(),
+                        cost: Gas::default(),
+                    });
+                }
+            };
+
+        let (_, execution_result): (Option<Result<(), u8>>, ExecutionResult) = executor
+            .exec_system_contract(
+                DirectSystemContractCall::Transfer,
+                mint_module,
+                runtime_args,
+                &mut named_keys,
+                extra_keys.as_slice(),
+                base_key,
+                &account,
+                authorization_keys,
+                blocktime,
+                deploy_item.deploy_hash,
+                gas_limit,
+                protocol_version,
+                correlation_id,
+                tracking_copy,
+                Phase::Session,
+                protocol_data,
+                SystemContractCache::clone(&self.system_contract_cache),
+            );
+
+        Ok(execution_result)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1354,7 +1403,7 @@ where
                     payment_args,
                     payment_base_key,
                     &account,
-                    payment_named_keys,
+                    &mut payment_named_keys,
                     authorization_keys.clone(),
                     blocktime,
                     deploy_hash,
@@ -1383,6 +1432,7 @@ where
                     EntryPointType::Session,
                     payment_args,
                     &mut payment_named_keys,
+                    Default::default(),
                     payment_base_key,
                     &account,
                     authorization_keys.clone(),
@@ -1502,7 +1552,7 @@ where
         let (
             session_module,
             session_base_key,
-            session_named_keys,
+            mut session_named_keys,
             session_package,
             session_entry_point,
         ) = match session_module {
@@ -1556,7 +1606,7 @@ where
                 session_args,
                 session_base_key,
                 &account,
-                session_named_keys,
+                &mut session_named_keys,
                 authorization_keys.clone(),
                 blocktime,
                 deploy_hash,
@@ -1585,7 +1635,7 @@ where
         execution_result_builder.set_session_execution_result(session_result);
 
         // payment_code_spec_5: run finalize process
-        let finalize_result = {
+        let (_, finalize_result): (Option<()>, ExecutionResult) = {
             let post_session_tc = post_session_rc.borrow();
             let finalization_tc = Rc::new(RefCell::new(post_session_tc.fork()));
 
@@ -1620,6 +1670,7 @@ where
                 proof_of_stake_module,
                 proof_of_stake_args,
                 &mut proof_of_stake_keys,
+                Default::default(),
                 Key::from(protocol_data.proof_of_stake()),
                 &system_account,
                 authorization_keys,

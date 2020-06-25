@@ -119,7 +119,7 @@ where
         entry_point_type: EntryPointType,
         named_keys: &'a mut NamedKeys,
         access_rights: HashMap<Address, HashSet<AccessRights>>,
-        args: RuntimeArgs,
+        runtime_args: RuntimeArgs,
         authorization_keys: BTreeSet<AccountHash>,
         account: &'a Account,
         base_key: Key,
@@ -139,7 +139,7 @@ where
             entry_point_type,
             named_keys,
             access_rights,
-            args,
+            args: runtime_args,
             account,
             authorization_keys,
             blocktime,
@@ -257,11 +257,11 @@ where
         &self.args
     }
 
-    pub fn address_generator(&self) -> Rc<RefCell<AddressGenerator>> {
+    pub fn uref_address_generator(&self) -> Rc<RefCell<AddressGenerator>> {
         Rc::clone(&self.uref_address_generator)
     }
 
-    pub fn fn_store_id(&self) -> Rc<RefCell<AddressGenerator>> {
+    pub fn hash_address_generator(&self) -> Rc<RefCell<AddressGenerator>> {
         Rc::clone(&self.hash_address_generator)
     }
 
@@ -331,7 +331,6 @@ where
         // the element stored under `base_key`) is allowed to add new named keys to itself.
         let named_key_value = StoredValue::CLValue(CLValue::from_t((name.clone(), key))?);
         self.validate_value(&named_key_value)?;
-
         self.add_unsafe(self.base_key(), named_key_value)?;
         self.insert_key(name, key);
         Ok(())

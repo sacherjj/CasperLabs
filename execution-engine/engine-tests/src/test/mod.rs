@@ -9,3 +9,4 @@ mod manage_groups;
 mod regression;
 mod system_contracts;
 mod upgrade;
+mod wasmless_transfer;
