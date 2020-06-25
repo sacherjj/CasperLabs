@@ -28,12 +28,12 @@ fn deserialize_trie_leaf(b: &mut Bencher) {
         value: StoredValue::CLValue(CLValue::from_t(42_i32).unwrap()),
     };
     let leaf_bytes = leaf.to_bytes().unwrap();
-    b.iter(|| u8::from_bytes(black_box(&leaf_bytes)))
+    b.iter(|| Trie::<Key, StoredValue>::from_bytes(black_box(&leaf_bytes)));
 }
 
 #[bench]
 fn serialize_trie_node(b: &mut Bencher) {
-    let node = Trie::<String, String>::Node {
+    let node = Trie::<Key, StoredValue>::Node {
         pointer_block: Box::new(PointerBlock::default()),
     };
     b.iter(|| ToBytes::to_bytes(black_box(&node)));
@@ -41,31 +41,31 @@ fn serialize_trie_node(b: &mut Bencher) {
 
 #[bench]
 fn deserialize_trie_node(b: &mut Bencher) {
-    let node = Trie::<String, String>::Node {
+    let node = Trie::<Key, StoredValue>::Node {
         pointer_block: Box::new(PointerBlock::default()),
     };
     let node_bytes = node.to_bytes().unwrap();
 
-    b.iter(|| u8::from_bytes(black_box(&node_bytes)));
+    b.iter(|| Trie::<Key, StoredValue>::from_bytes(black_box(&node_bytes)));
 }
 
 #[bench]
 fn serialize_trie_node_pointer(b: &mut Bencher) {
-    let node = Trie::<String, String>::Extension {
+    let node = Trie::<Key, StoredValue>::Extension {
         affix: (0..255).collect(),
         pointer: Pointer::NodePointer(Blake2bHash::new(&[0; 32])),
     };
 
-    b.iter(|| ToBytes::to_bytes(black_box(&node)))
+    b.iter(|| ToBytes::to_bytes(black_box(&node)));
 }
 
 #[bench]
 fn deserialize_trie_node_pointer(b: &mut Bencher) {
-    let node = Trie::<String, String>::Extension {
+    let node = Trie::<Key, StoredValue>::Extension {
         affix: (0..255).collect(),
         pointer: Pointer::NodePointer(Blake2bHash::new(&[0; 32])),
     };
     let node_bytes = node.to_bytes().unwrap();
 
-    b.iter(|| u8::from_bytes(black_box(&node_bytes)))
+    b.iter(|| Trie::<Key, StoredValue>::from_bytes(black_box(&node_bytes)));
 }
