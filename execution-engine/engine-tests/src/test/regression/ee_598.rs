@@ -9,14 +9,14 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, ApiError, RuntimeArgs, U512};
+use types::{account::AccountHash, runtime_args, ApiError, RuntimeArgs, U512};
 
 const ARG_AMOUNT: &str = "amount";
 const ARG_ENTRY_POINT: &str = "entry_point";
-const ARG_ACCOUNT_PK: &str = "account_public_key";
+const ARG_ACCOUNT_PK: &str = "account_hash";
 
 const CONTRACT_POS_BONDING: &str = "pos_bonding.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([7u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([7u8; 32]);
 
 const GENESIS_VALIDATOR_STAKE: u64 = 50_000;
 lazy_static! {
@@ -31,7 +31,7 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
     let accounts = {
         let mut tmp: Vec<GenesisAccount> = DEFAULT_ACCOUNTS.clone();
         let account = GenesisAccount::new(
-            PublicKey::ed25519_from([42; 32]),
+            AccountHash::new([42; 32]),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()) * Motes::new(2.into()),
             Motes::new(GENESIS_VALIDATOR_STAKE.into()),
         );
@@ -65,14 +65,12 @@ fn should_fail_unboding_more_than_it_was_staked_ee_598_regression() {
         ExecuteRequestBuilder::from_deploy_item(deploy).build()
     };
 
-    let result = InMemoryWasmTestBuilder::default()
-        .run_genesis(&run_genesis_request)
-        .exec(exec_request_1)
-        .expect_success()
-        .commit()
-        .exec(exec_request_2)
-        .commit()
-        .finish();
+    let mut builder = InMemoryWasmTestBuilder::default();
+    builder.run_genesis(&run_genesis_request);
+
+    builder.exec(exec_request_1).expect_success().commit();
+
+    let result = builder.exec(exec_request_2).commit().finish();
 
     let response = result
         .builder()

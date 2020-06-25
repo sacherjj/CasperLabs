@@ -29,7 +29,7 @@ impl From<(EngineStateError, ExecutionEffect, Gas)> for DeployResult {
             // We don't have separate IPC messages for storage errors so for the time being they are
             // all reported as "wasm errors".
             error @ EngineStateError::InvalidHashLength { .. }
-            | error @ EngineStateError::InvalidPublicKeyLength { .. }
+            | error @ EngineStateError::InvalidAccountHashLength { .. }
             | error @ EngineStateError::InvalidProtocolVersion { .. }
             | error @ EngineStateError::InvalidUpgradeConfig
             | error @ EngineStateError::WasmPreprocessing(_)

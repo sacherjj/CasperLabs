@@ -321,12 +321,12 @@ impl Drop for ClientPool {
 
 fn new_execute_request(args: &Args) -> ExecuteRequest {
     let amount = U512::one();
-    let account_1_public_key = profiling::account_1_public_key();
-    let account_2_public_key = profiling::account_2_public_key();
+    let account_1_account_hash = profiling::account_1_account_hash();
+    let account_2_account_hash = profiling::account_2_account_hash();
     ExecuteRequestBuilder::standard(
-        account_1_public_key,
+        account_1_account_hash,
         CONTRACT_NAME,
-        runtime_args! { ARG_TARGET => account_2_public_key, ARG_AMOUNT => amount },
+        runtime_args! { ARG_TARGET => account_2_account_hash, ARG_AMOUNT => amount },
     )
     .with_pre_state_hash(&args.pre_state_hash)
     .build()

@@ -1,7 +1,7 @@
 use std::convert::TryFrom;
 
 use engine_shared::stored_value::StoredValue;
-use types::{account::PublicKey, contracts::NamedKeys, URef};
+use types::{account::AccountHash, contracts::NamedKeys, URef};
 
 use crate::{Error, Result};
 
@@ -18,8 +18,8 @@ impl Account {
     }
 
     /// Returns the public_key.
-    pub fn public_key(&self) -> PublicKey {
-        self.inner.public_key()
+    pub fn account_hash(&self) -> AccountHash {
+        self.inner.account_hash()
     }
 
     /// Returns the named_keys.

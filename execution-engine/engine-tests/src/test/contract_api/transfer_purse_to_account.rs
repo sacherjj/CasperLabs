@@ -11,12 +11,12 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
 use types::{
-    account::PublicKey, runtime_args, ApiError, CLValue, Key, RuntimeArgs, TransferResult,
+    account::AccountHash, runtime_args, ApiError, CLValue, Key, RuntimeArgs, TransferResult,
     TransferredTo, U512,
 };
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 lazy_static! {
     static ref ACCOUNT_1_INITIAL_FUND: U512 = *DEFAULT_PAYMENT + 42;
 }
@@ -24,18 +24,18 @@ lazy_static! {
 #[ignore]
 #[test]
 fn should_run_purse_to_account_transfer() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
-    let genesis_public_key = DEFAULT_ACCOUNT_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
+    let genesis_account_hash = DEFAULT_ACCOUNT_ADDR;
     let exec_request_1 = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        runtime_args! { "target" => account_1_public_key, "amount" => *ACCOUNT_1_INITIAL_FUND },
+        runtime_args! { "target" => account_1_account_hash, "amount" => *ACCOUNT_1_INITIAL_FUND },
     )
     .build();
     let exec_request_2 = ExecuteRequestBuilder::standard(
-        account_1_public_key,
+        account_1_account_hash,
         CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
-        runtime_args! { "target" =>genesis_public_key, "amount" => U512::from(1) },
+        runtime_args! { "target" => genesis_account_hash, "amount" => U512::from(1) },
     )
     .build();
     let mut builder = InMemoryWasmTestBuilder::default();

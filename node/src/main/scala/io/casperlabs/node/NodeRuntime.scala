@@ -336,7 +336,7 @@ class NodeRuntime private[node] (
         conf,
         chainSpec,
         genesis,
-        maybeValidatorId.map(id => ByteString.copyFrom(id.publicKey)),
+        maybeValidatorId,
         isSyncedRef.get,
         readTransactor
       )

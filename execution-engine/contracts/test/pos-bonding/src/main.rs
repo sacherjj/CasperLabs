@@ -10,14 +10,14 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 
-use types::{account::PublicKey, runtime_args, ApiError, ContractHash, RuntimeArgs, URef, U512};
+use types::{account::AccountHash, runtime_args, ApiError, ContractHash, RuntimeArgs, URef, U512};
 
 const ARG_AMOUNT: &str = "amount";
 const ARG_PURSE: &str = "purse";
 const ARG_ENTRY_POINT: &str = "entry_point";
 const ARG_BOND: &str = "bond";
 const ARG_UNBOND: &str = "unbond";
-const ARG_ACCOUNT_PK: &str = "account_public_key";
+const ARG_ACCOUNT_HASH: &str = "account_hash";
 const TEST_BOND_FROM_MAIN_PURSE: &str = "bond-from-main-purse";
 const TEST_SEED_NEW_ACCOUNT: &str = "seed_new_account";
 
@@ -81,7 +81,7 @@ fn unbonding(pos: ContractHash, unbond_amount: Option<U512>) {
 
 fn seed_new_account() {
     let source = account::get_main_purse();
-    let target: PublicKey = runtime::get_named_arg(ARG_ACCOUNT_PK);
+    let target: AccountHash = runtime::get_named_arg(ARG_ACCOUNT_HASH);
     let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
     system::transfer_from_purse_to_account(source, target, amount)
         .unwrap_or_revert_with(ApiError::User(Error::UnableToSeedAccount as u16));

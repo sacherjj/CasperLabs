@@ -7,9 +7,9 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
+use types::{account::AccountHash, runtime_args, RuntimeArgs, U512};
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 const DO_NOTHING_WASM: &str = "do_nothing.wasm";
 const TRANSFER_PURSE_TO_ACCOUNT_WASM: &str = "transfer_purse_to_account.wasm";
 const TRANSFER_MAIN_PURSE_TO_NEW_PURSE_WASM: &str = "transfer_main_purse_to_new_purse.wasm";
@@ -26,7 +26,7 @@ fn should_charge_non_main_purse() {
     // instead of account_1 main purse
     const TEST_PURSE_NAME: &str = "test-purse";
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = U512::from(10_000_000);
     let account_1_funding_amount = U512::from(100_000_000);
     let account_1_purse_funding_amount = U512::from(50_000_000);
@@ -39,7 +39,7 @@ fn should_charge_non_main_purse() {
             .with_session_code(
                 TRANSFER_PURSE_TO_ACCOUNT_WASM, // creates account_1
                 runtime_args! {
-                    ARG_TARGET => account_1_public_key,
+                    ARG_TARGET => account_1_account_hash,
                     ARG_AMOUNT => account_1_funding_amount
                 },
             )
@@ -59,7 +59,7 @@ fn should_charge_non_main_purse() {
                 runtime_args! { ARG_DESTINATION => TEST_PURSE_NAME, ARG_AMOUNT => account_1_purse_funding_amount },
             )
             .with_empty_payment_bytes(runtime_args! { ARG_AMOUNT => payment_purse_amount})
-            .with_authorization_keys(&[account_1_public_key])
+            .with_authorization_keys(&[account_1_account_hash])
             .with_deploy_hash([2; 32])
             .build();
 
@@ -104,7 +104,7 @@ fn should_charge_non_main_purse() {
                     ARG_AMOUNT => payment_purse_amount
                 },
             )
-            .with_authorization_keys(&[account_1_public_key])
+            .with_authorization_keys(&[account_1_account_hash])
             .with_deploy_hash([3; 32])
             .build();
 

@@ -13,7 +13,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, Key, RuntimeArgs, URef, U512};
+use types::{account::AccountHash, runtime_args, Key, RuntimeArgs, URef, U512};
 
 const CONTRACT_CREATE_ACCOUNTS: &str = "create_accounts.wasm";
 const CONTRACT_CREATE_PURSES: &str = "create_purses.wasm";
@@ -23,7 +23,7 @@ const CONTRACT_TRANSFER_TO_PURSE: &str = "transfer_to_purse.wasm";
 /// Size of batch used in multiple execs benchmark, and multiple deploys per exec cases.
 const TRANSFER_BATCH_SIZE: u64 = 3;
 const PER_RUN_FUNDING: u64 = 10_000_000;
-const TARGET_ADDR: PublicKey = PublicKey::ed25519_from([127; 32]);
+const TARGET_ADDR: AccountHash = AccountHash::new([127; 32]);
 const ARG_AMOUNT: &str = "amount";
 const ARG_ACCOUNTS: &str = "accounts";
 const ARG_SEED_AMOUNT: &str = "seed_amount";
@@ -40,7 +40,7 @@ fn make_deploy_hash(i: u64) -> [u8; 32] {
     result
 }
 
-fn bootstrap(data_dir: &Path, accounts: Vec<PublicKey>, amount: U512) -> LmdbWasmTestBuilder {
+fn bootstrap(data_dir: &Path, accounts: Vec<AccountHash>, amount: U512) -> LmdbWasmTestBuilder {
     let exec_request = ExecuteRequestBuilder::standard(
         DEFAULT_ACCOUNT_ADDR,
         CONTRACT_CREATE_ACCOUNTS,
@@ -65,7 +65,7 @@ fn bootstrap(data_dir: &Path, accounts: Vec<PublicKey>, amount: U512) -> LmdbWas
 
 fn create_purses(
     builder: &mut LmdbWasmTestBuilder,
-    source: PublicKey,
+    source: AccountHash,
     total_purses: u64,
     purse_amount: U512,
 ) -> Vec<URef> {
@@ -103,7 +103,7 @@ fn create_purses(
 /// batch determined by value of TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_execs(
     builder: &mut LmdbWasmTestBuilder,
-    account: PublicKey,
+    account: AccountHash,
     should_commit: bool,
 ) {
     let amount = U512::one();
@@ -129,7 +129,7 @@ fn transfer_to_account_multiple_execs(
 /// Executes multiple deploys per single exec with based on TRANSFER_BATCH_SIZE.
 fn transfer_to_account_multiple_deploys(
     builder: &mut LmdbWasmTestBuilder,
-    account: PublicKey,
+    account: AccountHash,
     should_commit: bool,
 ) {
     let mut exec_builder = ExecuteRequestBuilder::new();

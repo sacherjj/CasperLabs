@@ -45,7 +45,7 @@ use engine_storage::{
     trie_store::lmdb::LmdbTrieStore,
 };
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{self},
     CLValue, Contract, ContractHash, ContractWasm, Key, URef, U512,
 };
@@ -76,7 +76,7 @@ pub struct WasmTestBuilder<S> {
     /// Cached transform maps after subsequent successful runs i.e. `transforms[0]` is for first
     /// exec call etc.
     transforms: Vec<AdditiveMap<Key, Transform>>,
-    bonded_validators: Vec<HashMap<PublicKey, U512>>,
+    bonded_validators: Vec<HashMap<AccountHash, U512>>,
     /// Cached genesis transforms
     genesis_account: Option<Account>,
     /// Genesis transforms
@@ -456,7 +456,7 @@ where
             .take_bonded_validators()
             .into_iter()
             .map(TryInto::try_into)
-            .collect::<Result<HashMap<PublicKey, U512>, MappingError>>()
+            .collect::<Result<HashMap<AccountHash, U512>, MappingError>>()
             .unwrap();
         self.bonded_validators.push(bonded_validators);
         self
@@ -523,7 +523,7 @@ where
         self.transforms.clone()
     }
 
-    pub fn get_bonded_validators(&self) -> Vec<HashMap<PublicKey, U512>> {
+    pub fn get_bonded_validators(&self) -> Vec<HashMap<AccountHash, U512>> {
         self.bonded_validators.clone()
     }
 
@@ -618,9 +618,9 @@ where
             .expect("should parse balance into a U512")
     }
 
-    pub fn get_account(&self, public_key: PublicKey) -> Option<Account> {
+    pub fn get_account(&self, account_hash: AccountHash) -> Option<Account> {
         let account_value = self
-            .query(None, Key::Account(public_key), &[])
+            .query(None, Key::Account(account_hash), &[])
             .expect("should query account");
 
         if let StoredValue::Account(account) = account_value {

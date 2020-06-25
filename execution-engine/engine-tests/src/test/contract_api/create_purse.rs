@@ -7,11 +7,11 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, Key, RuntimeArgs, U512};
+use types::{account::AccountHash, runtime_args, Key, RuntimeArgs, U512};
 
 const CONTRACT_CREATE_PURSE_01: &str = "create_purse_01.wasm";
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 const TEST_PURSE_NAME: &str = "test_purse";
 const ARG_PURSE_NAME: &str = "purse_name";
 

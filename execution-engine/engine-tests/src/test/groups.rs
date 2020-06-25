@@ -10,7 +10,7 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR,
 };
 use types::{
-    account::PublicKey, contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key, RuntimeArgs, U512,
+    account::AccountHash, contracts::CONTRACT_INITIAL_VERSION, runtime_args, Key, RuntimeArgs, U512,
 };
 
 const CONTRACT_GROUPS: &str = "groups.wasm";
@@ -21,7 +21,7 @@ const RESTRICTED_CONTRACT: &str = "restricted_contract";
 const RESTRICTED_SESSION_CALLER: &str = "restricted_session_caller";
 const UNRESTRICTED_CONTRACT_CALLER: &str = "unrestricted_contract_caller";
 const PACKAGE_HASH_ARG: &str = "package_hash";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const RESTRICTED_CONTRACT_CALLER_AS_SESSION: &str = "restricted_contract_caller_as_session";
 const UNCALLABLE_SESSION: &str = "uncallable_session";

@@ -7,7 +7,7 @@ use alloc::vec::Vec;
 use core::mem::MaybeUninit;
 
 use casperlabs_types::{
-    account::PublicKey,
+    account::AccountHash,
     api_error,
     bytesrepr::{self, FromBytes},
     contracts::{ContractVersion, NamedKeys},
@@ -179,9 +179,9 @@ pub fn get_named_arg<T: FromBytes>(name: &str) -> T {
     bytesrepr::deserialize(arg_bytes).unwrap_or_revert_with(ApiError::InvalidArgument)
 }
 
-/// Returns the caller of the current context, i.e. the [`PublicKey`] of the account which made the
-/// deploy request.
-pub fn get_caller() -> PublicKey {
+/// Returns the caller of the current context, i.e. the [`AccountHash`] of the account which made
+/// the deploy request.
+pub fn get_caller() -> AccountHash {
     let output_size = {
         let mut output_size = MaybeUninit::uninit();
         let ret = unsafe { ext_ffi::get_caller(output_size.as_mut_ptr()) };

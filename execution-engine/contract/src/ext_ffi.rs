@@ -165,8 +165,8 @@ extern "C" {
     ///   presently only 32-byte public keys are supported.
     /// * `weight` - the weight to assign to this public key
     pub fn add_associated_key(
-        public_key_ptr: *const u8,
-        public_key_size: usize,
+        account_hash_ptr: *const u8,
+        account_hash_size: usize,
         weight: i32,
     ) -> i32;
     /// This function attempts to remove the given public key from the associated
@@ -189,7 +189,7 @@ extern "C" {
     /// * `public_key` - pointer to the bytes in wasm memory representing the public key to update,
     ///   presently only 32-byte public keys are supported.
     /// * `weight` - the weight to assign to this public key
-    pub fn remove_associated_key(public_key_ptr: *const u8, public_key_size: usize) -> i32;
+    pub fn remove_associated_key(account_hash_ptr: *const u8, account_hash_size: usize) -> i32;
     /// This function attempts to update the given public key as an associated key
     /// to the current account. Presently only 32-byte keys are supported; it is
     /// up to the caller to ensure that the 32-bytes starting from offset
@@ -211,8 +211,8 @@ extern "C" {
     ///  public key to update, presently only 32-byte public keys are supported
     /// * `weight` - the weight to assign to this public key
     pub fn update_associated_key(
-        public_key_ptr: *const u8,
-        public_key_size: usize,
+        account_hash_ptr: *const u8,
+        account_hash_size: usize,
         weight: i32,
     ) -> i32;
     /// This function changes the threshold to perform the specified action. The

@@ -1037,7 +1037,7 @@ mod proptests {
         }
 
         #[test]
-        fn test_public_key(pk in public_key_arb()) {
+        fn test_account_hash(pk in account_hash_arb()) {
             bytesrepr::test_serialization_roundtrip(&pk);
         }
 

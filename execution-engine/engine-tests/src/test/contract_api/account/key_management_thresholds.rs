@@ -5,7 +5,7 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, RuntimeArgs};
+use types::{account::AccountHash, runtime_args, RuntimeArgs};
 
 const CONTRACT_KEY_MANAGEMENT_THRESHOLDS: &str = "key_management_thresholds.wasm";
 
@@ -58,7 +58,7 @@ fn should_verify_key_management_permission_with_sufficient_weight() {
             .with_authorization_keys(&[
                 DEFAULT_ACCOUNT_ADDR,
                 // Key [42; 32] is created in init stage
-                PublicKey::ed25519_from([42; 32]),
+                AccountHash::new([42; 32]),
             ])
             .build();
         ExecuteRequestBuilder::from_deploy_item(deploy).build()

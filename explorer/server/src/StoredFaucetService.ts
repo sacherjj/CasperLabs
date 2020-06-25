@@ -4,8 +4,8 @@ import {
   Contracts,
   DeployHash,
   DeployUtil,
-  encodeBase16
-} from "casperlabs-sdk";
+  encodeBase16,
+  Keys } from "casperlabs-sdk";
 import { ByteArray, SignKeyPair } from "tweetnacl-ts";
 import { CallFaucet, StoredFaucet } from "./lib/Contracts";
 import DeployService from "./services/DeployService";
@@ -32,7 +32,7 @@ export class StoredFaucetService {
     this.periodCheckState();
   }
 
-  async callStoredFaucet(accountPublicKey: ByteArray): Promise<DeployHash> {
+  async callStoredFaucet(accountPublicKeyHash: ByteArray): Promise<DeployHash> {
     if (!this.storedFaucetFinalized && !this.deployHash) {
       const state = await this.checkState();
       if (state) {
@@ -52,12 +52,12 @@ export class StoredFaucetService {
       dependencies.push(this.deployHash);
     }
     const deployByName = DeployUtil.makeDeploy(
-      CallFaucet.args(accountPublicKey, this.transferAmount),
+      CallFaucet.args(accountPublicKeyHash, this.transferAmount),
       DeployUtil.ContractType.Name,
       CONTRACT_NAME,
       null,
       this.paymentAmount,
-      this.contractKeys.publicKey,
+      Keys.Ed25519.publicKeyHash(this.contractKeys.publicKey),
       dependencies,
       ENTRY_POINT_NAME
     );

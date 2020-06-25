@@ -1,6 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use types::{account::PublicKey, Key};
+use types::{account::AccountHash, Key};
 
 use crate::engine_server::{
     mappings::{self, ParsingError},
@@ -40,7 +40,7 @@ impl TryFrom<state::Key> for Key {
         let key = match pb_key {
             Key_oneof_value::address(pb_account) => {
                 let account = mappings::vec_to_array(pb_account.account, "Protobuf Key::Account")?;
-                Key::Account(PublicKey::ed25519_from(account))
+                Key::Account(AccountHash::new(account))
             }
             Key_oneof_value::hash(pb_hash) => {
                 let hash = mappings::vec_to_array(pb_hash.hash, "Protobuf Key::Hash")?;

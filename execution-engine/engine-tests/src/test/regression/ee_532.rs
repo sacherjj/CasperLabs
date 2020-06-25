@@ -2,10 +2,10 @@ use engine_core::engine_state::Error;
 use engine_test_support::internal::{
     ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_RUN_GENESIS_REQUEST,
 };
-use types::{account::PublicKey, RuntimeArgs};
+use types::{account::AccountHash, RuntimeArgs};
 
 const CONTRACT_EE_532_REGRESSION: &str = "ee_532_regression.wasm";
-const UNKNOWN_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const UNKNOWN_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 
 #[ignore]
 #[test]

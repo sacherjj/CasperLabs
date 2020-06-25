@@ -1104,10 +1104,10 @@ class GrpcGossipServiceSpec
         forAll(genSummaryDagFromGenesis) { dag =>
           // ProtoUtil.removeRedundantJustifications is not available here.
           val expected = dag
-            .groupBy(_.getHeader.validatorPublicKey)
+            .groupBy(_.getHeader.validatorPublicKeyHash)
             .values
             .flatten
-            .map(s => Block.Justification(s.getHeader.validatorPublicKey, s.blockHash))
+            .map(s => Block.Justification(s.getHeader.validatorPublicKeyHash, s.blockHash))
             .toList
           runTestUnsafe(TestData(blockSummaries = dag)) {
             TestEnvironment(testDataRef).use { stub =>
@@ -1626,7 +1626,7 @@ object GrpcGossipServiceSpec extends TestRuntime with ArbitraryConsensusAndComm 
         def latestMessages: Task[Set[Block.Justification]] =
           Task.delay(
             testDataRef.get.blockSummaries.values
-              .map(bs => Block.Justification(bs.getHeader.validatorPublicKey, bs.blockHash))
+              .map(bs => Block.Justification(bs.getHeader.validatorPublicKeyHash, bs.blockHash))
               .toSet
           )
 

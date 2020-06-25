@@ -60,19 +60,19 @@ message DeployPayload {
 }
 
 message Bond {
-    bytes validator_public_key = 1;
+    bytes validator_account_hash = 1;
     io.casperlabs.casper.consensus.state.BigInt stake = 2;
 }
 
 message DeployItem {
     reserved 5; // motes in payment
     reserved 7; // nonce
-    // Public key of the account which is the context of the execution.
+    // Public key hash of the account which is the context of the execution.
     bytes address = 1; // length 32 bytes
     DeployPayload session = 3;
     DeployPayload payment = 4;
     uint64 gas_price = 6; // in units of Mote / Gas
-    // Public keys used to sign this deploy, to be checked against the keys
+    // Hashes of the public keys used to sign this deploy, to be checked against the keys
     // associated with the account.
     repeated bytes authorization_keys = 8;
     bytes deploy_hash = 9;
@@ -282,9 +282,9 @@ message ChainSpec {
             repeated GenesisAccount accounts = 4;
             // costs at genesis
             CostTable costs = 5;
-    
+
             message GenesisAccount {
-                bytes public_key = 1;
+                bytes public_key_hash = 1;
                 io.casperlabs.casper.consensus.state.BigInt balance = 2; // in motes
                 io.casperlabs.casper.consensus.state.BigInt bonded_amount = 3; // in motes, 0 means "not bonded"
             }

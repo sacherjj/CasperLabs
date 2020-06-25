@@ -89,14 +89,14 @@ export default class CasperService {
   }
 
   getDeployInfos(
-    accountPublicKey: ByteArray,
+    accountPublicKeyHash: ByteArray,
     pageSize: number,
     view?: 0 | 1,
     pageToken: string = ''
   ): Promise<ListDeployInfosResponse> {
     return new Promise<ListDeployInfosResponse>((resolve, reject) => {
       const request = new ListDeployInfosRequest();
-      request.setAccountPublicKeyBase16(encodeBase16(accountPublicKey));
+      request.setAccountPublicKeyHashBase16(encodeBase16(accountPublicKeyHash));
       request.setPageSize(pageSize);
       request.setPageToken(pageToken);
       request.setView(view === undefined ? BlockInfo.View.BASIC : view);
@@ -275,10 +275,10 @@ export default class CasperService {
    */
   async getAccountBalanceUref(
     blockHash: BlockHash,
-    accountPublicKey: ByteArray
+    accountPublicKeyHash: ByteArray
   ): Promise<Key.URef | undefined> {
     try {
-      const accountQuery = QueryAccount(accountPublicKey);
+      const accountQuery = QueryAccount(accountPublicKeyHash);
 
       const account = await this.getBlockState(blockHash, accountQuery).then(
         res => res.getAccount()!
@@ -380,10 +380,10 @@ const QueryHash = (hash: ByteArray) => {
   return query;
 };
 
-const QueryAccount = (accountPublicKey: ByteArray) => {
+const QueryAccount = (accountPublicKeyHash: ByteArray) => {
   const query = new StateQuery();
   query.setKeyVariant(StateQuery.KeyVariant.ADDRESS);
-  query.setKeyBase16(encodeBase16(accountPublicKey));
+  query.setKeyBase16(encodeBase16(accountPublicKeyHash));
   return query;
 };
 
@@ -393,4 +393,3 @@ const QueryUref = (uref: Key.URef) => {
   query.setKeyBase16(encodeBase16(uref.getUref_asU8()));
   return query;
 };
-

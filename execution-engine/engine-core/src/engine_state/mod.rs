@@ -39,7 +39,7 @@ use engine_storage::{
 };
 use engine_wasm_prep::{wasm_costs::WasmCosts, Preprocessor};
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{self, ToBytes},
     contracts::{NamedKeys, ENTRY_POINT_NAME_INSTALL, UPGRADE_ENTRY_POINT_NAME},
     runtime_args,
@@ -80,7 +80,7 @@ use crate::{
 pub const MAX_PAYMENT: u64 = 10_000_000;
 pub const CONV_RATE: u64 = 10;
 
-pub const SYSTEM_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([0u8; 32]);
+pub const SYSTEM_ACCOUNT_ADDR: AccountHash = AccountHash::new([0u8; 32]);
 
 const GENESIS_INITIAL_BLOCKTIME: u64 = 0;
 const ARG_AMOUNT: &str = "amount";
@@ -218,7 +218,7 @@ where
             let mint_installer_bytes = ee_config.mint_installer_bytes();
             let mint_installer_module = preprocessor.preprocess(mint_installer_bytes)?;
             let args = RuntimeArgs::new();
-            let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+            let authorization_keys: BTreeSet<AccountHash> = BTreeSet::new();
             let install_deploy_hash = genesis_config_hash.into();
             let hash_address_generator = Rc::clone(&hash_address_generator);
             let uref_address_generator = Rc::clone(&uref_address_generator);
@@ -254,7 +254,7 @@ where
         ) = {
             // Spec #6: Compute initially bonded validators as the contents of accounts_path
             // filtered to non-zero staked amounts.
-            let bonded_validators: BTreeMap<PublicKey, U512> = ee_config
+            let bonded_validators: BTreeMap<AccountHash, U512> = ee_config
                 .get_bonded_validators()
                 .map(|(k, v)| (k, v.value()))
                 .collect();
@@ -276,7 +276,7 @@ where
                 "mint_contract_package_hash" => mint_package_hash,
                 "genesis_validators" => bonded_validators,
             };
-            let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
+            let authorization_keys: BTreeSet<AccountHash> = BTreeSet::new();
 
             executor.exec_wasm_direct(
                 proof_of_stake_installer_module,
@@ -414,16 +414,14 @@ where
                 let tracking_copy_write = Rc::clone(&tracking_copy);
                 let mut named_keys_exec = NamedKeys::new();
                 let base_key = mint_hash;
-                let authorization_keys: BTreeSet<PublicKey> = BTreeSet::new();
-                let account_public_key = account.public_key();
-                // NOTE: As Ed25519 keys are currently supported by chainspec, PublicKey::value
-                // returns raw bytes of it
-                let purse_creation_deploy_hash = account_public_key.value();
+                let authorization_keys: BTreeSet<AccountHash> = BTreeSet::new();
+                let account_hash = account.account_hash();
+                let purse_creation_deploy_hash = account_hash.value();
                 let hash_address_generator = Rc::clone(&hash_address_generator);
                 let uref_address_generator = {
                     let generator = AddressGeneratorBuilder::new()
                         .seed_with(&genesis_config_hash.value())
-                        .seed_with(&account_public_key.to_bytes()?)
+                        .seed_with(&account_hash.to_bytes()?)
                         .seed_with(&[phase as u8])
                         .build();
                     Rc::new(RefCell::new(generator))
@@ -465,14 +463,10 @@ where
                 };
 
                 // ...and write that account to global state...
-                let key = Key::Account(account_public_key);
+                let key = Key::Account(account_hash);
                 let value = {
                     let main_purse = mint_result?;
-                    StoredValue::Account(Account::create(
-                        account_public_key,
-                        named_keys,
-                        main_purse,
-                    ))
+                    StoredValue::Account(Account::create(account_hash, named_keys, main_purse))
                 };
 
                 tracking_copy_write.borrow_mut().write(key, value);
@@ -898,13 +892,13 @@ where
     fn get_authorized_account(
         &self,
         correlation_id: CorrelationId,
-        account_public_key: PublicKey,
-        authorization_keys: &BTreeSet<PublicKey>,
+        account_hash: AccountHash,
+        authorization_keys: &BTreeSet<AccountHash>,
         tracking_copy: Rc<RefCell<TrackingCopy<<S as StateProvider>::Reader>>>,
     ) -> Result<Account, Error> {
         let account: Account = match tracking_copy
             .borrow_mut()
-            .get_account(correlation_id, account_public_key)
+            .get_account(correlation_id, account_hash)
         {
             Ok(account) => account,
             Err(_) => {
@@ -1686,7 +1680,7 @@ where
         correlation_id: CorrelationId,
         protocol_version: ProtocolVersion,
         root_hash: Blake2bHash,
-    ) -> Result<HashMap<PublicKey, U512>, Error>
+    ) -> Result<HashMap<AccountHash, U512>, Error>
     where
         Error: From<S::Error>,
     {
@@ -1711,7 +1705,7 @@ where
             .named_keys()
             .keys()
             .filter_map(|entry| utils::pos_validator_key_name_to_tuple(entry))
-            .collect::<HashMap<PublicKey, U512>>();
+            .collect::<HashMap<AccountHash, U512>>();
 
         Ok(bonded_validators)
     }

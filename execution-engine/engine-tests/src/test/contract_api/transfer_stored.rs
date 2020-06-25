@@ -7,10 +7,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
-use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
+use types::{account::AccountHash, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_TRANSFER_TO_ACCOUNT_NAME: &str = "transfer_to_account";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 
 #[ignore]
 #[test]

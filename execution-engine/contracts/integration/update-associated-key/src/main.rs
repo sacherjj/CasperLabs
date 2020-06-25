@@ -6,7 +6,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{PublicKey, Weight},
+    account::{AccountHash, Weight},
     ApiError,
 };
 
@@ -26,7 +26,7 @@ const ARG_WEIGHT: &str = "weight";
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let account: PublicKey = runtime::get_named_arg(ARG_ACCOUNT);
+    let account: AccountHash = runtime::get_named_arg(ARG_ACCOUNT);
     let weight_val: u32 = runtime::get_named_arg(ARG_WEIGHT);
     let weight = Weight::new(weight_val as u8);
 

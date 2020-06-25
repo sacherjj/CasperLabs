@@ -5,10 +5,10 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
+use types::{account::AccountHash, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_TRANSFER_PURSE_TO_ACCOUNT: &str = "transfer_purse_to_account.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 const ARG_PAYMENT_AMOUNT: &str = "payment_amount";
 
 #[ignore]
@@ -34,13 +34,13 @@ fn initialize() -> InMemoryWasmTestBuilder {
     builder
 }
 
-fn transfer(builder: &mut InMemoryWasmTestBuilder, public_key: PublicKey, amount: U512) {
+fn transfer(builder: &mut InMemoryWasmTestBuilder, account_hash: AccountHash, amount: U512) {
     let exec_request = {
         ExecuteRequestBuilder::standard(
             DEFAULT_ACCOUNT_ADDR,
             CONTRACT_TRANSFER_PURSE_TO_ACCOUNT,
             runtime_args! {
-                "target" => public_key,
+                "target" => account_hash,
                 "amount" => amount,
             },
         )
@@ -50,17 +50,17 @@ fn transfer(builder: &mut InMemoryWasmTestBuilder, public_key: PublicKey, amount
     builder.exec(exec_request).expect_success().commit();
 }
 
-fn refund_tests(builder: &mut InMemoryWasmTestBuilder, public_key: PublicKey) {
+fn refund_tests(builder: &mut InMemoryWasmTestBuilder, account_hash: AccountHash) {
     let exec_request = {
         let deploy = DeployItemBuilder::new()
-            .with_address(public_key)
+            .with_address(account_hash)
             .with_deploy_hash([2; 32])
             .with_session_code("do_nothing.wasm", RuntimeArgs::default())
             .with_payment_code(
                 "pos_refund_purse.wasm",
                 runtime_args! { ARG_PAYMENT_AMOUNT => *DEFAULT_PAYMENT },
             )
-            .with_authorization_keys(&[public_key])
+            .with_authorization_keys(&[account_hash])
             .build();
 
         ExecuteRequestBuilder::new().push_deploy(deploy).build()

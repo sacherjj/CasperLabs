@@ -11,7 +11,7 @@ use contract::{
 };
 use mint::{Mint, RuntimeProvider, StorageProvider};
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{FromBytes, ToBytes},
     contracts::Parameters,
     system_contract_errors::mint::Error,
@@ -32,7 +32,7 @@ pub const ARG_TARGET: &str = "target";
 pub struct MintContract;
 
 impl RuntimeProvider for MintContract {
-    fn get_caller(&self) -> PublicKey {
+    fn get_caller(&self) -> AccountHash {
         runtime::get_caller()
     }
 

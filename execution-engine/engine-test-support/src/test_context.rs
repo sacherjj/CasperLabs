@@ -11,7 +11,7 @@ use types::{AccessRights, Key, URef, U512};
 
 use crate::{
     internal::{InMemoryWasmTestBuilder, DEFAULT_GENESIS_CONFIG, DEFAULT_GENESIS_CONFIG_HASH},
-    Account, Error, PublicKey, Result, Session, URefAddr, Value,
+    Account, AccountHash, Error, Result, Session, URefAddr, Value,
 };
 
 /// Context in which to run a test of a Wasm smart contract.
@@ -108,7 +108,7 @@ impl TestContext {
     /// Queries for a [`Value`] stored under the given `key` and `path`.
     ///
     /// Returns an [`Error`] if not found.
-    pub fn query<T: AsRef<str>>(&self, key: PublicKey, path: &[T]) -> Result<Value> {
+    pub fn query<T: AsRef<str>>(&self, key: AccountHash, path: &[T]) -> Result<Value> {
         let path = path.iter().map(AsRef::as_ref).collect::<Vec<_>>();
         self.inner
             .query(None, Key::Account(key), &path)
@@ -125,7 +125,7 @@ impl TestContext {
     }
 
     /// Gets the main purse [`URef`] from an [`Account`] stored under a [`PublicKey`], or `None`.
-    pub fn main_purse_address(&self, account_key: PublicKey) -> Option<URef> {
+    pub fn main_purse_address(&self, account_key: AccountHash) -> Option<URef> {
         match self.inner.get_account(account_key) {
             Some(account) => Some(account.main_purse()),
             None => None,
@@ -134,7 +134,7 @@ impl TestContext {
 
     // TODO: Remove this once test can use query
     /// Gets an [`Account`] stored under a [`PublicKey`], or `None`.
-    pub fn get_account(&self, account_key: PublicKey) -> Option<Account> {
+    pub fn get_account(&self, account_key: AccountHash) -> Option<Account> {
         match self.inner.get_account(account_key) {
             Some(account) => Some(account.into()),
             None => None,
@@ -162,7 +162,7 @@ impl TestContextBuilder {
     /// the Genesis block.
     ///
     /// Note: `initial_balance` represents the number of motes.
-    pub fn with_account(mut self, address: PublicKey, initial_balance: U512) -> Self {
+    pub fn with_account(mut self, address: AccountHash, initial_balance: U512) -> Self {
         let new_account = GenesisAccount::new(address, Motes::new(initial_balance), Motes::zero());
         self.genesis_config
             .ee_config_mut()

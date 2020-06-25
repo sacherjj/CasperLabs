@@ -5,7 +5,7 @@ use contract::{
     contract_api::{account, runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, runtime_args, ContractHash, RuntimeArgs, URef, U512};
+use types::{account::AccountHash, runtime_args, ContractHash, RuntimeArgs, URef, U512};
 
 pub const ARG_AMOUNT: &str = "amount";
 pub const ARG_AMOUNT_SPENT: &str = "amount_spent";
@@ -33,7 +33,7 @@ fn submit_payment(contract_hash: ContractHash, amount: U512) {
     system::transfer_from_purse_to_purse(main_purse, payment_purse, amount).unwrap_or_revert()
 }
 
-fn finalize_payment(contract_hash: ContractHash, amount_spent: U512, account: PublicKey) {
+fn finalize_payment(contract_hash: ContractHash, amount_spent: U512, account: AccountHash) {
     runtime::call_contract(
         contract_hash,
         "finalize_payment",
@@ -51,7 +51,7 @@ pub extern "C" fn call() {
     let payment_amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
     let refund_purse_flag: u8 = runtime::get_named_arg(ARG_REFUND_FLAG);
     let maybe_amount_spent: Option<U512> = runtime::get_named_arg(ARG_AMOUNT_SPENT);
-    let maybe_account: Option<PublicKey> = runtime::get_named_arg(ARG_ACCOUNT_KEY);
+    let maybe_account: Option<AccountHash> = runtime::get_named_arg(ARG_ACCOUNT_KEY);
 
     submit_payment(contract_hash, payment_amount);
 

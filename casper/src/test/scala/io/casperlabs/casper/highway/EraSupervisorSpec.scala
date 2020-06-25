@@ -6,7 +6,7 @@ import cats.implicits._
 import io.casperlabs.casper.consensus.Block.MessageRole
 import io.casperlabs.comm.gossiping.WaitHandle
 import io.casperlabs.comm.gossiping.relaying.BlockRelaying
-import io.casperlabs.crypto.Keys.PublicKeyBS
+import io.casperlabs.crypto.Keys
 import io.casperlabs.models.Message
 import io.casperlabs.storage.{BlockHash, SQLiteStorage}
 import monix.eval.Task
@@ -89,7 +89,7 @@ class EraSupervisorSpec
               keyBlockHash: BlockHash,
               roundId: Ticks,
               mainParent: Message.Block,
-              justifications: Map[PublicKeyBS, Set[Message]],
+              justifications: Map[Keys.PublicKeyHashBS, Set[Message]],
               isBookingBlock: Boolean,
               messageRole: MessageRole
           ) = Task.raiseError(new RuntimeException("Stop the agenda!"))
@@ -130,7 +130,7 @@ class EraSupervisorSpec
           isSyncedRef
         ) (timer, db) {
 
-          val validatorId: PublicKeyBS = validator
+          val validatorId: Keys.PublicKeyHashBS = validator
 
           override val test = for {
             _        <- sleepUntil(start plus length)

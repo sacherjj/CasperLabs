@@ -24,7 +24,7 @@ export function makeDeploy(
   session: ByteArray,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray,
+  accountPublicKeyHash: ByteArray,
   dependencies?: Uint8Array[]
 ): Deploy;
 
@@ -47,7 +47,7 @@ export function makeDeploy(
   sessionName: string,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray,
+  accountPublicKeyHash: ByteArray,
   dependencies: Uint8Array[],
   entryPoint: string
 ): Deploy;
@@ -60,7 +60,7 @@ export function makeDeploy(
   session: ByteArray | string,
   paymentWasm: ByteArray | null,
   paymentAmount: bigint | JSBI,
-  accountPublicKey: ByteArray,
+  accountPublicKeyHash: ByteArray,
   dependencies?: Uint8Array[],
   entryPoint?: string,
 ): Deploy {
@@ -96,7 +96,7 @@ export function makeDeploy(
   body.setPayment(payment);
 
   const header = new Deploy.Header();
-  header.setAccountPublicKey(accountPublicKey);
+  header.setAccountPublicKeyHash(accountPublicKeyHash);
   header.setTimestamp(new Date().getTime());
   header.setBodyHash(protoHash(body));
   // we will remove gasPrice eventually

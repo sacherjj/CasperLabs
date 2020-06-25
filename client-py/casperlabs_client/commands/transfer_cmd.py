@@ -4,7 +4,7 @@ from casperlabs_client.commands.common_options import (
     CHAINNAME_OPTION,
     DEPENDENCIES_OPTION,
     TTL_MILLIS_OPTION,
-    PRIVATE_KEY_OPTION,
+    private_key_option,
     WAIT_PROCESSED_OPTION,
     TIMEOUT_SECONDS_OPTION,
 )
@@ -44,7 +44,7 @@ OPTIONS = [
         dict(
             required=False,
             type=str,
-            help=("base64 or base16 representation of source purse URef"),
+            help="base64 or base16 representation of source purse URef",
         ),
     ],
     FROM_OPTION,
@@ -53,13 +53,12 @@ OPTIONS = [
     TTL_MILLIS_OPTION,
     WAIT_PROCESSED_OPTION,
     TIMEOUT_SECONDS_OPTION,
-    PRIVATE_KEY_OPTION,
+    private_key_option(required=True),
 ]
 
 
 @guarded_command
-def method(casperlabs_client: CasperLabsClient, args):
-    args = vars(args)
+def method(casperlabs_client: CasperLabsClient, args: dict):
     deploy_hash = casperlabs_client.transfer(
         amount=args.get("amount"),
         target_account=args.get("target_account"),
