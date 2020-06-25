@@ -11,8 +11,8 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::PublicKey, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType, EntryPoints,
-    RuntimeArgs,
+    account::AccountHash, CLType, CLValue, EntryPoint, EntryPointAccess, EntryPointType,
+    EntryPoints, RuntimeArgs,
 };
 
 const ENTRY_POINT_NAME: &str = "get_caller_ext";
@@ -22,17 +22,17 @@ const ARG_ACCOUNT: &str = "account";
 
 #[no_mangle]
 pub extern "C" fn get_caller_ext() {
-    let caller_public_key: PublicKey = runtime::get_caller();
-    runtime::ret(CLValue::from_t(caller_public_key).unwrap_or_revert());
+    let caller_account_hash: AccountHash = runtime::get_caller();
+    runtime::ret(CLValue::from_t(caller_account_hash).unwrap_or_revert());
 }
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let known_public_key: PublicKey = runtime::get_named_arg(ARG_ACCOUNT);
-    let caller_public_key: PublicKey = runtime::get_caller();
+    let known_account_hash: AccountHash = runtime::get_named_arg(ARG_ACCOUNT);
+    let caller_account_hash: AccountHash = runtime::get_caller();
     assert_eq!(
-        caller_public_key, known_public_key,
-        "caller public key was not known public key"
+        caller_account_hash, known_account_hash,
+        "caller account hash was not known account hash"
     );
 
     let entry_points = {
@@ -56,10 +56,10 @@ pub extern "C" fn call() {
         Some(ACCESS_KEY_NAME.to_string()),
     );
 
-    let subcall_public_key: PublicKey =
+    let subcall_account_hash: AccountHash =
         runtime::call_contract(contract_hash, ENTRY_POINT_NAME, RuntimeArgs::default());
     assert_eq!(
-        subcall_public_key, known_public_key,
-        "subcall public key was not known public key"
+        subcall_account_hash, known_account_hash,
+        "subcall account hash was not known account hash"
     );
 }

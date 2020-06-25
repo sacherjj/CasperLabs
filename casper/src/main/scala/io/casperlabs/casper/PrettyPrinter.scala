@@ -234,7 +234,7 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
       mainParent <- header.parentHashes.headOption
       postState  <- header.state
     } yield s"Block j-rank #${header.jRank} main-rank #${header.mainRank} (${buildString(b.blockHash)}) " +
-      s"-- Sender ID ${buildString(header.validatorPublicKey)} " +
+      s"-- Sender ID ${buildString(header.validatorPublicKeyHash)} " +
       s"-- M Parent Hash ${buildString(mainParent)} " +
       s"-- Contents ${buildString(postState.postStateHash)}" +
       s"-- Chain Name ${limit(header.chainName, 10)}"
@@ -271,5 +271,5 @@ object PrettyPrinter extends ByteStringPrettyPrinter {
     s"Deployment threshold ${at.deploymentThreshold}, Key management threshold: ${at.keyManagementThreshold}"
 
   def buildString(d: consensus.Deploy): String =
-    s"Deploy ${buildStringNoLimit(d.deployHash)} (${buildStringNoLimit(d.getHeader.accountPublicKey)})"
+    s"Deploy ${buildStringNoLimit(d.deployHash)} (account ${buildStringNoLimit(d.getHeader.accountPublicKeyHash)})"
 }

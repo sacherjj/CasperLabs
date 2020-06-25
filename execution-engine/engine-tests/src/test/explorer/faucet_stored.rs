@@ -5,11 +5,11 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, ApiError, RuntimeArgs, U512};
+use types::{account::AccountHash, runtime_args, ApiError, RuntimeArgs, U512};
 
 const FAUCET: &str = "faucet";
 const CALL_FAUCET: &str = "call_faucet";
-const NEW_ACCOUNT_ADDR: PublicKey = PublicKey::ed25519_from([99u8; 32]);
+const NEW_ACCOUNT_ADDR: AccountHash = AccountHash::new([99u8; 32]);
 
 fn get_builder() -> InMemoryWasmTestBuilder {
     let mut builder = InMemoryWasmTestBuilder::default();

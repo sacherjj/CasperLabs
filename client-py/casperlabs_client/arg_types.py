@@ -23,7 +23,7 @@ def positive_integer(number):
 
 
 def directory_for_write(path):
-    """  """
+    """ Check directory exists and is writable. """
     if not os.path.exists(path):
         raise argparse.ArgumentTypeError(f"Directory '{path}' does not exist")
     if not os.path.isdir(path):

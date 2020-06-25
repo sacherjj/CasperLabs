@@ -9,7 +9,7 @@ use engine_shared::{
 };
 use engine_storage::{global_state::StateReader, protocol_data::ProtocolData};
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, contracts::NamedKeys, AccessRights, BlockTime,
+    account::AccountHash, bytesrepr::FromBytes, contracts::NamedKeys, AccessRights, BlockTime,
     CLTyped, CLValue, ContractPackage, EntryPoint, EntryPointType, Key, Phase, ProtocolVersion,
     RuntimeArgs,
 };
@@ -93,7 +93,7 @@ impl Executor {
         base_key: Key,
         account: &Account,
         named_keys: &mut NamedKeys,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
@@ -238,7 +238,7 @@ impl Executor {
         extra_keys: &[Key],
         base_key: Key,
         account: &Account,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
@@ -329,7 +329,7 @@ impl Executor {
                 extra_keys,
                 effect_snapshot,
             );
-            *named_keys = inner_named_keys.to_owned();
+            *named_keys = inner_named_keys;
             return ret;
         }
 
@@ -404,7 +404,7 @@ impl Executor {
         entry_point_name: &str,
         args: RuntimeArgs,
         account: &mut Account,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,
@@ -423,7 +423,7 @@ impl Executor {
         T: FromBytes + CLTyped,
     {
         let mut named_keys: NamedKeys = account.named_keys().clone();
-        let base_key = account.public_key().into();
+        let base_key = account.account_hash().into();
 
         let (instance, mut runtime) = self.create_runtime(
             module,
@@ -489,7 +489,7 @@ impl Executor {
         extra_keys: &[Key],
         base_key: Key,
         account: &'a Account,
-        authorization_keys: BTreeSet<PublicKey>,
+        authorization_keys: BTreeSet<AccountHash>,
         blocktime: BlockTime,
         deploy_hash: [u8; 32],
         gas_limit: Gas,

@@ -13,7 +13,7 @@ use proptest::{
 };
 
 use crate::{
-    account::{PublicKey, Weight},
+    account::{AccountHash, Weight},
     contracts::{ContractVersions, DisabledVersions, Groups, NamedKeys, Parameters},
     AccessRights, CLType, CLValue, Contract, ContractPackage, ContractVersionKey, ContractWasm,
     EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, Group, Key, NamedArg, Parameter,
@@ -60,14 +60,14 @@ pub fn uref_arb() -> impl Strategy<Value = URef> {
 
 pub fn key_arb() -> impl Strategy<Value = Key> {
     prop_oneof![
-        public_key_arb().prop_map(Key::Account),
+        account_hash_arb().prop_map(Key::Account),
         u8_slice_32().prop_map(Key::Hash),
         uref_arb().prop_map(Key::URef),
     ]
 }
 
-pub fn public_key_arb() -> impl Strategy<Value = PublicKey> {
-    u8_slice_32().prop_map(PublicKey::ed25519_from)
+pub fn account_hash_arb() -> impl Strategy<Value = AccountHash> {
+    u8_slice_32().prop_map(AccountHash::new)
 }
 
 pub fn weight_arb() -> impl Strategy<Value = Weight> {

@@ -5,7 +5,7 @@ use engine_core::{
     DeployHash,
 };
 use types::{
-    account::PublicKey, bytesrepr::ToBytes, contracts::ContractVersion, ContractHash, HashAddr,
+    account::AccountHash, bytesrepr::ToBytes, contracts::ContractVersion, ContractHash, HashAddr,
     RuntimeArgs,
 };
 
@@ -13,11 +13,11 @@ use crate::internal::utils;
 
 #[derive(Default)]
 struct DeployItemData {
-    pub address: Option<PublicKey>,
+    pub address: Option<AccountHash>,
     pub payment_code: Option<ExecutableDeployItem>,
     pub session_code: Option<ExecutableDeployItem>,
     pub gas_price: u64,
-    pub authorization_keys: BTreeSet<PublicKey>,
+    pub authorization_keys: BTreeSet<AccountHash>,
     pub deploy_hash: DeployHash,
 }
 
@@ -30,7 +30,7 @@ impl DeployItemBuilder {
         Default::default()
     }
 
-    pub fn with_address(mut self, address: PublicKey) -> Self {
+    pub fn with_address(mut self, address: AccountHash) -> Self {
         self.deploy_item.address = Some(address);
         self
     }
@@ -193,7 +193,7 @@ impl DeployItemBuilder {
         self
     }
 
-    pub fn with_authorization_keys<T: Clone + Into<PublicKey>>(
+    pub fn with_authorization_keys<T: Clone + Into<AccountHash>>(
         mut self,
         authorization_keys: &[T],
     ) -> Self {
@@ -220,7 +220,7 @@ impl DeployItemBuilder {
             address: self
                 .deploy_item
                 .address
-                .unwrap_or_else(|| PublicKey::ed25519_from([0u8; 32])),
+                .unwrap_or_else(|| AccountHash::new([0u8; 32])),
             session: self
                 .deploy_item
                 .session_code

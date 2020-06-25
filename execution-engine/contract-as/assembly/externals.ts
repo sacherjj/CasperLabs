@@ -72,13 +72,13 @@ export declare function revert(err_code: i32): void;
 export declare function is_valid_uref(target_ptr: usize, target_size: u32): i32;
 /** @hidden */
 @external("env", "add_associated_key")
-export declare function add_associated_key(public_key_ptr: usize, public_key_size: usize, weight: i32): i32;
+export declare function add_associated_key(account_hash_ptr: usize, account_hash_size: usize, weight: i32): i32;
 /** @hidden */
 @external("env", "remove_associated_key")
-export declare function remove_associated_key(public_key_ptr: usize, public_key_size: usize): i32;
+export declare function remove_associated_key(account_hash_ptr: usize, account_hash_size: usize): i32;
 /** @hidden */
 @external("env", "update_associated_key")
-export declare function update_associated_key(public_key_ptr: usize, public_key_size: usize, weight: i32): i32;
+export declare function update_associated_key(account_hash_ptr: usize, account_hash_size: usize, weight: i32): i32;
 /** @hidden */
 @external("env", "set_action_threshold")
 export declare function set_action_threshold(permission_level: u32, threshold: i32): i32;

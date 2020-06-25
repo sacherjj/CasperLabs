@@ -9,14 +9,14 @@ use engine_test_support::{
     },
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, runtime_args, RuntimeArgs, U512};
+use types::{account::AccountHash, runtime_args, RuntimeArgs, U512};
 
 const CONTRACT_EE_599_REGRESSION: &str = "ee_599_regression.wasm";
 const CONTRACT_TRANSFER_TO_ACCOUNT: &str = "transfer_to_account_u512.wasm";
 const DONATION_PURSE_COPY_KEY: &str = "donation_purse_copy";
 const EXPECTED_ERROR: &str = "InvalidContext";
 const TRANSFER_FUNDS_KEY: &str = "transfer_funds";
-const VICTIM_ADDR: PublicKey = PublicKey::ed25519_from([42; 32]);
+const VICTIM_ADDR: AccountHash = AccountHash::new([42; 32]);
 
 lazy_static! {
     static ref VICTIM_INITIAL_FUNDS: U512 = *DEFAULT_PAYMENT * 10;

@@ -4,7 +4,7 @@ use rand::Rng;
 
 use engine_core::engine_state::{deploy_item::DeployItem, execute_request::ExecuteRequest};
 use types::{
-    account::PublicKey, contracts::ContractVersion, runtime_args, ContractHash, ProtocolVersion,
+    account::AccountHash, contracts::ContractVersion, runtime_args, ContractHash, ProtocolVersion,
     RuntimeArgs,
 };
 
@@ -50,17 +50,21 @@ impl ExecuteRequestBuilder {
         self.execute_request
     }
 
-    pub fn standard(public_key: PublicKey, session_file: &str, session_args: RuntimeArgs) -> Self {
+    pub fn standard(
+        account_hash: AccountHash,
+        session_file: &str,
+        session_args: RuntimeArgs,
+    ) -> Self {
         let mut rng = rand::thread_rng();
         let deploy_hash: [u8; 32] = rng.gen();
 
         let deploy = DeployItemBuilder::new()
-            .with_address(public_key)
+            .with_address(account_hash)
             .with_session_code(session_file, session_args)
             .with_empty_payment_bytes(runtime_args! {
                 ARG_AMOUNT => *DEFAULT_PAYMENT
             })
-            .with_authorization_keys(&[public_key])
+            .with_authorization_keys(&[account_hash])
             .with_deploy_hash(deploy_hash)
             .build();
 
@@ -68,7 +72,7 @@ impl ExecuteRequestBuilder {
     }
 
     pub fn contract_call_by_hash(
-        sender: PublicKey,
+        sender: AccountHash,
         contract_hash: ContractHash,
         entry_point: &str,
         args: RuntimeArgs,
@@ -89,7 +93,7 @@ impl ExecuteRequestBuilder {
 
     /// Calls a versioned contract from contract package hash key_name
     pub fn versioned_contract_call_by_hash_key_name(
-        sender: PublicKey,
+        sender: AccountHash,
         hash_key_name: &str,
         version: Option<ContractVersion>,
         entry_point_name: &str,

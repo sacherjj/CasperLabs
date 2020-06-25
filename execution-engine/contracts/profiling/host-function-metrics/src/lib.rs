@@ -12,7 +12,7 @@ use contract::{
     unwrap_or_revert::UnwrapOrRevert,
 };
 use types::{
-    account::{ActionType, PublicKey, Weight},
+    account::{AccountHash, ActionType, Weight},
     contracts::NamedKeys,
     runtime_args, ApiError, BlockTime, CLType, CLValue, ContractHash, ContractVersion, EntryPoint,
     EntryPointAccess, EntryPointType, EntryPoints, Key, Parameter, Phase, RuntimeArgs, U512,
@@ -133,7 +133,7 @@ fn small_function() {
 #[no_mangle]
 pub extern "C" fn call() {
     let seed: u64 = runtime::get_named_arg(ARG_SEED);
-    let (random_bytes, source_account, destination_account): (Vec<u8>, PublicKey, PublicKey) =
+    let (random_bytes, source_account, destination_account): (Vec<u8>, AccountHash, AccountHash) =
         runtime::get_named_arg(ARG_OTHERS);
 
     // ========== storage, execution and upgrading of contracts ====================================

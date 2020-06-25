@@ -14,12 +14,12 @@ use engine_test_support::{
     DEFAULT_ACCOUNT_ADDR, DEFAULT_ACCOUNT_INITIAL_BALANCE,
 };
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     contracts::{ContractVersion, CONTRACT_INITIAL_VERSION, DEFAULT_ENTRY_POINT_NAME},
     runtime_args, ContractHash, Key, ProtocolVersion, RuntimeArgs, U512,
 };
 
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([42u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([42u8; 32]);
 const DEFAULT_ACTIVATION_POINT: ActivationPoint = 1;
 const DO_NOTHING_NAME: &str = "do_nothing";
 const DO_NOTHING_CONTRACT_PACKAGE_HASH_NAME: &str = "do_nothing_package_hash";
@@ -97,7 +97,7 @@ fn should_exec_non_stored_code() {
     // using the new execute logic, passing code for both payment and session
     // should work exactly as it did with the original exec logic
 
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 10_000_000;
     let transferred_amount = 1;
 
@@ -107,7 +107,7 @@ fn should_exec_non_stored_code() {
             .with_session_code(
                 &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
                 runtime_args! {
-                    ARG_TARGET => account_1_public_key,
+                    ARG_TARGET => account_1_account_hash,
                     ARG_AMOUNT => U512::from(transferred_amount)
                 },
             )
@@ -189,12 +189,12 @@ fn should_exec_stored_code_by_hash() {
     // next make another deploy that USES stored payment logic
     {
         let exec_request_stored_payment = {
-            let account_1_public_key = ACCOUNT_1_ADDR;
+            let account_1_account_hash = ACCOUNT_1_ADDR;
             let deploy = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                    runtime_args! { ARG_TARGET =>account_1_public_key, ARG_AMOUNT => U512::from(transferred_amount) },
+                    runtime_args! { ARG_TARGET => account_1_account_hash, ARG_AMOUNT => U512::from(transferred_amount) },
                 )
                 .with_stored_versioned_payment_contract_by_hash(
                     hash,
@@ -286,12 +286,12 @@ fn should_exec_stored_code_by_named_hash() {
     // next make another deploy that USES stored payment logic
     {
         let exec_request_stored_payment = {
-            let account_1_public_key = ACCOUNT_1_ADDR;
+            let account_1_account_hash = ACCOUNT_1_ADDR;
             let deploy = DeployItemBuilder::new()
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                    runtime_args! { ARG_TARGET =>account_1_public_key, ARG_AMOUNT => U512::from(transferred_amount) },
+                    runtime_args! { ARG_TARGET => account_1_account_hash, ARG_AMOUNT => U512::from(transferred_amount) },
                 )
                 .with_stored_versioned_payment_contract_by_name(
                     STORED_PAYMENT_CONTRACT_PACKAGE_HASH_NAME,
@@ -482,7 +482,7 @@ fn should_exec_payment_and_session_stored_code() {
 #[ignore]
 #[test]
 fn should_have_equivalent_transforms_with_stored_contract_pointers() {
-    let account_1_public_key = ACCOUNT_1_ADDR;
+    let account_1_account_hash = ACCOUNT_1_ADDR;
     let payment_purse_amount = 100_000_000;
     let transferred_amount = 1;
 
@@ -538,7 +538,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_stored_session_named_key(
                     TRANSFER_PURSE_TO_ACCOUNT_STORED_HASH_KEY_NAME,
                     TRANSFER,
-                    runtime_args! { ARG_TARGET => account_1_public_key, ARG_AMOUNT => U512::from(transferred_amount) },
+                    runtime_args! { ARG_TARGET => account_1_account_hash, ARG_AMOUNT => U512::from(transferred_amount) },
                 )
                 .with_stored_payment_named_key(
                     STORED_PAYMENT_CONTRACT_HASH_NAME,
@@ -582,7 +582,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 .with_address(DEFAULT_ACCOUNT_ADDR)
                 .with_session_code(
                     &format!("{}.wasm", TRANSFER_PURSE_TO_ACCOUNT_CONTRACT_NAME),
-                    runtime_args! { ARG_TARGET => account_1_public_key, ARG_AMOUNT => U512::from(transferred_amount) },
+                    runtime_args! { ARG_TARGET => account_1_account_hash, ARG_AMOUNT => U512::from(transferred_amount) },
                 )
                 .with_empty_payment_bytes(
                     runtime_args! {
@@ -639,7 +639,7 @@ fn should_have_equivalent_transforms_with_stored_contract_pointers() {
                 Transform::Write(StoredValue::Account(la)),
                 Transform::Write(StoredValue::Account(ra)),
             ) => {
-                assert_eq!(la.public_key(), ra.public_key());
+                assert_eq!(la.account_hash(), ra.account_hash());
                 assert_eq!(la.main_purse(), ra.main_purse());
                 assert_eq!(la.action_thresholds(), ra.action_thresholds());
 

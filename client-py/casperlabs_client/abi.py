@@ -10,6 +10,8 @@ Instance = state.CLValueInstance
 Value = Instance.Value
 Type = state.CLType
 
+# TODO: This is in no way an ABI.  Need to rename.
+
 
 class ABI:
     """

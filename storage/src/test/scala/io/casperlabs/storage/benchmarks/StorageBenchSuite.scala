@@ -66,7 +66,7 @@ object StorageBenchSuite {
   //Take this into account before change it
   def randomDeployData: Deploy =
     Deploy()
-      .withHeader(Deploy.Header().withAccountPublicKey(randomHexString(32)))
+      .withHeader(Deploy.Header().withAccountPublicKeyHash(randomHexString(32)))
       .withBody(
         Deploy
           .Body()
@@ -112,7 +112,7 @@ object StorageBenchSuite {
           .withJustifications(justifications)
           .withProtocolVersion(ProtocolVersion(version.toInt))
           .withTimestamp(timestamp)
-          .withValidatorPublicKey(validator)
+          .withValidatorPublicKeyHash(validator)
       )
       .withBody(randomBody)
   }

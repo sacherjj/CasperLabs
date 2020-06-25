@@ -40,6 +40,8 @@ fi
 
 if [[ "$1" == "--test" ]]; then
     if [[ -f "$OUTPUT_DIR/node-id" ]] && \
+       [[ -f "$OUTPUT_DIR/validator-pk" ]] && \
+       [[ -f "$OUTPUT_DIR/validator-pk-hex" ]] && \
        [[ -f "$OUTPUT_DIR/validator-id" ]] && \
        [[ -f "$OUTPUT_DIR/validator-id-hex" ]] && \
        [[ -f "$OUTPUT_DIR/node.key.pem" ]] && \

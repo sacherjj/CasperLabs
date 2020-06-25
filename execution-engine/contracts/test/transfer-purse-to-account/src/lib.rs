@@ -8,7 +8,7 @@ use contract::{
     contract_api::{account, runtime, storage, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, Key, URef, U512};
+use types::{account::AccountHash, ApiError, Key, URef, U512};
 
 const TRANSFER_RESULT_UREF_NAME: &str = "transfer_result";
 const MAIN_PURSE_FINAL_BALANCE_UREF_NAME: &str = "final_balance";
@@ -18,7 +18,7 @@ const ARG_AMOUNT: &str = "amount";
 
 pub fn delegate() {
     let source: URef = account::get_main_purse();
-    let target: PublicKey = runtime::get_named_arg(ARG_TARGET);
+    let target: AccountHash = runtime::get_named_arg(ARG_TARGET);
     let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
 
     let transfer_result = system::transfer_from_purse_to_account(source, target, amount);

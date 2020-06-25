@@ -121,15 +121,16 @@ app.use(express.json());
 app.post("/api/faucet", checkJwt, (req, res) => {
   // express-jwt put the token in res.user
   // const userId = (req as any).user.sub;
-  const accountPublicKeyBase64 = req.body.accountPublicKeyBase64 || "";
-  if (accountPublicKeyBase64 === "") {
-    throw Error("The 'accountPublicKeyBase64' is missing.");
+  const accountPublicKeyHashBase64 = req.body.accountPublicKeyHashBase64 || "";
+  if (accountPublicKeyHashBase64 === "") {
+    throw Error("The 'accountPublicKeyHashBase64' is missing.");
   }
 
-  const accountPublicKey = decodeBase64(accountPublicKeyBase64);
+  // Prepare the signed deploy.
+  const accountPublicKeyHash = decodeBase64(accountPublicKeyHashBase64);
 
   // Send the deploy to the node and return the deploy hash to the browser.
-  storedFaucetService.callStoredFaucet(accountPublicKey)
+  storedFaucetService.callStoredFaucet(accountPublicKeyHash)
     .then((deployHash) => {
       const response = {
         deployHashBase16: Buffer.from(deployHash).toString('hex')

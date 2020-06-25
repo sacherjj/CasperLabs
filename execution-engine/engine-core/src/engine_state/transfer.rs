@@ -1,7 +1,7 @@
 use engine_shared::{account::Account, newtypes::CorrelationId, stored_value::StoredValue};
 use engine_storage::global_state::StateReader;
 use std::{cell::RefCell, rc::Rc};
-use types::{account::PublicKey, AccessRights, ApiError, Key, RuntimeArgs, URef, U512};
+use types::{account::AccountHash, AccessRights, ApiError, Key, RuntimeArgs, URef, U512};
 
 use crate::{
     engine_state::Error,
@@ -17,7 +17,7 @@ const AMOUNT: &str = "amount";
 pub enum TransferTargetMode {
     Unknown,
     PurseExists(URef),
-    CreateAccount(PublicKey),
+    CreateAccount(AccountHash),
 }
 
 pub struct TransferRuntimeArgsBuilder {

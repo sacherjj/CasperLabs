@@ -14,7 +14,7 @@ use engine_shared::{gas::Gas, newtypes::CorrelationId};
 use engine_storage::{global_state::StateProvider, protocol_data::ProtocolData};
 use engine_wasm_prep::Preprocessor;
 use types::{
-    account::PublicKey, bytesrepr::FromBytes, BlockTime, CLTyped, EntryPointType, Key, Phase,
+    account::AccountHash, bytesrepr::FromBytes, BlockTime, CLTyped, EntryPointType, Key, Phase,
     ProtocolVersion, RuntimeArgs, URef, U512,
 };
 
@@ -28,7 +28,7 @@ use crate::internal::{utils, WasmTestBuilder, DEFAULT_WASM_COSTS};
 pub fn exec<S, T>(
     config: EngineConfig,
     builder: &mut WasmTestBuilder<S>,
-    address: PublicKey,
+    address: AccountHash,
     wasm_file: &str,
     block_time: u64,
     deploy_hash: [u8; 32],

@@ -365,7 +365,7 @@ object DeployRuntime {
       publicKey    <- readKey[F, PublicKey](publicKeyFile, "public", Ed25519.tryParsePublicKey _)
       privateKey   <- readKey[F, PrivateKey](privateKeyFile, "private", Ed25519.tryParsePrivateKey _)
       deploy       <- Sync[F].fromTry(Try(Deploy.parseFrom(deployBA)))
-      signedDeploy = deploy.sign(privateKey, publicKey)
+      signedDeploy = deploy.approve(Ed25519, privateKey, publicKey)
       _            <- writeDeploy(signedDeploy, output)
     } yield ()
 
@@ -386,13 +386,15 @@ object DeployRuntime {
         deployConfig.paymentAmount.map(bigIntArg("amount", _)).toList
       )
 
+    val accountPublicKeyHash = Ed25519.publicKeyHash(from)
+
     consensus
       .Deploy()
       .withHeader(
         consensus.Deploy
           .Header()
           .withTimestamp(System.currentTimeMillis)
-          .withAccountPublicKey(ByteString.copyFrom(from))
+          .withAccountPublicKeyHash(ByteString.copyFrom(accountPublicKeyHash))
           .withGasPrice(deployConfig.gasPrice)
           .withTtlMillis(deployConfig.timeToLive.getOrElse(0))
           .withDependencies(deployConfig.dependencies)
@@ -503,7 +505,7 @@ object DeployRuntime {
     } yield {
       val deploy =
         makeDeploy(accountPublicKey, deployConfig, sessionArgs)
-      (maybePrivateKey, maybePublicKey).mapN(deploy.sign) getOrElse deploy
+      (maybePrivateKey, maybePublicKey).mapN(deploy.approve(Ed25519, _, _)) getOrElse deploy
     }
 
     gracefulExit(

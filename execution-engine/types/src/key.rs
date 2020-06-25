@@ -4,7 +4,7 @@ use core::fmt::{self, Debug, Display, Formatter};
 use hex_fmt::HexFmt;
 
 use crate::{
-    account::PublicKey,
+    account::AccountHash,
     bytesrepr::{self, Error, FromBytes, ToBytes},
     URef, UREF_SERIALIZED_LENGTH,
 };
@@ -45,8 +45,9 @@ pub type ContractPackageHash = HashAddr;
 #[derive(PartialEq, Eq, Clone, Copy, PartialOrd, Ord, Hash)]
 pub enum Key {
     /// A `Key` under which a user account is stored.
-    Account(PublicKey),
-    /// A `Key` generated from value contract.
+    Account(AccountHash),
+    /// A `Key` under which a smart contract is stored and which is the pseudo-hash of the
+    /// contract.
     Hash(HashAddr),
     /// A `Key` which is a [`URef`], under which most types of data can be stored.
     URef(URef),
@@ -80,9 +81,10 @@ impl Key {
     /// Returns a human-readable version of `self`, with the inner bytes encoded to Base16.
     pub fn as_string(&self) -> String {
         match self {
-            Key::Account(PublicKey::Ed25519(addr)) => {
-                format!("account-ed25519-{}", base16::encode_lower(&addr.value()))
-            }
+            Key::Account(account_hash) => format!(
+                "account-account_hash-{}",
+                base16::encode_lower(&account_hash.value())
+            ),
             Key::Hash(addr) => format!("hash-{}", base16::encode_lower(addr)),
             Key::URef(uref) => uref.as_string(),
         }
@@ -90,7 +92,7 @@ impl Key {
 
     /// Returns the inner bytes of `self` if `self` is of type [`Key::Account`], otherwise returns
     /// `None`.
-    pub fn into_account(self) -> Option<PublicKey> {
+    pub fn into_account(self) -> Option<AccountHash> {
         match self {
             Key::Account(bytes) => Some(bytes),
             _ => None,
@@ -126,7 +128,7 @@ impl Key {
     /// Creates the seed of a local key for a context with the given base key.
     pub fn into_seed(self) -> [u8; BLAKE2B_DIGEST_LENGTH] {
         match self {
-            Key::Account(PublicKey::Ed25519(bytes)) => bytes.value(),
+            Key::Account(account_hash) => account_hash.value(),
             Key::Hash(bytes) => bytes,
             Key::URef(uref) => uref.addr(),
         }
@@ -136,7 +138,7 @@ impl Key {
 impl Display for Key {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Key::Account(PublicKey::Ed25519(ed25519)) => write!(f, "Key::Account({})", ed25519),
+            Key::Account(account_hash) => write!(f, "Key::Account({})", account_hash),
             Key::Hash(addr) => write!(f, "Key::Hash({})", HexFmt(addr)),
             Key::URef(uref) => write!(f, "Key::{}", uref), /* Display impl for URef will append */
         }
@@ -155,9 +157,9 @@ impl From<URef> for Key {
     }
 }
 
-impl From<PublicKey> for Key {
-    fn from(public_key: PublicKey) -> Key {
-        Key::Account(public_key)
+impl From<AccountHash> for Key {
+    fn from(account_hash: AccountHash) -> Key {
+        Key::Account(account_hash)
     }
 }
 
@@ -165,9 +167,9 @@ impl ToBytes for Key {
     fn to_bytes(&self) -> Result<Vec<u8>, Error> {
         let mut result = bytesrepr::unchecked_allocate_buffer(self);
         match self {
-            Key::Account(public_key) => {
+            Key::Account(account_hash) => {
                 result.push(ACCOUNT_ID);
-                result.append(&mut public_key.to_bytes()?);
+                result.append(&mut account_hash.to_bytes()?);
             }
             Key::Hash(hash) => {
                 result.push(HASH_ID);
@@ -183,7 +185,9 @@ impl ToBytes for Key {
 
     fn serialized_length(&self) -> usize {
         match self {
-            Key::Account(public_key) => KEY_ID_SERIALIZED_LENGTH + public_key.serialized_length(),
+            Key::Account(account_hash) => {
+                KEY_ID_SERIALIZED_LENGTH + account_hash.serialized_length()
+            }
             Key::Hash(_) => KEY_HASH_SERIALIZED_LENGTH,
             Key::URef(_) => KEY_UREF_SERIALIZED_LENGTH,
         }
@@ -195,8 +199,8 @@ impl FromBytes for Key {
         let (id, remainder) = u8::from_bytes(bytes)?;
         match id {
             ACCOUNT_ID => {
-                let (public_key, rem) = PublicKey::from_bytes(remainder)?;
-                Ok((Key::Account(public_key), rem))
+                let (account_hash, rem) = AccountHash::from_bytes(remainder)?;
+                Ok((Key::Account(account_hash), rem))
             }
             HASH_ID => {
                 let (hash, rem) = <[u8; KEY_HASH_LENGTH]>::from_bytes(remainder)?;
@@ -268,11 +272,11 @@ mod tests {
     fn should_display_key() {
         let expected_hash = core::iter::repeat("0").take(64).collect::<String>();
         let addr_array = [0u8; 32];
-        let public_key = PublicKey::ed25519_from(addr_array);
-        let account_key = Key::Account(public_key);
+        let account_hash = AccountHash::new(addr_array);
+        let account_key = Key::Account(account_hash);
         assert_eq!(
             format!("{}", account_key),
-            format!("Key::Account(Ed25519({}))", expected_hash)
+            format!("Key::Account({})", expected_hash)
         );
         let uref_key = Key::URef(URef::new(addr_array, AccessRights::READ));
         assert_eq!(
@@ -300,9 +304,9 @@ mod tests {
     #[test]
     fn check_key_account_getters() {
         let account = [42; 32];
-        let public_key = PublicKey::ed25519_from(account);
-        let key1 = Key::Account(public_key);
-        assert_eq!(key1.into_account(), Some(public_key));
+        let account_hash = AccountHash::new(account);
+        let key1 = Key::Account(account_hash);
+        assert_eq!(key1.into_account(), Some(account_hash));
         assert!(key1.into_hash().is_none());
         assert!(key1.as_uref().is_none());
     }
@@ -327,7 +331,7 @@ mod tests {
 
     #[test]
     fn key_max_serialized_length() {
-        let key_account = Key::Account(PublicKey::ed25519_from([42; BLAKE2B_DIGEST_LENGTH]));
+        let key_account = Key::Account(AccountHash::new([42; BLAKE2B_DIGEST_LENGTH]));
         assert!(key_account.serialized_length() <= Key::max_serialized_length());
 
         let key_hash = Key::Hash([42; KEY_HASH_LENGTH]);

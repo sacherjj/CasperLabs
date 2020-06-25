@@ -7,7 +7,7 @@ use alloc::{string::ToString, vec};
 
 use contract::contract_api::{runtime, storage};
 use types::{
-    account::PublicKey, CLType, CLTyped, ContractHash, ContractVersion, EntryPoint,
+    account::AccountHash, CLType, CLTyped, ContractHash, ContractVersion, EntryPoint,
     EntryPointAccess, EntryPointType, EntryPoints, Parameter,
 };
 
@@ -31,7 +31,7 @@ fn store() -> (ContractHash, ContractVersion) {
         let entry_point = EntryPoint::new(
             ENTRY_POINT_NAME,
             vec![
-                Parameter::new(ARG_TARGET, PublicKey::cl_type()),
+                Parameter::new(ARG_TARGET, AccountHash::cl_type()),
                 Parameter::new(ARG_AMOUNT, CLType::U512),
             ],
             CLType::Unit,

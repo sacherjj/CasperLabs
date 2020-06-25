@@ -5,7 +5,7 @@ use contract::{
     contract_api::{runtime, system},
     unwrap_or_revert::UnwrapOrRevert,
 };
-use types::{account::PublicKey, ApiError, TransferredTo, U512};
+use types::{account::AccountHash, ApiError, TransferredTo, U512};
 
 const ARG_TARGET: &str = "target";
 const ARG_AMOUNT: &str = "amount";
@@ -17,9 +17,9 @@ enum Error {
 
 #[no_mangle]
 pub extern "C" fn call() {
-    let public_key: PublicKey = runtime::get_named_arg(ARG_TARGET);
+    let account: AccountHash = runtime::get_named_arg(ARG_TARGET);
     let amount: U512 = runtime::get_named_arg(ARG_AMOUNT);
-    let result = system::transfer_to_account(public_key, amount).unwrap_or_revert();
+    let result = system::transfer_to_account(account, amount).unwrap_or_revert();
     match result {
         TransferredTo::ExistingAccount => {
             // This is the expected result, as all accounts have to be initialized beforehand

@@ -7,14 +7,14 @@ use engine_test_support::{
     internal::{utils, ExecuteRequestBuilder, InMemoryWasmTestBuilder, DEFAULT_ACCOUNTS},
     DEFAULT_ACCOUNT_ADDR,
 };
-use types::{account::PublicKey, RuntimeArgs, U512};
+use types::{account::AccountHash, RuntimeArgs, U512};
 
 const CONTRACT_LOCAL_STATE: &str = "do_nothing.wasm";
-const ACCOUNT_1_ADDR: PublicKey = PublicKey::ed25519_from([1u8; 32]);
+const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 const ACCOUNT_1_BALANCE: u64 = 2000;
 const ACCOUNT_1_BOND: u64 = 1000;
 
-const ACCOUNT_2_ADDR: PublicKey = PublicKey::ed25519_from([2u8; 32]);
+const ACCOUNT_2_ADDR: AccountHash = AccountHash::new([2u8; 32]);
 const ACCOUNT_2_BALANCE: u64 = 2000;
 const ACCOUNT_2_BOND: u64 = 200;
 
@@ -54,14 +54,14 @@ fn should_return_bonded_validators() {
         .get_bonded_validators()[0]
         .clone();
 
-    let expected: HashMap<PublicKey, U512> = {
+    let expected: HashMap<AccountHash, U512> = {
         let zero = Motes::zero();
         accounts
             .iter()
             .filter_map(move |genesis_account| {
                 if genesis_account.bonded_amount() > zero {
                     Some((
-                        genesis_account.public_key(),
+                        genesis_account.account_hash(),
                         genesis_account.bonded_amount().value(),
                     ))
                 } else {

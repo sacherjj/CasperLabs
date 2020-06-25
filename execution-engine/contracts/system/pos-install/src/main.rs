@@ -16,7 +16,7 @@ use pos::{
 };
 use proof_of_stake::Stakes;
 use types::{
-    account::PublicKey,
+    account::AccountHash,
     contracts::{
         EntryPoint, EntryPointAccess, EntryPointType, EntryPoints, NamedKeys, Parameter,
         CONTRACT_INITIAL_VERSION,
@@ -71,7 +71,7 @@ pub extern "C" fn finalize_payment() {
 #[no_mangle]
 pub extern "C" fn install() {
     let mint_package_hash: ContractPackageHash = runtime::get_named_arg(ARG_MINT_PACKAGE_HASH);
-    let genesis_validators: BTreeMap<PublicKey, U512> =
+    let genesis_validators: BTreeMap<AccountHash, U512> =
         runtime::get_named_arg(ARG_GENESIS_VALIDATORS);
 
     let stakes = Stakes::new(genesis_validators);

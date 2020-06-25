@@ -7,7 +7,7 @@ use engine_shared::{
 use engine_storage::global_state::StateReader;
 use engine_wasm_prep::Preprocessor;
 use types::{
-    account::PublicKey, CLValue, Contract, ContractHash, ContractPackage, ContractPackageHash,
+    account::AccountHash, CLValue, Contract, ContractHash, ContractPackage, ContractPackageHash,
     ContractWasm, ContractWasmHash, Key, U512,
 };
 
@@ -21,14 +21,14 @@ pub trait TrackingCopyExt<R> {
     fn get_account(
         &mut self,
         correlation_id: CorrelationId,
-        public_key: PublicKey,
+        account_hash: AccountHash,
     ) -> Result<Account, Self::Error>;
 
     /// Reads the account at a given account address.
     fn read_account(
         &mut self,
         correlation_id: CorrelationId,
-        public_key: PublicKey,
+        account_hash: AccountHash,
     ) -> Result<Account, Self::Error>;
 
     /// Gets the purse balance key for a given purse id
@@ -85,9 +85,9 @@ where
     fn get_account(
         &mut self,
         correlation_id: CorrelationId,
-        public_key: PublicKey,
+        account_hash: AccountHash,
     ) -> Result<Account, Self::Error> {
-        let account_key = Key::Account(public_key);
+        let account_key = Key::Account(account_hash);
         match self.get(correlation_id, &account_key).map_err(Into::into)? {
             Some(StoredValue::Account(account)) => Ok(account),
             Some(other) => Err(execution::Error::TypeMismatch(TypeMismatch::new(
@@ -101,9 +101,9 @@ where
     fn read_account(
         &mut self,
         correlation_id: CorrelationId,
-        public_key: PublicKey,
+        account_hash: AccountHash,
     ) -> Result<Account, Self::Error> {
-        let account_key = Key::Account(public_key);
+        let account_key = Key::Account(account_hash);
         match self
             .read(correlation_id, &account_key)
             .map_err(Into::into)?
