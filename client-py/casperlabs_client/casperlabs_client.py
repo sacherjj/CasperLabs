@@ -866,14 +866,11 @@ class CasperLabsClient:
             account_public_key_hashes = []
         if deploy_hashes is None:
             deploy_hashes = []
-
-        deploy_filter = (
-            casper.StreamEventsRequest.DeployFilter(
-                account_public_key_hashes=[
-                    bytes.fromhex(pk) for pk in account_public_key_hashes
-                ],
-                deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes],
-            ),
+        deploy_filter = casper.StreamEventsRequest.DeployFilter(
+            account_public_key_hashes=[
+                bytes.fromhex(pk) for pk in account_public_key_hashes
+            ],
+            deploy_hashes=[bytes.fromhex(h) for h in deploy_hashes],
         )
 
         yield from self.casper_service.StreamEvents_stream(
