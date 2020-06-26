@@ -20,7 +20,6 @@ THIS_DIRECTORY = os.path.dirname(os.path.realpath(__file__))
 
 # Directory with Scala client's bundled contracts
 
-CONTRACTS_DIR = f"{THIS_DIRECTORY}/../../../client/src/main/resources"
 PROTOBUF_DIR = f"{THIS_DIRECTORY}/../../../protobuf"
 PROTO_DIR = f"{THIS_DIRECTORY}/casperlabs_client/proto"
 PACKAGE_DIR = f"{THIS_DIRECTORY}/casperlabs_client"
