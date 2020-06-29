@@ -52,12 +52,8 @@ const Home = observer((props: Props) => {
         <h3>Looking for help?</h3>
         <p>
           To write contracts have a look at the{' '}
-          <a href="https://techspec.casperlabs.io/en/latest/dapp/index.html">
+          <a href="https://techspec.casperlabs.io/en/latest/dapp-dev-guide/index.html">
             dApp Developer Guide
-          </a>
-          , the{' '}
-          <a href="https://github.com/CasperLabs/CasperLabs/tree/dev/execution-engine/contracts/examples">
-            contract examples
           </a>
           , the{' '}
           <a href="https://github.com/CasperLabs/CasperLabs/blob/dev/README.md">
