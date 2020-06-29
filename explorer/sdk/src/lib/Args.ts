@@ -64,7 +64,7 @@ export const StringValue = toValue<string>((value, x) => {
   t.setSimpleType(CLType.Simple.STRING);
 
   const v = new CLValueInstance.Value();
-  v.setStrValue(x)
+  v.setStrValue(x);
 
   value.setClType(t);
   value.setValue(v);

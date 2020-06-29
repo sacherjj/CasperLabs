@@ -1,18 +1,21 @@
 /**
- * Provide methods to communicate with [CasperLabs Plugin](https://github.com/CasperLabs/signer).
- * Works only on Browser.
+ * Provide methods to communicate with [CasperLabs Signer Extension](https://github.com/CasperLabs/signer).
+ * Works only on browser.
+ *
+ * @packageDocumentation
  */
 
 /**
- * whether CasperLabs Sign Helper Plugin is ready
+ * Check whether CasperLabs Signer extension is ready
  */
 export const isConnected: () => boolean = () => {
   return !!window?.casperlabsHelper?.isConnected();
 };
 
 /**
- * returns base64 encoded public key of user current selected account.
- * @throws Error if haven't connected to CasperLabs Signer browser plugin.
+ * Return base64 encoded public key of user current selected account.
+ *
+ * @throws Error if haven't connected to CasperLabs Signer browser extension.
  */
 export const getSelectedPublicKeyBase64: () => Promise<string | undefined> = () => {
   throwIfNotConnected();
@@ -20,8 +23,9 @@ export const getSelectedPublicKeyBase64: () => Promise<string | undefined> = () 
 };
 
 /**
- * send base16 encoded message to plugin to sign
- * @throws Error if haven't connected to CasperLabs Signer browser plugin.
+ * Send base16 encoded message to plugin to sign
+ *
+ * @throws Error if haven't connected to CasperLabs Signer browser extension.
  */
 export const sign: (messageBase16: string) => Promise<string> = (messageBase16: string) => {
   throwIfNotConnected();

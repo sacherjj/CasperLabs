@@ -33,20 +33,35 @@ import { BlockHash, ByteArray } from '../index';
 import { encodeBase16 } from '../lib/Conversions';
 import { GrpcError } from './Errors';
 
+/**
+ * Topics of event stream that client could subscribe to
+ */
 export interface SubscribeTopics {
-  blockAdded?: boolean;
-  blockFinalized?: boolean;
+  blockAdded?: boolean; // emit when a new block added
+  blockFinalized?: boolean; // emit when a new block finalized
 }
 
+/**
+ * Client implementation for [casper.proto](https://github.com/CasperLabs/CasperLabs/blob/dev/protobuf/io/casperlabs/node/api/casper.proto) gRPC API service.
+ */
 export default class CasperService {
+  /**
+   *
+   * @param url Point at either at a URL on a different port where grpcwebproxy is listening, or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
+   * @param transport transport of [grpc-web](https://github.com/improbable-eng/grpc-web/blob/master/client/grpc-web/docs/transport.md#node-http-only-available-in-a-nodejs-environment), the default value is browser transport
+   */
   constructor(
-    // Point at either at a URL on a different port where grpcwebproxy is listening,
-    // or use nginx to serve the UI files, the API and gRPC all on the same port without CORS.
     private url: string,
     private transport: grpc.TransportFactory = options =>
       grpc.CrossBrowserHttpTransport({ withCredentials: false })(options)
   ) {}
 
+  /**
+   * Add a deploy to the deploy pool on the node,
+   * to be processed during subsequent block proposals.
+   *
+   * @param deploy
+   */
   public deploy(deploy: Deploy) {
     return new Promise<void>((resolve, reject) => {
       const deployRequest = new DeployRequest();
@@ -68,6 +83,11 @@ export default class CasperService {
     });
   }
 
+  /**
+   * Get information about a single deploy by hash.
+   *
+   * @param deployHash
+   */
   getDeployInfo(deployHash: ByteArray): Promise<DeployInfo> {
     return new Promise<DeployInfo>((resolve, reject) => {
       const request = new GetDeployInfoRequest();
@@ -88,10 +108,20 @@ export default class CasperService {
     });
   }
 
+  /**
+   * Get deploys list of a given account
+   *
+   * @param accountPublicKeyHash
+   * @param pageSize size of each page
+   * @param view
+   *  - BlockInfo.ViewMap.BASIC: Only includes information which is based on the header.
+   *  - BlockInfo.ViewMap.FULL: Includes extra information such as children which require extra lookups.
+   * @param pageToken pagination token
+   */
   getDeployInfos(
     accountPublicKeyHash: ByteArray,
     pageSize: number,
-    view?: 0 | 1,
+    view?: BlockInfo.ViewMap[keyof BlockInfo.ViewMap],
     pageToken: string = ''
   ): Promise<ListDeployInfosResponse> {
     return new Promise<ListDeployInfosResponse>((resolve, reject) => {
@@ -116,10 +146,16 @@ export default class CasperService {
     });
   }
 
-  /** Return the block info including statistics. */
+  /**
+   * Get the block summary with extra information about finality.
+   * @param blockHash
+   * @param view
+   *  - BlockInfo.ViewMap.BASIC: Only includes information which is based on the header.
+   *  - BlockInfo.ViewMap.FULL: Includes extra information such as children which require extra lookups.
+   */
   getBlockInfo(
     blockHash: ByteArray | string,
-    view?: 0 | 1
+    view?: BlockInfo.ViewMap[keyof BlockInfo.ViewMap]
   ): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
       // The API supports prefixes, which may not have even number of characters.
@@ -144,6 +180,11 @@ export default class CasperService {
     });
   }
 
+  /**
+   * Get slices of the DAG, going backwards, rank by rank.
+   * @param depth
+   * @param maxRank
+   */
   getBlockInfos(depth: number, maxRank?: number): Promise<BlockInfo[]> {
     return new Promise<BlockInfo[]>((resolve, reject) => {
       const request = new StreamBlockInfosRequest();
@@ -170,6 +211,10 @@ export default class CasperService {
     });
   }
 
+  /**
+   * Get the processed deploys within a block.
+   * @param blockHash
+   */
   getBlockDeploys(blockHash: ByteArray): Promise<Block.ProcessedDeploy[]> {
     return new Promise<Block.ProcessedDeploy[]>((resolve, reject) => {
       const request = new StreamBlockDeploysRequest();
@@ -195,7 +240,9 @@ export default class CasperService {
     });
   }
 
-  /** Get one of the blocks from the last rank. */
+  /**
+   * Get one of the blocks from the last rank.
+   */
   getLatestBlockInfo(): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
       const request = new StreamBlockInfosRequest();
@@ -223,6 +270,11 @@ export default class CasperService {
     });
   }
 
+  /**
+   * Query the value of global state as it was after the execution of a block.
+   * @param blockHash
+   * @param query
+   */
   getBlockState(blockHash: BlockHash, query: StateQuery): Promise<StateValue> {
     return new Promise<StateValue>((resolve, reject) => {
       const request = new GetBlockStateRequest();
@@ -244,6 +296,12 @@ export default class CasperService {
     });
   }
 
+  /**
+   * Execute multiple state queries at once.
+   *
+   * @param blockHash
+   * @param querys
+   */
   batchGetBlockState(
     blockHash: BlockHash,
     querys: StateQuery[]
@@ -270,8 +328,9 @@ export default class CasperService {
     });
   }
 
-  /** Get the reference to the balance so we can cache it.
-   *  Returns `undefined` if the account doesn't exist yet.
+  /**
+   * Get the reference to the balance so we can cache it.
+   * Returns `undefined` if the account doesn't exist yet.
    */
   async getAccountBalanceUref(
     blockHash: BlockHash,
@@ -315,6 +374,11 @@ export default class CasperService {
     }
   }
 
+  /**
+   * Query balance for the specified balanceUref
+   * @param blockHash
+   * @param balanceUref
+   */
   async getAccountBalance(
     blockHash: BlockHash,
     balanceUref: Key.URef
@@ -330,6 +394,9 @@ export default class CasperService {
     return Number(balance.getValue());
   }
 
+  /**
+   * Get block information for the last finalized block
+   */
   getLastFinalizedBlockInfo(): Promise<BlockInfo> {
     return new Promise<BlockInfo>((resolve, reject) => {
       const request = new GetLastFinalizedBlockInfoRequest();
@@ -349,6 +416,10 @@ export default class CasperService {
     });
   }
 
+  /**
+   * Subscribe to event stream of blockchain
+   * @param subscribeTopics see {@link SubscribeTopics}
+   */
   subscribeEvents(subscribeTopics: SubscribeTopics): Observable<Event> {
     return new Observable(obs => {
       const client = grpc.client(GrpcCasperService.StreamEvents, {
