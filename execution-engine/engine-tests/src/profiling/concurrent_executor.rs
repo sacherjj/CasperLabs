@@ -62,7 +62,7 @@ const REQUEST_COUNT_ARG_HELP: &str = "Total number of 'ExecuteRequest's to send"
 const TRANSFER_MODE_ARG_NAME: &str = "transfer-mode";
 const TRANSFER_MODE_ARG_SHORT: &str = "m";
 const TRANSFER_MODE_ARG_DEFAULT: &str = "WASMLESS";
-const TRANSFER_MODE_ARG_VALUE_NAME: &str = "@str";
+const TRANSFER_MODE_ARG_VALUE_NAME: &str = "&str";
 const TRANSFER_MODE_ARG_HELP: &str = "Transfer mode [WASMLESS|WASM]";
 
 const CONTRACT_NAME: &str = "transfer_to_existing_account.wasm";
