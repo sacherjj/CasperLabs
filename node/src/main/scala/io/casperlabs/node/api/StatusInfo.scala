@@ -21,7 +21,7 @@ import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.ipc.ChainSpec
 
 object StatusInfo {
-  import ByteStringPrettyPrinter.byteStringShow
+  import ByteStringPrettyPrinter._
 
   case class Status(
       version: String,
@@ -99,15 +99,21 @@ object StatusInfo {
         genesisLikeBlocks: List[BlockDetails]
     )
 
+    case class ValidatorDetails(
+        publicKeyHash: String
+    )
+
     type Basic     = Check[Unit]
     type LastBlock = Check[BlockDetails]
     type Peers     = Check[PeerDetails]
     type Eras      = Check[ErasDetails]
     type Genesis   = Check[GenesisDetails]
+    type Validator = Check[ValidatorDetails]
   }
 
   case class CheckList(
       database: Check.Basic,
+      validator: Check.Validator,
       peers: Check.Peers,
       bootstrap: Check.Peers,
       initialSynchronization: Check.Basic,
@@ -132,6 +138,7 @@ object StatusInfo {
     ): StateT[F, Boolean, CheckList] =
       for {
         database               <- database[F](readXa)
+        validator              <- validator(maybeValidatorId)
         peers                  <- peers[F](conf)
         bootstrap              <- bootstrap[F](conf, genesis)
         initialSynchronization <- initialSynchronization[F](getIsSynced)
@@ -144,6 +151,7 @@ object StatusInfo {
         genesisBlock           <- genesisBlock[F](genesis)
         checklist = CheckList(
           database = database,
+          validator = validator,
           peers = peers,
           bootstrap = bootstrap,
           initialSynchronization = initialSynchronization,
@@ -162,6 +170,19 @@ object StatusInfo {
       import doobie.implicits._
       sql"""select 1""".query[Int].unique.transact(readXa).map { _ =>
         Check[Unit](ok = true, message = "Database is readable.")
+      }
+    }
+
+    def validator[F[_]: Sync](maybeValidatorId: Option[ValidatorIdentity]) = Check {
+      maybeValidatorId match {
+        case None =>
+          Check[ValidatorDetails](ok = true, "Running in read-only mode.").pure[F]
+        case Some(id) =>
+          Check(
+            ok = true,
+            "Running in validating mode.",
+            details = ValidatorDetails(id.publicKeyHashBS.show).some
+          ).pure[F]
       }
     }
 
