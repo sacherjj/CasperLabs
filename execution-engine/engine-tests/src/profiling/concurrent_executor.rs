@@ -154,7 +154,7 @@ impl Args {
         let transfer_mode = arg_matches
             .value_of(TRANSFER_MODE_ARG_NAME)
             .map(profiling::parse_transfer_mode)
-            .expect("Expected request count");
+            .expect("Expected transfer mode");
 
         Args {
             socket,
