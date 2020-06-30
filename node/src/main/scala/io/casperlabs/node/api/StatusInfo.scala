@@ -118,8 +118,8 @@ object StatusInfo {
       bootstrap: Check.Peers,
       initialSynchronization: Check.Basic,
       lastFinalizedBlock: Check.LastBlock,
-      lastReceivedBlock: Check.Basic,
-      lastCreatedBlock: Check.Basic,
+      lastReceivedBlock: Check.LastBlock,
+      lastCreatedBlock: Check.LastBlock,
       activeEras: Check.Eras,
       bondedEras: Check.Eras,
       genesisEra: Check.Eras,
@@ -263,8 +263,7 @@ object StatusInfo {
         )
       }
 
-    // Only returning basic info so as not to reveal the validator identity by process of elimination,
-    // i.e. which validator's block is it that this node _never_ says it received.
+    // Returning the block hash can reveal the validator identity by process of elimination.
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         chainSpec: ChainSpec,
@@ -279,18 +278,18 @@ object StatusInfo {
         }
         latest   = findLatest(received)
         isTooOld <- isTooOld(chainSpec, latest)
-
-      } yield Check[Unit](
+      } yield Check[BlockDetails](
         ok = !isTooOld,
         message =
           if (isTooOld) "Last block was received too long ago."
           else if (latest.nonEmpty) "Received a block not too long ago."
           else if (conf.casper.standalone) "Running in standalone mode."
-          else "Haven't received a block yet."
+          else "Haven't received a block yet.",
+        details = latest.map(BlockDetails(_))
       )
     }
 
-    // Returning basic info so as not to reveal the validator identity through the block ID.
+    // Returning the block hash reveals the validator identity.
     def lastCreatedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         chainSpec: ChainSpec,
         maybeValidatorId: Option[ValidatorIdentity]
@@ -305,13 +304,14 @@ object StatusInfo {
                   }
         latest   = findLatest(created)
         isTooOld <- isTooOld(chainSpec, latest)
-      } yield Check[Unit](
+      } yield Check[BlockDetails](
         ok = !isTooOld,
         message =
           if (isTooOld) "The last created block was too long ago."
           else if (maybeValidatorId.isEmpty) "Running in read-only mode."
           else if (latest.isEmpty) "Haven't created any blocks yet."
-          else "Created a block not too long ago."
+          else "Created a block not too long ago.",
+        details = latest.map(BlockDetails(_))
       )
     }
 
