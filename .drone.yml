@@ -692,21 +692,6 @@ steps:
   depends_on:
   - package-sbt-artifacts-merge
 
-- name: package-python-client
-  image: "casperlabs/buildenv:latest"
-  commands:
-  - "make build-python-client"
-  - "cp client-py/dist/casperlabs* artifacts/${DRONE_BRANCH}"
-  when:
-    branch:
-    - dev
-    - release-*
-    - master
-    event:
-    - push
-  depends_on:
-    - package-ee
-
 - name: rsync-artifacts
   image: drillster/drone-rsync
   settings:
@@ -735,7 +720,6 @@ steps:
   depends_on:
   - package-sbt-artifacts-merge
   - package-ee
-  - package-python-client
 
 - name: docker-publish
   commands:
@@ -958,17 +942,6 @@ steps:
   depends_on:
   - package-sbt-artifacts-tag
 
-- name: package-python-client-tag
-  image: "casperlabs/buildenv:latest"
-  commands:
-  - "make build-python-client"
-  - "cp client-py/dist/casperlabs* artifacts/${DRONE_BRANCH}"
-  when:
-    ref:
-    - refs/tags/v*
-  depends_on:
-    - package-ee-tag
-
 - name: build-docker-tag
   image: "casperlabs/buildenv:latest"
   commands:
@@ -1058,25 +1031,7 @@ steps:
     ref:
     - refs/tags/v*
   depends_on:
-  - package-python-client-tag
   - generate-metapackages
-
-- name: pypi-publish
-  image: tvasile1012/pypi:latest
-  failure: "ignore"
-  settings:
-    username:
-      from_secret: pypi_user
-    password:
-      from_secret: pypi_pass
-    setupfile: "client-py/setup.py"
-    dist_dir: "client-py/dist/"
-    skip_build: true
-  when:
-    ref:
-    - refs/tags/v*
-  depends_on:
-  - github_publish_release_artifacts
 
 - name: bintray-publish
   image: "casperlabs/buildenv:latest"
