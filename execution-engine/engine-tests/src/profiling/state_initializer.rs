@@ -25,9 +25,9 @@ use types::{runtime_args, RuntimeArgs};
 const ABOUT: &str = "Initializes global state in preparation for profiling runs. Outputs the root \
                      hash from the commit response.";
 const STATE_INITIALIZER_CONTRACT: &str = "state_initializer.wasm";
-const ARG_ACCOUNT1_HASH: &str = "account_1_hash";
+const ARG_ACCOUNT1_HASH: &str = "account_1_account_hash";
 const ARG_ACCOUNT1_AMOUNT: &str = "account_1_amount";
-const ARG_ACCOUNT2_HASH: &str = "account_2_hash";
+const ARG_ACCOUNT2_HASH: &str = "account_2_account_hash";
 
 fn data_dir() -> PathBuf {
     let exe_name = profiling::exe_name();

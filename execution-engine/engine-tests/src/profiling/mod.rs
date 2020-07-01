@@ -16,6 +16,11 @@ const ACCOUNT_1_ADDR: AccountHash = AccountHash::new([1u8; 32]);
 pub const ACCOUNT_1_INITIAL_AMOUNT: u64 = DEFAULT_ACCOUNT_INITIAL_BALANCE - 1_000_000_000;
 const ACCOUNT_2_ADDR: AccountHash = AccountHash::new([2u8; 32]);
 
+pub enum TransferMode {
+    WASM,
+    WASMLESS,
+}
+
 pub fn exe_name() -> String {
     env::current_exe()
         .expect("Expected to read current executable's name")
@@ -50,6 +55,13 @@ pub fn parse_count(count_as_str: &str) -> usize {
     let count: usize = count_as_str.parse().expect("Expected an integral count");
     assert!(count > 0, "Expected count > 0");
     count
+}
+
+pub fn parse_transfer_mode(transfer_mode: &str) -> TransferMode {
+    match transfer_mode {
+        "WASM" => TransferMode::WASM,
+        _ => TransferMode::WASMLESS,
+    }
 }
 
 pub fn account_1_account_hash() -> AccountHash {

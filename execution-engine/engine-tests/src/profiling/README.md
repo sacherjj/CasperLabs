@@ -107,6 +107,8 @@ RUST_LOG=concurrent_executor=info cargo run --release --bin=concurrent-executor 
     --socket=/tmp/CasperLabs/Socket --pre-state-hash=$HASH --threads=8 --requests=200
 ```
 
+**Note: by default, the wasmless transfer option is used. However the original wasm based transfer can be opted into by appending `-m=WASM` to the above command.**
+
 There is a bash script which automates this process, and which allows specifying the number of server threadpool threads, the number of client threadpool threads, the number of messages the client should send, and whether to use system contracts or not.
 
 ```bash
