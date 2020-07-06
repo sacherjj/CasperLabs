@@ -1,3 +1,8 @@
+/**
+ * Util methods for making Deploy message
+ *
+ * @packageDocumentation
+ */
 import {
   Approval,
   Deploy,
@@ -9,15 +14,27 @@ import { ByteArray } from '../index';
 import { Args, BigIntValue } from './Args';
 import { protoHash } from './Contracts';
 
+/**
+ * Supported contract type
+ */
 export enum ContractType {
   WASM = 'WASM',
   Hash = 'Hash',
   Name = 'Name'
 }
 
-// The following two methods definition guarantee that session is a string iff its contract type is ContractType.Name
-// See https://stackoverflow.com/questions/39700093/variable-return-types-based-on-string-literal-type-argument for detail
-// for ContractType.WASM, the type of session is ByteArray, and entryPoint is not required
+/**
+ * Make Deploy message
+ *
+ * @param args session arguments
+ * @param type the type of session contract, has to be {@link ContractType.WASM}
+ * @param session the wasm code of session contract
+ * @param paymentWasm the wasm code of payment contract, set it null if you want to use the standard payment contract
+ * @param paymentAmount
+ * @param accountPublicKeyHash The account public key hash that used to sign the Deploy.
+ * @param dependencies  List of `Deploy.deploy_hash`s that must be executed in past blocks before this deploy can be executed.
+ * @param entryPoint entry point of smart contract
+ */
 export function makeDeploy(
   args: Deploy.Arg[],
   type: ContractType.WASM,
@@ -28,7 +45,18 @@ export function makeDeploy(
   dependencies?: Uint8Array[]
 ): Deploy;
 
-// for ContractType.Hash, the type of session is ByteArray, and entryPoint is required
+/**
+ * Make Deploy message
+ *
+ * @param args session arguments
+ * @param type the type of session contract, has to be {@link ContractType.Hash}
+ * @param session the hash of session contract
+ * @param paymentWasm the wasm code of payment contract, set it null if you want to use the standard payment contract
+ * @param paymentAmount
+ * @param accountPublicKeyHash The account public key hash that used to sign the Deploy.
+ * @param dependencies  List of `Deploy.deploy_hash`s that must be executed in past blocks before this deploy can be executed.
+ * @param entryPoint entry point of smart contract
+ */
 export function makeDeploy(
   args: Deploy.Arg[],
   type: ContractType.Hash,
@@ -40,7 +68,18 @@ export function makeDeploy(
   entryPoint: string
 ): Deploy;
 
-// for ContractType.Name, the type of sessionName is string, and entryPoint is required
+/**
+ * Makes Deploy message
+ *
+ * @param args session arguments
+ * @param type the type of session contract, has to be {@link ContractType.Name}
+ * @param sessionName the name of session contract
+ * @param paymentWasm the wasm code of payment contract, set it null if you want to use the standard payment contract
+ * @param paymentAmount
+ * @param accountPublicKeyHash The account public key hash that used to sign the Deploy.
+ * @param dependencies  List of `Deploy.deploy_hash`s that must be executed in past blocks before this deploy can be executed.
+ * @param entryPoint entry point of smart contract
+ */
 export function makeDeploy(
   args: Deploy.Arg[],
   type: ContractType.Name,
@@ -52,8 +91,9 @@ export function makeDeploy(
   entryPoint: string
 ): Deploy;
 
-// If EE receives a deploy with no payment bytes,
-// then it will use host-side functionality equivalent to running the standard payment contract
+/**
+ * Makes Deploy message
+ */
 export function makeDeploy(
   args: Deploy.Arg[],
   type: ContractType,
@@ -110,6 +150,12 @@ export function makeDeploy(
   return deploy;
 }
 
+/**
+ * Uses the provided key pair to sign the Deploy message
+ *
+ * @param deploy
+ * @param signingKeyPair
+ */
 export const signDeploy = (
   deploy: Deploy,
   signingKeyPair: nacl.SignKeyPair
@@ -129,6 +175,13 @@ export const signDeploy = (
   return deploy;
 };
 
+/**
+ * Sets the already generated Ed25519 signature for the Deploy message
+ *
+ * @param deploy
+ * @param sig the Ed25519 signature
+ * @param publicKey the public key used to generate the Ed25519 signature
+ */
 export const setSignature = (
   deploy: Deploy,
   sig: ByteArray,
