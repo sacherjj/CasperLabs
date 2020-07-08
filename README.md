@@ -15,28 +15,37 @@ We strive to scale opportunity for everyone - forever.  Read more about our miss
 The status on development is reported during the Community calls and is found [here](https://github.com/CasperLabs/Governance/wiki/Current-Status)
 
 The CasperLabs Testnet is live!  
-- Transactions can be sent to: deploy.casperlabs.io
+- Transactions can be sent to: deploy.casperlabs.io via the client
 - [Clarity Block Exporer](https://clarity.casperlabs.io)
 
-## Documentation
+## Specification
 
-- [Technical Specification](https://techspec.casperlabs.io/en/latest/)
+- [Platform Specification](https://techspec.casperlabs.io/en/latest/)
+- [Highway Consensus Proofs](https://github.com/CasperLabs/highway/releases/latest)
+
+## Get Started with Smart Contracts
+- [Writing Smart Contracts](https://docs.casperlabs.io/en/latest/dapp-dev-guide/index.html)
+- [Rust Smart Contract SDK](https://crates.io/crates/cargo-casperlabs)
+- [Rust Smart Contract API Docs (v0.5.1)](https://docs.rs/casperlabs-contract/0.5.1/casperlabs_contract/contract_api/index.html)
+- [Assemblyscript Smart Contract API (https://www.npmjs.com/package/@casperlabs/contract)
+- [Querying the System](docs/QUERYING.md)
+
+## Working with Node
 - [Installing the CasperLabs Node](docs/INSTALL.md)
-- [Building the CasperLabs Node](docs/BUILD.md)
 - [Creating Keys](docs/KEYS.md)
 - [Running the CasperLabs Node](docs/NODE.md)
-- [Deploying Contracts](docs/CONTRACTS.md)
-- [Querying](docs/QUERYING.md)
+
+## Core Development
 - [Contributing](CONTRIBUTING.md)
+- [Building the CasperLabs Node](docs/BUILD.md)
 - [Useful Diagrams](docs/DIAGRAMS.md)
 
-## Getting Help
+## Community
 
 - [Discord Server](https://discord.gg/mpZ9AYD)
 - [CasperLabs Community Forum](https://forums.casperlabs.io/)
 - [Telegram Channel](https://t.me/CasperLabs)
 
-## Known Issues
 
 ## Issues
 
