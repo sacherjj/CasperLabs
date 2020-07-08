@@ -50,7 +50,9 @@ casperlabs-node run \
 
 If your node has connected properly to an active network it will report a non-zero number of peers. There is a status endpoint that provides information on block height and synchronization. The endpoint outputs JSON.  Install JQuery for readable output, then run:
 
-```curl https://localhost:40403/status | jq
+```
+curl https://localhost:40403/status | jq
+
 ```
 
 ##### Stopping the Node
@@ -89,6 +91,7 @@ mkdir -p ~/.casperlabs/chainspec/genesis
 In a separate terminal, run:
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
+
 ```
 
 ##### Step 3: Start the Node
