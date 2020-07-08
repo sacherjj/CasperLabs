@@ -52,7 +52,6 @@ If your node has connected properly to an active network it will report a non-ze
 
 ```
 curl https://localhost:40403/status | jq
-
 ```
 
 ##### Stopping the Node
@@ -91,7 +90,6 @@ mkdir -p ~/.casperlabs/chainspec/genesis
 In a separate terminal, run:
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
-
 ```
 
 ##### Step 3: Start the Node
