@@ -5,16 +5,15 @@ CasperLabs Node provides the [gRPC](https://grpc.io) and [GraphQL](https://graph
 ## gRPC
 By default CasperLabs Node provides gRPC API [/protobuf/io/casperlabs/node/api/casper.proto](/protobuf/io/casperlabs/node/api/casper.proto) on the 40401 port, see for `grpc.port-external` in the [/node/src/main/resources/default-configuration.toml](/node/src/main/resources/default-configuration.toml).
 
-CasperLabs provides the Scala and [Python](https://pypi.org/project/casperlabs-client/) CLI tools to access the gRPC API. 
+### Client
+#### Python CLI
 
-### Scala
-The Scala client is published to our [public repository](http://repo.casperlabs.io/casperlabs/repo/) as well as [Docker Hub](https://hub.docker.com/r/casperlabs/client).
+CasperLabs provides the [Python](https://pypi.org/project/casperlabs-client/) CLI tools to access the gRPC API. 
+Python [casperlabs-client](https://pypi.org/project/casperlabs-client/) module is a Python 3.6+ only library. It can be installed with `pip install casperlabs-client`, see [casperlabs-client](https://pypi.org/project/casperlabs-client/) package documentation on [PyPi](https://pypi.org/).
 
-Also, it can be built locally, see [BUILD.md](BUILD.md) for more information.
+The package contains also a CLI tool `casperlabs_client`. Note, the Python CLI has `'_'` (underscore) in its name. 
 
-Print the help message (assuming if you decided to built it locally): `./client/target/universal/stage/bin/casperlabs-client --help`.
-
-It will show all commands and their options.
+Run `casperlabs_client --help` to see available commands and connection options. `casperlabs_client <command> --help` shows detailed information on options of a specific command, for example: `casperlabs_client deploy --help`.
 
 #### The State Query API
 
@@ -67,39 +66,6 @@ with four parameters:
     the desired key to query. This makes use of the human-readable
     name associations accounts and contracts have for keys.
   - The path is presented as a '/'-separated string of identifiers on the CLI.
-
-#### Visualising DAG state
-
-In the root of the node, run:
-
-```
-./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 vdag --depth 10 --out test.png
-```
-
-The output will be saved into the `test.png` file.
-
-It's also possible subscribing to DAG changes and view them in the realtime
-
-```
-./client/target/universal/stage/bin/casperlabs-client --host 127.0.0.1 --port 40401 vdag --depth 10 --out test.png --stream=multiple-outputs
-```
-
-The outputs will be saved into the files `test_0.png`, `test_1.png`, etc.
-
-For more information and possible output image formats check the help message
-
-```
-./client/target/universal/stage/bin/casperlabs-client vdag --help
-```
-
-### Python
-#### Python client library
-Python [casperlabs-client](https://pypi.org/project/casperlabs-client/) module is a Python 3.6+ only library. It can be installed with `pip install casperlabs-client`, see [casperlabs-client](https://pypi.org/project/casperlabs-client/) package documentation on [PyPi](https://pypi.org/).
-
-#### Python CLI
-The package contains also a CLI tool `casperlabs_client` with syntax compatible with the Scala CLI, although currently it is missing some functionality of the Scala CLI, for example `vdag` command. Note, the Python CLI has `'_'` (underscore) in its name. This is to distinguish it from the Scala CLI which is spelled with `-` (hyphen or minus sign): `casperlabs-client`.
-
-Run `casperlabs_client --help` to see available commands and connection options. `casperlabs_client <command> --help` shows detailed information on options of a specific command, for example: `casperlabs_client deploy --help`.
 
 
 ## GraphQL
