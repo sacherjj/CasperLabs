@@ -857,7 +857,7 @@ name: on-tag
 steps:
 - name: package-sbt-artifacts-tag
   commands:
-  - "make build-client-contracts build-node-contracts"
+  - "make build-node-contracts"
   - "sbt update test node/debian:packageBin node/universal:packageZipTarball node/rpm:packageBin"
   - "mkdir -p artifacts/${DRONE_BRANCH}"
   - "cp node/target/casperlabs-node_*_all.deb node/target/universal/*.tgz artifacts/${DRONE_BRANCH}"
