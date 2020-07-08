@@ -106,7 +106,7 @@ casperlabs-node run \
 
 ##### Step 4: Deploy Some Code
 
-See instructions [here](CONTRACTS.md).
+See instructions [here](https://docs.casperlabs.io/en/latest/dapp-dev-guide/deploying-contracts.html).
 
 ### Running a Simulated Network
 
