@@ -10,62 +10,31 @@ The CasperLabs node consists of two components:
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
 * Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
 
-#### Building from source:
-* Build the [`casperlabs-node`](BUILD.md#build-the-node).
-* Build the [`casperlabs-engine-grpc-server`](BUILD.md#build-the-casperlabs-engine-grpc-server).
-* Build the [Mint and Proof-of-Stake Contracts](BUILD.md#build-the-mint-and-proof-of-stake-contracts).
-* Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
 
-If you build from source, you will need to add the build directories to your `PATH`, for example:
-```
-export PATH="<path-to-CasperLabs-repo>/node/target/universal/stage/bin:$PATH"
-export PATH="<path-to-CasperLabs-repo>/execution-engine/target/release:$PATH"
-```
-Or you can run the following commands from the root directory of the repo, using explicit paths to the binaries.
-
-## Instructions
-
-### Running a validator on the CasperLabs Network
+### Running a Read-Only Node on the Casper Testnet
 
 ##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
 Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine where you will run the node.  This will be your validator account and keypair.
 
-##### Step 2: Add coins to this account
 
-Add coins to this account using the [faucet](https://clarity.casperlabs.io/#/faucet).
+##### Step 2: Get the ChainSpec
 
-##### Step 3: Bond your validator onto the network
+The node needs the information that allows it to connect to Testnet. This information is known as the Chain specification (Chainspec). The Chainspec is comprised of a list of Genesis validators, stored in the `accounts.csv` file and a `manifest.toml`, which contains protocol parameters.  These files need to be placed in the `chainspec/genesis` directory on the node.
+These files are available from:(https://github.com/CasperLabs/CasperLabs/tree/dev/testnet). It is recommended that the files be downloaded via curl or equivalent mechanism, to avoid any hidden characters from appearing in the files.  The Genesis block must have the same hash, or the node will not connect.
 
-```
-casperlabs-client \
-    --host deploy.casperlabs.io \
-    bond \
-    --payment-amount 1 \
-    --amount <bond-amount> \
-    --private-key <path-to-private-key>
-```
-
-Note: `--payment-amount` is used in the standard payment code to pay for the execution.
-For now, the value is not used, but payment code will be enabled on the DEVNET
-in an upcoming release.
-
-##### Step 4: Download the ChainSpec
-
-The node comes with the ChainSpec contracts that should allow you to connect to DevNet. You will also need to pull down the latest `accounts.csv` and store this in the `chainspec/genesis` directory for your node if you wish to connect to DevNet. You can download DevNet's `account.csv` from our [releases](https://github.com/CasperLabs/CasperLabs/releases) page starting with Release `v0.8.0`. To connect elsewhere,
-you need to obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
+To connect elsewhere, obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
 option pointed to the directory.
 
-The ChainSpec contains the system contracts, but if you downloaded or built them separately you need to copy them. You can override the defaults packaged in the node by copying the system contracts to
-`~/.casperlabs/chainspec/genesis/`, or wherever the `--server-data-dir` is pointing, which by default is `~/.casperlabs`.
+The ChainSpec contains the information to create the Genesis block.
 
-##### Step 5: Start the Execution Engine
+##### Step 3: Start the Execution Engine
 
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
-##### Step 6: Start the Node
+##### Step 4: Start the Node
 
 In a separate terminal, run:
 ```
@@ -74,31 +43,32 @@ casperlabs-node run \
     --tls-certificate ./keys/node.certificate.pem \
     --casper-validator-private-key-path ./keys/validator-private.pem \
     --casper-validator-public-key-path ./keys/validator-public.pem \
-    --server-bootstrap "casperlabs://a605c8ddc4ed3dc9b881bfe006cc8175fb31e125@100.24.117.48?protocol=40400&discovery=40404"
+    --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 \ casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 \ casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404"
 ```
 
-##### Stopping a bonded validator
+##### Checking Status
 
-First, you must unbond:
+If your node has connected properly to an active network it will report a non-zero number of peers. There is a status endpoint that provides information on block height and synchronization. The endpoint outputs JSON.  Install JQuery for readable output, then run:
+
 ```
-casperlabs-client \
-    --host deploy.casperlabs.io \
-    unbond \
-    --payment-amount 1 \
-    --amount <unbond-amount> \
-    --private-key <path-to-private-key>
+curl https://localhost:40403/status | jq
 ```
 
-The `--amount` argument here is optional: you can partially unbond by providing an amount that is smaller than your bond amount, or you can omit this argument to unbond your full bond amount.
-(See note above about `--payment-amount`).
+##### Stopping the Node
 
-After that, you can safely stop processes:
 ```
 pkill casperlabs-node
 pkill casperlabs-engine-grpc-server
 ```
+To clear the previous state from the node run the following command:
 
-### Running a single Node
+```
+cd ~/.casperlabs
+rm sqlite.db
+rm -r global_state
+```
+
+### Running a Standalone Node
 
 You can run a single Node in standalone mode for testing purposes.
 
@@ -132,13 +102,11 @@ casperlabs-node run \
     --casper-validator-private-key-path ./keys/validator-private.pem \
     --casper-validator-public-key-path ./keys/validator-public.pem \
     --casper-initial-motes 1234567890 \
-    --casper-mint-code-path ./mint_token.wasm \
-    --casper-pos-code-path ./pos.wasm
 ```
 
 ##### Step 4: Deploy Some Code
 
-See instructions [here](CONTRACTS.md).
+See instructions [here](https://docs.casperlabs.io/en/latest/dapp-dev-guide/deploying-contracts.html).
 
 ### Running a Simulated Network
 
