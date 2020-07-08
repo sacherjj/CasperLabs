@@ -11,7 +11,7 @@ By default CasperLabs Node provides gRPC API [/protobuf/io/casperlabs/node/api/c
 CasperLabs provides the [Python](https://pypi.org/project/casperlabs-client/) CLI tools to access the gRPC API. 
 Python [casperlabs-client](https://pypi.org/project/casperlabs-client/) module is a Python 3.6+ only library. It can be installed with `pip install casperlabs-client`, see [casperlabs-client](https://pypi.org/project/casperlabs-client/) package documentation on [PyPi](https://pypi.org/).
 
-The package contains also a CLI tool `casperlabs_client`. Note, the Python CLI has `'_'` (underscore) in its name. 
+The package also contains a CLI tool `casperlabs_client`. Note, the Python CLI has `'_'` (underscore) in its name. 
 
 Run `casperlabs_client --help` to see available commands and connection options. `casperlabs_client <command> --help` shows detailed information on options of a specific command, for example: `casperlabs_client deploy --help`.
 
