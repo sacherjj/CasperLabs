@@ -113,7 +113,7 @@ sudo npm install -g assemblyscript@0.10.0
 ```
 
 
-### Update the paths for all of this
+### Update $PATH to find local bin directories
 
 Added to ```.bashrc```
 ```
