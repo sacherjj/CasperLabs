@@ -14,7 +14,6 @@ EE_DIR     = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 BENCH       = $(shell find ./contracts/bench       -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 CLIENT      = $(shell find ./contracts/client      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 EXPLORER    = $(shell find ./contracts/explorer    -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
-INTEGRATION = $(shell find ./contracts/integration -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 PROFILING   = $(shell find ./contracts/profiling   -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 SRE         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 SYSTEM      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
@@ -97,7 +96,6 @@ build-contracts-rs: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
-	$(INTEGRATION_CONTRACTS) \
 	$(PROFILING_CONTRACTS) \
 	$(SRE_CONTRACTS) \
 	$(SYSTEM_CONTRACTS) \
@@ -108,14 +106,10 @@ build-contracts-enable-bonding-rs: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
-	$(INTEGRATION_CONTRACTS) \
 	$(PROFILING_CONTRACTS) \
 	$(SRE_CONTRACTS) \
 	$(SYSTEM_CONTRACTS_FEATURED) \
 	$(TEST_CONTRACTS)
-
-.PHONY: build-integration-contracts
-build-integration-contracts: $(INTEGRATION_CONTRACTS)
 
 .PHONY: build-system-contracts
 build-system-contracts: $(SYSTEM_CONTRACTS)
