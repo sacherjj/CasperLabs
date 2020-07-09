@@ -42,7 +42,7 @@ sudo apt install python3.7 python3.7-dev python3.8-dev
 If you are planning on using multiple versions of Python and possibly testing a new release version (3.9+), it is better to setup pyenv.
 It's a better solution with more flexibility.
 
-More complete but complex Python versioning option with pyenv:
+#### More complete Python versioning option with pyenv:
 install pyenv
 
 ```
