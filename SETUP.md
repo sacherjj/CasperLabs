@@ -31,7 +31,7 @@ sudo apt install python3-pip
 python3.8 -m pip install pipenv
 ```
 
-The easiest solution to get Python3.7 is using another ppa.   
+#### The easiest solution to get Python3.7 is using another ppa.   
 If you plan on running the Python client, or STESTS, but not developing with Python, this configuration is enough.
 ```
 sudo add-apt-repository ppa:deadsnakes/ppa
