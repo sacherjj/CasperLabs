@@ -8,14 +8,12 @@ RUST_TOOLCHAIN := $(shell cat rust-toolchain)
 CARGO := $(CARGO) $(CARGO_OPTS)
 
 EE_DIR     = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-IT_RES_DIR = $(realpath $(EE_DIR)/../integration-testing/resources)
 
 # Rust Contracts
 # Directory names should match crate names
 BENCH       = $(shell find ./contracts/bench       -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 CLIENT      = $(shell find ./contracts/client      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 EXPLORER    = $(shell find ./contracts/explorer    -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
-INTEGRATION = $(shell find ./contracts/integration -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 PROFILING   = $(shell find ./contracts/profiling   -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 SRE         = $(shell find ./contracts/SRE         -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
 SYSTEM      = $(shell find ./contracts/system      -mindepth 1 -maxdepth 1 -type d -exec basename {} \;)
@@ -35,20 +33,10 @@ TEST_CONTRACTS_AS    = $(shell find ./contracts-as/test     -mindepth 1 -maxdept
 CLIENT_CONTRACTS_AS  := $(patsubst %, build-contract-as/%, $(CLIENT_CONTRACTS_AS))
 TEST_CONTRACTS_AS    := $(patsubst %, build-contract-as/%, $(TEST_CONTRACTS_AS))
 
-INTEGRATION += \
-	endless-loop \
-	local-state \
-	modified-system-upgrader \
-	pos-bonding \
-	remove-associated-key \
-	standard-payment \
-	transfer-to-account-u512
-
 HIGHWAY_CONTRACTS += \
 	pos-install \
 	pos
 
-INTEGRATION_CONTRACTS     := $(patsubst %, build-integration-contract-rs/%,     $(INTEGRATION))
 SYSTEM_CONTRACTS          := $(patsubst %, build-contract-rs/%,                 $(SYSTEM))
 SYSTEM_CONTRACTS_FEATURED := $(patsubst %, build-system-contract-featured-rs/%, $(SYSTEM))
 
@@ -88,14 +76,6 @@ build-contract-rs/%:
 	        --package $* \
 	        --target wasm32-unknown-unknown
 
-build-integration-contract-rs/%:
-	$(CARGO) build \
-	        -Z unstable-options \
-	        --release $(filter-out --release, $(CARGO_FLAGS)) \
-	        --package $* \
-	        --target wasm32-unknown-unknown \
-	        --out-dir $(IT_RES_DIR)
-
 build-system-contract-featured-rs/%:
 	$(CARGO) build \
 	        --release $(filter-out --release, $(CARGO_FLAGS)) \
@@ -106,7 +86,6 @@ build-contracts-rs: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
-	$(INTEGRATION_CONTRACTS) \
 	$(PROFILING_CONTRACTS) \
 	$(SRE_CONTRACTS) \
 	$(SYSTEM_CONTRACTS) \
@@ -117,14 +96,10 @@ build-contracts-enable-bonding-rs: \
 	$(BENCH_CONTRACTS) \
 	$(CLIENT_CONTRACTS) \
 	$(EXPLORER_CONTRACTS) \
-	$(INTEGRATION_CONTRACTS) \
 	$(PROFILING_CONTRACTS) \
 	$(SRE_CONTRACTS) \
 	$(SYSTEM_CONTRACTS_FEATURED) \
 	$(TEST_CONTRACTS)
-
-.PHONY: build-integration-contracts
-build-integration-contracts: $(INTEGRATION_CONTRACTS)
 
 .PHONY: build-system-contracts
 build-system-contracts: $(SYSTEM_CONTRACTS)
