@@ -34,7 +34,6 @@ all: \
 	cargo-package-all \
 	build-client \
 	build-node \
-	build-python-client 
 
 
 # Push the local artifacts to repositories.
@@ -44,7 +43,6 @@ publish: docker-push-all
 clean:
 	$(MAKE) -C execution-engine clean
 	sbt clean
-	cd integration-testing && rm -rf bundled_contracts system_contracts
 	cd explorer/grpc && rm -rf google io node_modules
 	cd explorer/sdk && rm -rf node_modules dist
 	cd explorer/ui && rm -rf node_modules build
@@ -56,7 +54,6 @@ docker-build-all: \
 	docker-build/node \
 	docker-build/client \
 	docker-build/execution-engine \
-	docker-build/integration-testing \
 	docker-build/key-generator \
 	docker-build/explorer \
 	docker-build/grpcwebproxy
@@ -71,7 +68,6 @@ docker-push-all: \
 docker-build/node: .make/docker-build/debian/node
 docker-build/client: .make/docker-build/debian/client
 docker-build/execution-engine: .make/docker-build/execution-engine
-docker-build/integration-testing: .make/docker-build/integration-testing
 docker-build/key-generator: .make/docker-build/key-generator
 docker-build/explorer: .make/docker-build/explorer
 docker-build/grpcwebproxy: .make/docker-build/grpcwebproxy
@@ -105,15 +101,6 @@ cargo-native-packager/%:
 		.make/sbt-deb/%
 	$(eval PROJECT = $*)
 	docker build -f $(PROJECT)/Dockerfile -t $(DOCKER_USERNAME)/$(PROJECT):$(DOCKER_LATEST_TAG) $(PROJECT)
-	mkdir -p $(dir $@) && touch $@
-
-# Dockerize the Integration Tests
-.make/docker-build/integration-testing: \
-		integration-testing/Dockerfile
-	$(eval IT_PATH = integration-testing)
-	cp -r protobuf $(IT_PATH)/
-	docker build -f $(IT_PATH)/Dockerfile -t $(DOCKER_USERNAME)/integration-testing:$(DOCKER_LATEST_TAG) $(IT_PATH)/
-	rm -rf $(IT_PATH)/protobuf
 	mkdir -p $(dir $@) && touch $@
 
 # Dockerize the Execution Engine.
@@ -297,11 +284,6 @@ explorer/contracts/%.wasm: .make/contracts/%
 
 build-client: \
 	.make/sbt-stage/client
-
-build-python-client: \
-	$(PROTO_SRC) \
-	$(shell find ./client-py/ -name "*.py"|grep -v _grpc.py)
-	client-py/build.sh
 
 build-client-contracts: \
 	client/src/main/resources/bonding.wasm \

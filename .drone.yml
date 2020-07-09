@@ -228,19 +228,6 @@ steps:
   depends_on:
   - rust-compile-test-pr
 
-- name: black-and-flake8
-  commands:
-  - "cd integration-testing"
-  - "./run_flake8_black.sh"
-  image: "casperlabs/buildenv:latest"
-  when:
-    event:
-    - pull_request
-    changeset:
-      includes:
-      - "**/.drone.yml"
-      - "integration-testing/**"
-
 # This section is for bors' branches only
 
 #NOTE: allowing failures here since we've seen site temporarily go down and cause
@@ -258,20 +245,6 @@ steps:
       includes:
       - "**/.drone.yml"
       - "**/**.md"
-
-- name: black-and-flake8-bors
-  commands:
-  - "cd integration-testing"
-  - "./run_flake8_black.sh"
-  image: "casperlabs/buildenv:latest"
-  when:
-    branch:
-    - staging
-    - trying
-    changeset:
-      includes:
-      - "**/.drone.yml"
-      - "integration-testing/**"
 
 - name: sbt-test-docker-bors
   commands:
@@ -435,13 +408,10 @@ steps:
   - rust-compile-test-bors
   - sbt-test-docker-bors
 
-- name: docker-build-ee-int-bors
+- name: docker-build-ee-bors
   commands:
   - "export DOCKER_LATEST_TAG=DRONE-${DRONE_BUILD_NUMBER}"
-  - "make build-client-contracts"
-  - "./integration-testing/build_contracts.sh"
   - "make docker-build/execution-engine"
-  - "make docker-build/integration-testing"
   environment:
     _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
   image: "casperlabs/buildenv:latest"
@@ -520,27 +490,6 @@ steps:
       - "hack/key-management/**"
   depends_on:
   - docker-build-key-bors
-
-# Dev branch only
-- name: run-integration-tests
-  commands:
-  - "cd integration-testing"
-  - "./docker_run_tests.sh --unique_run_num 5"
-  environment:
-    _JAVA_OPTIONS: "-Xms2G -Xmx2G -XX:MaxMetaspaceSize=1G"
-  image: "casperlabs/buildenv:latest"
-  volumes:
-  - name: docker_sock
-    path: "/var/run/docker.sock"
-  - name: temp
-    path: "/tmp"
-  when:
-    branch:
-    - staging
-    - trying
-  depends_on:
-  - docker-build-ee-int-bors
-  - docker-build-explorer-bors
 
 # The below section is for post-bors push webhooks
 - name: rust-compile-for-make
