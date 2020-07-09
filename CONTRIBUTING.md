@@ -1,5 +1,9 @@
 # Contributing to CasperLabs
 
+CasperLabs strives to create a decentralized blockchain.  We welcome contributions from the community.  These steps will help you get started with core development:
+
+* [Ubuntu 20.04 Development Machine Setup](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/584974345/Ubuntu+20.04+Developer+Machine+Setup)
+
 * [Coding Standards](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/16842753/Coding+Standards)
 * [Sign your commits](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/4390963/Signing+Commits)
 * [Code Review Process](https://casperlabs.atlassian.net/wiki/spaces/EN/pages/4161628/Code+Review+Process)
