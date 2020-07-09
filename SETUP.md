@@ -97,7 +97,7 @@ sudo apt-get install sbt
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-Make sure you have cloned the CasperLabs/CasperLabs repo first, then do this in the ```CasperLabs/execution-engine``` folder
+Before running the following, you will have needed to run the command at the end of setup or reloaded your shell. You also need to add cargo to your $PATH as shown in a future section.
 ```
 sudo apt install pkg-config libssl-dev
 cargo install cargo-audit
