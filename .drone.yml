@@ -92,8 +92,8 @@ steps:
 - name: rust-compile-test-pr
   commands:
   - "cd execution-engine/"
-  - "make setup"
-  - "make test"
+  - "make setup-rs"
+  - "make test-rs test-contracts-rs"
   image: "casperlabs/buildenv:latest"
   when:
     event:
