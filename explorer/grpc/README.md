@@ -5,6 +5,6 @@ There are generated gRPC JavaScript codes and TypeScript declarations that are u
 ## how to build
 On the command line, navigate to root directory of CasperLabs, run 
 
-    ```console
-    make .make/protoc/explorer
-    ```
+```console
+make .make/protoc/explorer
+```
