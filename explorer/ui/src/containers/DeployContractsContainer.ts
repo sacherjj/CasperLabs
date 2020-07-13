@@ -283,7 +283,7 @@ export class DeployContractsContainer {
     this.signing = true;
     let sigBase64;
     try {
-      sigBase64 = await Signer.sign(encodeBase16(deploy!.getDeployHash_asU8()));
+      sigBase64 = await Signer.sign(encodeBase16(deploy!.getDeployHash_asU8()), publicKeyBase64);
       this.signing = false;
       let signedDeploy = DeployUtil.setSignature(
         deploy,
