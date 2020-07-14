@@ -2,4 +2,4 @@
 
 # build docker images to use
 cd ../.. || exit 1
-make docker-build-all || exit 1
+make docker-build-all

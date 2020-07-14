@@ -26,11 +26,17 @@ def clarity_config():
                                        desired_capabilities=DesiredCapabilities.CHROME,
                                        options=chrome_options)
     selenium_driver.implicitly_wait(30)
-    return ClarityConfig(CLARITY_URL, selenium_driver)
+    config = ClarityConfig(CLARITY_URL, selenium_driver)
+
+    # Make sure Clarity is up before letting other test run.
+    selenium_driver.get(config.url)
+    assert selenium_driver.title == "CasperLabs Clarity - Home"
+
+    return config
 
 
 @pytest.fixture("session")
 def faucet_public_key_hash():
     with open(FAUCET_HASH_PATH, "rb") as f:
         faucet_hash = f.read().strip()
-    return faucet_hash
+    return faucet_hash.decode("utf-8")

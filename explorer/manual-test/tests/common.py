@@ -1,5 +1,5 @@
 import string
-from random import random
+import random
 
 SELENIUM_COMMAND_EXECUTOR_URL = "http://localhost:4444/wd/hub"
 CLARITY_URL = "https://nginx:8443/"
@@ -16,4 +16,4 @@ FAUCET_HASH_PATH = KEYS_DIRECTORY / "faucet-account" / "account-id-hex"
 
 
 def random_string(length: int) -> str:
-    return "".join(random.choice(string.ascii_letters) for _ in range(length)).lower()
+    return "".join(random.choice(string.ascii_lowercase) for _ in range(length))

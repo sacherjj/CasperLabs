@@ -6,6 +6,8 @@ from selenium.webdriver.support.wait import WebDriverWait
 
 from .common import random_string
 
+REQUEST_TOKEN_WAIT = 500
+
 
 def test_create_account_key(clarity_config, faucet_public_key_hash):
     """
@@ -91,7 +93,7 @@ def request_token(driver, account_name):
     select.select_by_visible_text(account_name)
     driver.find_element(By.XPATH, "//button[contains(., 'Request tokens')]").click()
     time.sleep(2)
-    WebDriverWait(driver, 90).until_not(
+    WebDriverWait(driver, REQUEST_TOKEN_WAIT).until_not(
         lambda d: d.find_element(By.CSS_SELECTOR, "table tr:first-child td:last-child")
         .get_attribute("title")
         .startswith("Pending")
@@ -117,13 +119,13 @@ def create_account(driver):
     driver.find_element(By.XPATH, "//button[contains(., 'Create Account Key')]").click()
     account_name = random_string(5)
     # waiting for showing the modal of the form where to create account keys.
-    time.sleep(1)
+    time.sleep(2)
     account_name_input = driver.find_element(By.ID, "id-account-name")
     account_name_input.click()
     account_name_input.send_keys(account_name)
     driver.find_element(By.XPATH, "//button[contains(., 'Save')]").click()
     # waiting for downloading the keypairs
-    time.sleep(1)
+    time.sleep(2)
     assert (
         len(driver.find_elements(By.XPATH, f"//td[contains(., '{account_name}')]")) == 1
     )

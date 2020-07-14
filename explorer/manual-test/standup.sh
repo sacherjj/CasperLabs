@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 export CL_VERSION=latest
+export AUTH_MOCK_ENABLED=true
 
 # Stand up highway network
 cd ../../hack/docker || exit 1

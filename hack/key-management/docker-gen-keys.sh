@@ -23,7 +23,7 @@ shift
 if [[ -z "$DRONE_BUILD_NUMBER" ]]; then
     TAG=${CL_VERSION:-"latest"}
     # Only pull if CL_VERSION isn't stated.  This allows using new version before published.
-    if [[ -z "$CL_VERSION" ]]; then
+    if [[ "$CL_VERSION" != "latest" ]]; then
       docker pull casperlabs/key-generator:"$TAG" &> /dev/null || {
           TAG="dev"
           #echo "Failed to pull casperlabs/key-generator:latest"
