@@ -107,8 +107,6 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
-  depends_on:
-  - sbt-compile-test-pr
 
 - name: rust-compile-test-latest-nightly-pr
   environment:
@@ -132,8 +130,6 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
-  depends_on:
-  - sbt-compile-test-pr
 
 - name: rust-compile-docs-stable-pr
   commands:
@@ -154,8 +150,6 @@ steps:
       - "**/Cargo.toml"
       - "**/casperlabs-engine-grpc-server.spec"
       - "**/rustfmt.toml"
-  depends_on:
-  - sbt-compile-test-pr
 
 - name: as-compile-test-pr
   commands:
