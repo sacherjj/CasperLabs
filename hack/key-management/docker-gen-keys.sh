@@ -21,13 +21,16 @@ fi
 shift
 
 if [[ -z "$DRONE_BUILD_NUMBER" ]]; then
-    TAG="latest"
-    docker pull casperlabs/key-generator:"$TAG" &> /dev/null || {
-        TAG="dev"
-        #echo "Failed to pull casperlabs/key-generator:latest"
-        #echo "Falling back to casperlabs/key-generator:dev"
-        docker pull casperlabs/key-generator:"$TAG" &> /dev/null
-    }
+    TAG=${CL_VERSION:-"latest"}
+    # Only pull if CL_VERSION isn't stated.  This allows using new version before published.
+    if [[ "$CL_VERSION" != "latest" ]]; then
+      docker pull casperlabs/key-generator:"$TAG" &> /dev/null || {
+          TAG="dev"
+          #echo "Failed to pull casperlabs/key-generator:latest"
+          #echo "Falling back to casperlabs/key-generator:dev"
+          docker pull casperlabs/key-generator:"$TAG" &> /dev/null
+      }
+    fi
     docker run --rm -it --user $(id -u):$(id -g) -v "$OUTPUT_DIR":/keys casperlabs/key-generator:"$TAG" /keys || {
         echo 'Retrying without overriding UID'
         # Above line doesn't work on macOS + VirtualBox Docker

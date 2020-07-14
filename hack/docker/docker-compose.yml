@@ -98,6 +98,7 @@ services:
       SERVER_USE_TLS: "false"
       # Ignore the fact that the grpcwebproxy cert is self-signed.
       NODE_TLS_REJECT_UNAUTHORIZED: 0
+      AUTH_MOCK_ENABLED: ${AUTH_MOCK_ENABLED-:false}
 
   # gRPC-Web and the Explorer available on the same port via nginx.
   nginx:
@@ -139,3 +140,14 @@ services:
     container_name: redis
     networks:
       - casperlabs
+
+  # Selenium for testing clarity
+  selenium:
+    image: selenium/standalone-chrome:3.141.59-xenon
+    container_name: selenium
+    networks:
+      - casperlabs
+    volumes:
+      - /dev/shm:/dev/shm
+    ports:
+      - 4444:4444
