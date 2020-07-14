@@ -139,3 +139,14 @@ services:
     container_name: redis
     networks:
       - casperlabs
+
+  # Selenium for testing clarity
+  selenium:
+    image: selenium/standalone-chrome:3.141.59-xenon
+    container_name: selenium
+    networks:
+      - casperlabs
+    volumes:
+      - /dev/shm:/dev/shm
+    ports:
+      - 4444:4444
