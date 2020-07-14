@@ -8,5 +8,6 @@ with `CasperLabs/hack/docker`.
  - Run python tests.
  - Run `./teardown.sh` to bring down network when finished.
 
-This assumes that `client-py` repo is at the same directory level as the 
-`CasperLabs` repo.  
+The 'run_manual_tests.sh' will run all steps and silently buffer everything except
+the pytest run, unless there is an error.  This allows a run and forget if tests take 
+a longer time.
