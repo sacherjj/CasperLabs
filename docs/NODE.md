@@ -30,6 +30,8 @@ The ChainSpec contains the information to create the Genesis block.
 
 ##### Step 3: Start the Execution Engine
 
+Note: The following instructions apply only for Linux OS.  Running the system using Docker requires adapting the commands for Docker.
+
 ```
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
