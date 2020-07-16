@@ -31,6 +31,13 @@ wget --no-check-certificate https://github.com/CasperLabs/CasperLabs/blob/dev/te
 ```
 and place these files in the `chainspec/genesis` directory.
 
+```
+mkdir -p ~/.casperlabs/chainspec/genesis
+
+cd ~/.casperlabs/chainspec/genesis
+
+```
+
 ##### Connecting elsewhere
 
 To connect elsewhere, obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
