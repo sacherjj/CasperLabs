@@ -26,18 +26,13 @@ The node needs the information that allows it to connect to Testnet. This inform
 These files are available from:(https://github.com/CasperLabs/CasperLabs/tree/dev/testnet). It is recommended that the files be downloaded via curl or equivalent mechanism, to avoid any hidden characters from appearing in the files.  The Genesis block must have the same hash, or the node will not connect.
 
 ```
-wget --no-check-certificate https://github.com/CasperLabs/CasperLabs/blob/dev/testnet/accounts.csv
-wget --no-check-certificate https://github.com/CasperLabs/CasperLabs/blob/dev/testnet/manifest.toml
-```
-and place these files in the `chainspec/genesis` directory.
-
-```
 mkdir -p ~/.casperlabs/chainspec/genesis
 
 cd ~/.casperlabs/chainspec/genesis
 
+curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/accounts.csv
+curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/manifest.toml
 ```
-
 ##### Connecting elsewhere
 
 To connect elsewhere, obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
