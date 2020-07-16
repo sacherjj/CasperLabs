@@ -19,12 +19,11 @@ Cloud Instances:
 
 
 ### Operating System
-* Ubuntu 18.04 LTS.  The software will work with other distributions, but you may experience some hiccups.  Feel free to reach out for help if you want to use another Linux distribution and hit issues. 
+* The officially supported OS is Ubuntu 18.04 LTS or greater.  The software should work with other distributions, but may experience some hiccups.  Feel free to reach out for help if you want to use another Linux distribution and hit issues. The technical team is available on [Discord](https://discord.gg/xeU7szA)
 
 
 #### Using binaries (recommended):
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
-* Create Node operator keys, TLS Certificate and Validator as described [here](KEYS.md#generating-node-keys-and-validator-keys).
 
 #### Ports used by the Node:
 
@@ -38,7 +37,7 @@ It is possible to override these and other settings when starting the node.  Run
 
 ---
 ## The Casper Testnet
-CasperLabs is building a permissionless public blockchain.  However, the current phase of the Testnet bonded validator slots are open to node operators that have agreed to the Terms and Conditions and signed up to participate in the program. To sign up for the Testnet, complete this (process)[https://docs.google.com/forms/d/e/1FAIpQLSdaxtS015aiH89Pn0zt09v95FqNDoBk3hOH7Jq0IeuUWFVcTA/viewform?usp=sf_link]
+CasperLabs is building a permissionless public blockchain.  However, in the current phase of the Testnet bonded validator slots are open to node operators that have agreed to the Terms and Conditions and signed up to participate in the program. To sign up for the Testnet, complete this [process](https://docs.google.com/forms/d/e/1FAIpQLSdaxtS015aiH89Pn0zt09v95FqNDoBk3hOH7Jq0IeuUWFVcTA/viewform?usp=sf_link)
 
 
 ### Running a Node on the Casper Testnet
@@ -46,7 +45,7 @@ It's possible to run a Read only node on the testnet.  The configuration of a re
 
 ##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
-Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine running the node software.  
+From within the interface, create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine running the node software. Please keep your private keys secure at all times.
 
 ##### Step 2: Get the ChainSpec
 
@@ -67,7 +66,7 @@ curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/mani
 
 ##### Step 3: Create Node keys and TLS Certificate
 
-* Create Node keys and TLS Certificate as described [here](KEYS.md#generating-node-keys-and-validator-keys).
+The node uses a separate set of keys for its' TLS certificate. These keys are separate from validator keys- which happen to be the same as account keys (created via Clarity).  In this step, create the Node keys and TLS Certificate as described [here](KEYS.md#generating-node-keys-and-validator-keys).
 
 ##### Step 4: Start the Execution Engine
 
