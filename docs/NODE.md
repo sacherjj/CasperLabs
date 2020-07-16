@@ -6,10 +6,37 @@ The CasperLabs node consists of two components:
 
 ## Prerequisites
 
+### Hardware
+Base requirements: 4 cores, 16 GB RAM  and 200 GB of disk space.
+
+Cloud Instances:
+
+| Provider  | Machine Type  |
+|---|---|
+| AWS  | m5.xlarge  |
+| Azure  | D4 v3  |
+| GCP  | n1-standard-4  |
+
+##### Note: It is advised to monitor disk usage and expand disk as necessary
+
+
+### Operating System
+* Ubuntu 18.04 LTS.  The software will work with other distributions, but you may experience some hiccups.  Feel free to reach out for help if you want to use another Linux distribution and hit issues. 
+
+
 #### Using binaries (recommended):
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
 * Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
 
+#### Ports used by the Node:
+
+The default configuration of the node uses following ports:
+* 40400 - Intra node communication port for consensus.
+* 40401 - External GRPC for deployments
+* 40403 - For monitoring (GraphQL, Grafana etc)
+* 40404 - Intra node communication port for node discovery.
+
+It is possible to override these settings by passing the `-port` flag when starting the node.
 
 ### Running a Read-Only Node on the Casper Testnet
 
