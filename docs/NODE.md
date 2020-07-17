@@ -6,21 +6,51 @@ The CasperLabs node consists of two components:
 
 ## Prerequisites
 
+### Hardware
+Base requirements: 4 cores, 16 GB RAM  and 200 GB of disk space. *Note: Validators need to monitor their disk usage and expand as necessary.*
+
+Cloud Instances:
+
+| Provider  | Machine Type  |
+|---|---|
+| AWS  | m5.xlarge  |
+| Azure  | D4 v3  |
+| GCP  | n1-standard-4  |
+
+
+### Operating System
+* The officially supported OS is Ubuntu 18.04 LTS or greater.  The software should work with other distributions, but may experience some hiccups.  Feel free to reach out for help if you want to use another Linux distribution and hit issues. The technical team is available on [Discord](https://discord.gg/xeU7szA)
+
+
 #### Using binaries (recommended):
 * [Install](INSTALL.md) the `casperlabs` package, which contains `casperlabs-node` and `casperlabs-engine-grpc-server`.
-* Create [keys](KEYS.md#generating-node-keys-and-validator-keys).
+
+#### Ports used by the Node:
+
+The default configuration of the node uses following ports:
+* 40400 - Intra node communication port for consensus.
+* 40401 - External GRPC for deployments
+* 40403 - For monitoring (GraphQL, Grafana etc)
+* 40404 - Intra node communication port for node discovery.
+
+It is possible to override these and other settings when starting the node.  Run `casperlabs-node --help` to see a list of options.
+
+---
+## The Casper Testnet
+CasperLabs is building a permissionless public blockchain.  However, in the current phase of the Testnet bonded validator slots are open to node operators that have agreed to the Terms and Conditions and signed up to participate in the program. To sign up for the Testnet, complete this [process](https://docs.google.com/forms/d/e/1FAIpQLSdaxtS015aiH89Pn0zt09v95FqNDoBk3hOH7Jq0IeuUWFVcTA/viewform?usp=sf_link)
 
 
-### Running a Read-Only Node on the Casper Testnet
+### Running a Node on the Casper Testnet
+It's possible to run a Read only node on the testnet.  The configuration of a read only node is exactly the same as a bonded node at this time.  Read only nodes process all state updates and receive all blocks just as bonded nodes.  Read only nodes are not permitted to propose blocks or participate in consensus.
 
 ##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
-Create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine where you will run the node.  This will be your validator account and keypair.
-
+From within the interface, create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine running the node software. Please keep your private keys secure at all times.
 
 ##### Step 2: Get the ChainSpec
 
-The node needs the information that allows it to connect to Testnet. This information is known as the Chain specification (Chainspec). The Chainspec is comprised of a list of Genesis validators, stored in the `accounts.csv` file and a `manifest.toml`, which contains protocol parameters.  These files need to be placed in the `chainspec/genesis` directory on the node.
+The first block in the blockchain is the Genesis block.  The nodes must have the same Genesis block in order to be on the same chain. This information is known as the Chain specification (Chainspec). The Chainspec is comprised of a list of Genesis validators, stored in the `accounts.csv` file and a `manifest.toml`, which contains protocol parameters.  These files need to be placed in the `chainspec/genesis` directory on the node.
+
 ###### Testnet ChainSpec
 
 These files are available from:(https://github.com/CasperLabs/CasperLabs/tree/dev/testnet). It is recommended that the files be downloaded via curl or equivalent mechanism, to avoid any hidden characters from appearing in the files.  The Genesis block must have the same hash, or the node will not connect.
@@ -33,14 +63,12 @@ cd ~/.casperlabs/chainspec/genesis
 curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/accounts.csv
 curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/manifest.toml
 ```
-##### Connecting elsewhere
 
-To connect elsewhere, obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
-option pointed to the directory.
+##### Step 3: Create Node keys and TLS Certificate
 
-The ChainSpec contains the information to create the Genesis block.
+The node uses a separate set of keys for its' TLS certificate. These keys are separate from validator keys- which happen to be the same as account keys (created via Clarity).  In this step, create the Node keys and TLS Certificate as described [here](KEYS.md#generating-node-keys-and-validator-keys).
 
-##### Step 3: Start the Execution Engine
+##### Step 4: Start the Execution Engine
 
 Note: The following instructions apply only for Linux OS.  Running the system using Docker requires adapting the commands for Docker.
 
@@ -48,8 +76,9 @@ Note: The following instructions apply only for Linux OS.  Running the system us
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
-##### Step 4: Start the Node
-
+##### Step 5: Start the Node (Read Only Node)
+The node requires a bootstrap server in order to connect to the network & peer up.  The command below lists the 3 bootstrap servers provided by CasperLabs.
+If you wish to run a read only node, this start command is sufficient.  Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
 In a separate terminal, run:
 ```
 casperlabs-node run \
@@ -60,15 +89,33 @@ casperlabs-node run \
     --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 \ casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 \ casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404"
 ```
 
-##### Checking Status
+##### Step 6: Start the Node - Validator with Highway Parameters for Testnet
+If the validator keys have been added to Testnet genesis block, use this command line to start the node. 
+```
+casperlabs-node run \
+    --tls-key ./keys/node.key.pem \
+    --tls-certificate ./keys/node.certificate.pem \
+    --casper-validator-private-key-path ./keys/validator-private.pem \
+    --casper-validator-public-key-path ./keys/validator-public.pem \
+    --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 \ casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 \ casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404" \ 
+--highway-init-round-exponent 19 --server-relay-factor 5 --server-init-sync-min-successful 5 --highway-omega-message-time-start 0.1 \
+--highway-omega-message-time-end 0.9 --highway-omega-blocks-enabled --server-deploy-gossip-enabled
 
-If your node has connected properly to an active network it will report a non-zero number of peers. There is a status endpoint that provides information on block height and synchronization. The endpoint outputs JSON.  Install JQuery for readable output, then run:
+```
+
+#### Checking Status
+
+* When joining at Genesis, the genesis block is viewable on [Clarity](https://clarity.casperlabs.io/#/explorer) along with connected peer nodes from other validators.
+* There is a status endpoint that provides information on block height and synchronization. The endpoint outputs JSON.  Install JQuery for readable output, then run:
 
 ```
 curl https://localhost:40403/status | jq
 ```
+Check the 'Last Finalized Block' received from this query against Clarity to confirm that the node is in sync with the network.
 
-##### Stopping the Node
+* You can also monitor the network and your node on the [Grafana](https://grafana.casperlabs.io/d/tlZ4zTrZk/testnet-block-processing?orgId=1&from=now-7d&to=now) dashboard.
+
+#### Stopping the Node
 
 ```
 pkill casperlabs-node
@@ -81,6 +128,27 @@ cd ~/.casperlabs
 rm sqlite.db
 rm -r global_state
 ```
+
+#### Troubleshooting
+Common errors to be looked at when having an issue:
+* Check to ensure that the execution engine is running as the same user as node. There is no need to run under sudo.
+* Check the paths to the keys.
+* Before rejoining the network, check that the data directory (global_state and sqlite.db from ~/.casperlabs) has been cleared out before starting the engine & node. 
+
+#### Getting Help
+* Join [Discord/validators channel](https://discord.gg/xeU7szA) and send queries for help with any issues. 
+* Capture the logs (dafault location /var/logs/casperlabs which can be changed by setting CL_LOG_JSON_PATH to any other directory), zip and share with us. jq can be used to parse the json logs. 
+
+---
+
+##### Connecting elsewhere
+
+To connect elsewhere, obtain the ChainSpec, unzip it, and start the node with the `--casper-chain-spec-path`
+option pointed to the directory.
+
+The ChainSpec contains the information to create the Genesis block.
+
+---
 
 ### Running a Standalone Node
 
@@ -108,6 +176,8 @@ casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 ##### Step 3: Start the Node
 
+This command adds the initial token supply to the node. This will enable the system to have some tokens at Genesis.
+
 ```
 casperlabs-node run \
     --casper-standalone \
@@ -121,6 +191,8 @@ casperlabs-node run \
 ##### Step 4: Deploy Some Code
 
 See instructions [here](https://docs.casperlabs.io/en/latest/dapp-dev-guide/deploying-contracts.html).
+
+---
 
 ### Running a Simulated Network
 
