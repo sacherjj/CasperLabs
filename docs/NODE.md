@@ -76,7 +76,7 @@ Note: The following instructions apply only for Linux OS.  Running the system us
 casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 ```
 
-##### Step 4: Start the Node (Read Only Node)
+##### Step 5: Start the Node (Read Only Node)
 The node requires a bootstrap server in order to connect to the network & peer up.  The command below lists the 3 bootstrap servers provided by CasperLabs.
 If you wish to run a read only node, this start command is sufficient.  Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
 In a separate terminal, run:
@@ -89,7 +89,7 @@ casperlabs-node run \
     --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 \ casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 \ casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404"
 ```
 
-##### Step 4: Start the Node - Validator with Highway Parameters for Testnet
+##### Step 6: Start the Node - Validator with Highway Parameters for Testnet
 If the validator keys have been added to Testnet genesis block, use this command line to start the node. 
 ```
 casperlabs-node run \
@@ -103,7 +103,7 @@ casperlabs-node run \
 
 ```
 
-##### Checking Status
+#### Checking Status
 
 * When joining at Genesis, the genesis block is viewable on [Clarity](https://clarity.casperlabs.io/#/explorer) along with connected peer nodes from other validators.
 * There is a status endpoint that provides information on block height and synchronization. The endpoint outputs JSON.  Install JQuery for readable output, then run:
@@ -115,7 +115,7 @@ Check the 'Last Finalized Block' received from this query against Clarity to con
 
 * You can also monitor the network and your node on the [Grafana](https://grafana.casperlabs.io/d/tlZ4zTrZk/testnet-block-processing?orgId=1&from=now-7d&to=now) dashboard.
 
-##### Stopping the Node
+#### Stopping the Node
 
 ```
 pkill casperlabs-node
@@ -128,6 +128,17 @@ cd ~/.casperlabs
 rm sqlite.db
 rm -r global_state
 ```
+
+#### Troubleshooting
+Common errors to be looked at when having an issue:
+* Check to ensure that the execution engine is running as the same user as node. There is no need to run under sudo.
+* Check the paths to the keys.
+* Before rejoining the network, check that the data directory (global_state and sqlite.db from ~/.casperlabs) has been cleared out before starting the engine & node. 
+
+#### Getting Help
+* Join [Discord/validators channel](https://discord.gg/xeU7szA) and send queries for help with any issues. 
+* Capture the logs (dafault location /var/logs/casperlabs which can be changed by setting CL_LOG_JSON_PATH to any other directory), zip and share with us. jq can be used to parse the json logs. 
+
 ---
 
 ##### Connecting elsewhere
