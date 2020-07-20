@@ -120,7 +120,7 @@ When generating a key pair in Clarity, you will be prompted to save two files fr
 |File                         |Contents                                                                                          |
 |-----------------------------|--------------------------------------------------------------------------------------------------|
 |[key_name_given].private.key | An 'ed25519' private key in base64 format.  No exact equivalent exists in key generated below.   |
-|[key_name_given].public.key  | An 'ed25519' public key in base64 format. Similar to `account-id` below.                         |
+|[key_name_given].public.key  | An 'ed25519' public key in base64 format. Similar to `account-pk` below.                         |
 
 
 These instructions are provided for reference and advanced use-cases.
