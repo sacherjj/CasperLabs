@@ -40,6 +40,8 @@ Data contained in `validator-id` and `validator-id-hex` has moved to `validator-
 `pk` files are not used by the system, but are generated with our tool in case validators were using the old style `id`
 files in their workflow.
 
+Note also that the `accounts.csv` has changed and will use both the public key and algorithm type.
+
 The recommended method for generating keys is to use the [Docker image](/hack/key-management/Dockerfile) that we provide.
 
 More advanced users may prefer to generate keys directly on their host OS.
