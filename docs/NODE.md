@@ -19,7 +19,7 @@ Cloud Instances:
 
 
 ### Operating System
-* The officially supported OS is Ubuntu 18.04 LTS or greater.  The software should work with other distributions, but may experience some hiccups.  Feel free to reach out for help if you want to use another Linux distribution and hit issues. The technical team is available on [Discord](https://discord.gg/xeU7szA)
+* The officially supported OS is Ubuntu 20.04 LTS or greater. The software should work with other distributions, but may experience some hiccups.  Feel free to reach out for help if you want to use another Linux distribution and hit issues. The technical team is available on [Discord](https://discord.gg/xeU7szA)
 
 
 #### Using binaries (recommended):
