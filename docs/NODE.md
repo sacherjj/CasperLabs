@@ -45,7 +45,7 @@ It's possible to run a Read only node on the testnet.  The configuration of a re
 
 ##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
-From within the interface, create an account, which automatically creates a new keypair.  This keypair should be downloaded to the machine running the node software. Please keep your private keys secure at all times.
+From within the interface, create an account, which automatically creates a new keypair.  ***Download the files from Clarity. You will need these files for the node***   This keypair should be placed on the machine running the node software. Please keep your private keys secure at all times.
 
 ##### Step 2: Get the ChainSpec
 
@@ -90,7 +90,8 @@ casperlabs-node run \
 ```
 
 ##### Step 6: Start the Node - Validator with Highway Parameters for Testnet
-If the validator keys have been added to Testnet genesis block, use this command line to start the node. 
+If the validator keys have been added to Testnet genesis block, use this command line to start the node.  These options are part of the `run` command for the node.
+
 ```
 casperlabs-node run \
     --tls-key ./keys/node.key.pem \
@@ -100,7 +101,6 @@ casperlabs-node run \
     --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 \ casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 \ casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404" \ 
 --highway-init-round-exponent 19 --server-relay-factor 5 --server-init-sync-min-successful 5 --highway-omega-message-time-start 0.1 \
 --highway-omega-message-time-end 0.9 --highway-omega-blocks-enabled --server-deploy-gossip-enabled
-
 ```
 
 #### Checking Status
