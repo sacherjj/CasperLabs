@@ -1,18 +1,21 @@
 /**
- * Provide methods to communicate with [CasperLabs Plugin](https://github.com/CasperLabs/signer).
- * Works only on Browser.
+ * Provide methods to communicate with [CasperLabs Signer Extension](https://github.com/CasperLabs/signer).
+ * Works only on browser.
+ *
+ * @packageDocumentation
  */
 
 /**
- * whether CasperLabs Sign Helper Plugin is ready
+ * Check whether CasperLabs Signer extension is ready
  */
 export const isConnected: () => boolean = () => {
   return !!window?.casperlabsHelper?.isConnected();
 };
 
 /**
- * returns base64 encoded public key of user current selected account.
- * @throws Error if haven't connected to CasperLabs Signer browser plugin.
+ * Return base64 encoded public key of user current selected account.
+ *
+ * @throws Error if haven't connected to CasperLabs Signer browser extension.
  */
 export const getSelectedPublicKeyBase64: () => Promise<string | undefined> = () => {
   throwIfNotConnected();
@@ -21,11 +24,16 @@ export const getSelectedPublicKeyBase64: () => Promise<string | undefined> = () 
 
 /**
  * send base16 encoded message to plugin to sign
- * @throws Error if haven't connected to CasperLabs Signer browser plugin.
+ *
+ * @param messageBase16 the base16 encoded message that plugin received to sign
+ * @param publicKeyBase64 the base64 encoded public key used to sign the deploy, if set, we will check whether it is the same as the active key for signing the message, otherwise, we won't check.
+ *
+ * @throws Error if haven't connected to CasperLabs Signer browser extension.
+ * @throws Error if publicKeyBase64 is not the same as the key that Signer used to sign the message
  */
-export const sign: (messageBase16: string) => Promise<string> = (messageBase16: string) => {
+export const sign: (messageBase16: string, publicKeyBase64?: string) => Promise<string> = (messageBase16: string, publicKeyBase64?: string) => {
   throwIfNotConnected();
-  return window.casperlabsHelper!.sign(messageBase16);
+  return window.casperlabsHelper!.sign(messageBase16, publicKeyBase64);
 };
 
 const throwIfNotConnected = () => {

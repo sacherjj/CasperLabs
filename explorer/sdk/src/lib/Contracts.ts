@@ -11,10 +11,23 @@ import { Ed25519 } from './Keys';
 // https://www.npmjs.com/package/tweetnacl-ts
 // https://github.com/dcposch/blakejs
 
+/**
+ * Use blake2b to compute hash of ByteArray
+ *
+ * @param x
+ */
 export function byteHash(x: ByteArray): ByteArray {
   return blake.blake2b(x, null, 32);
 }
 
+/**
+ * Compute hash of protobuf object
+ *
+ * we use this method to compute
+ * deployHash and blockHash
+ *
+ * @param x protobuf Message
+ */
 export function protoHash<T extends Message>(x: T): ByteArray {
   return byteHash(x.serializeBinary());
 }
@@ -23,6 +36,11 @@ export class Contract {
   private sessionWasm: ByteArray;
   private paymentWasm: ByteArray;
 
+  /**
+   *
+   * @param sessionPath
+   * @param paymentPath the path of payment contract file, set it undefined if you want use standard payment
+   */
   constructor(sessionPath: string, paymentPath?: string) {
     this.sessionWasm = fs.readFileSync(sessionPath);
     if (!paymentPath) {
@@ -32,6 +50,14 @@ export class Contract {
     }
   }
 
+  /**
+   * Generate the Deploy message for this contract
+   *
+   * @param args Arguments
+   * @param paymentAmount
+   * @param accountPublicKeyHash
+   * @param signingKeyPair key pair to sign the deploy
+   */
   public deploy(
     args: Deploy.Arg[],
     paymentAmount: bigint,
@@ -50,7 +76,9 @@ export class Contract {
   }
 }
 
-/** Always use the same account for deploying and signing. */
+/**
+ * Always use the same account for deploying and signing.
+ */
 export class BoundContract {
   constructor(
     private contract: Contract,
@@ -68,12 +96,23 @@ export class BoundContract {
 }
 
 export class Faucet {
+  /**
+   * Arguments for Faucet smart contract
+   *
+   * @param accountPublicKeyHash the public key hash that want to be funded
+   */
   public static args(accountPublicKeyHash: ByteArray): Deploy.Arg[] {
     return Args(['account', BytesValue(accountPublicKeyHash)]);
   }
 }
 
 export class Transfer {
+  /**
+   * Arguments for Transfer smart contract
+   *
+   * @param accountPublicKeyHash the target account to transfer tokens
+   * @param amount the amount of tokens to transfer
+   */
   public static args(
     accountPublicKeyHash: ByteArray,
     amount: bigint

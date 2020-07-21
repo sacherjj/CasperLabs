@@ -68,7 +68,7 @@ const checkJwt: express.RequestHandler = isMock ?
     return next();
   }
   : jwt({
-    algorithm: ["RS256"],
+    algorithms: ["RS256"],
     audience: config.auth0.audience,
     issuer: `https://${config.auth0.domain}/`,
     secret: jwksRsa.expressJwtSecret({

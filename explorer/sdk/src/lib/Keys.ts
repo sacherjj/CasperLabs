@@ -25,15 +25,25 @@ const publicKeyHashUtil = (signatureAlgorithm: string) => {
 export class Ed25519 {
   name: string = 'ed25519';
 
+  /**
+   * Generating a new key pair
+   */
   public static newKeyPair() {
     return nacl.sign_keyPair();
   }
 
-  /** Compute a unique hash from the algorithm name and a public key, used for accounts. */
+  /**
+   * Compute a unique hash from the algorithm name(Ed25519 here) and a public key, used for accounts.
+   */
   public static publicKeyHash: (
     publicKey: ByteArray
   ) => ByteArray = publicKeyHashUtil(Ed25519.name);
 
+  /**
+   * Parse the key pair from publicKey file and privateKey file
+   * @param publicKeyPath path of public key file
+   * @param privateKeyPath path of private key file
+   */
   public static parseKeyFiles(
     publicKeyPath: string,
     privateKeyPath: string
@@ -76,7 +86,20 @@ export class Ed25519 {
     return Ed25519.parseKey(bytes, 32, 64);
   }
 
-  /** Get rid of PEM frames */
+  /**
+   * Get rid of PEM frames, skips header `-----BEGIN PUBLIC KEY-----`
+   * and footer `-----END PUBLIC KEY-----`
+   *
+   * Example PEM:
+   *
+   * ```
+   * -----BEGIN PUBLIC KEY-----
+   * MFYwEAYHKoZIzj0CAQYFK4EEAAoDQgAEj1fgdbpNbt06EY/8C+wbBXq6VvG+vCVD
+   * Nl74LvVAmXfpdzCWFKbdrnIlX3EFDxkd9qpk35F/kLcqV3rDn/u3dg==
+   * -----END PUBLIC KEY-----
+   * ```
+   *
+   */
   public static readBase64WithPEM(content: string): ByteArray {
     const base64 = content
       .split('\n')
@@ -86,7 +109,11 @@ export class Ed25519 {
     return bytes;
   }
 
-  /** Read the Base64 content of a file, get rid of PEM frames. */
+  /**
+   * Read the Base64 content of a file, get rid of PEM frames.
+   *
+   * @param path the path of file to read from
+   */
   private static readBase64File(path: string): ByteArray {
     const content = fs.readFileSync(path).toString();
     return Ed25519.readBase64WithPEM(content);

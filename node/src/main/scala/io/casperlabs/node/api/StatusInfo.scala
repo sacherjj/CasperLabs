@@ -21,7 +21,7 @@ import io.casperlabs.storage.era.EraStorage
 import io.casperlabs.ipc.ChainSpec
 
 object StatusInfo {
-  import ByteStringPrettyPrinter.byteStringShow
+  import ByteStringPrettyPrinter._
 
   case class Status(
       version: String,
@@ -99,21 +99,27 @@ object StatusInfo {
         genesisLikeBlocks: List[BlockDetails]
     )
 
+    case class ValidatorDetails(
+        publicKeyHash: String
+    )
+
     type Basic     = Check[Unit]
     type LastBlock = Check[BlockDetails]
     type Peers     = Check[PeerDetails]
     type Eras      = Check[ErasDetails]
     type Genesis   = Check[GenesisDetails]
+    type Validator = Check[ValidatorDetails]
   }
 
   case class CheckList(
       database: Check.Basic,
+      validator: Check.Validator,
       peers: Check.Peers,
       bootstrap: Check.Peers,
       initialSynchronization: Check.Basic,
       lastFinalizedBlock: Check.LastBlock,
-      lastReceivedBlock: Check.Basic,
-      lastCreatedBlock: Check.Basic,
+      lastReceivedBlock: Check.LastBlock,
+      lastCreatedBlock: Check.LastBlock,
       activeEras: Check.Eras,
       bondedEras: Check.Eras,
       genesisEra: Check.Eras,
@@ -132,6 +138,7 @@ object StatusInfo {
     ): StateT[F, Boolean, CheckList] =
       for {
         database               <- database[F](readXa)
+        validator              <- validator(maybeValidatorId)
         peers                  <- peers[F](conf)
         bootstrap              <- bootstrap[F](conf, genesis)
         initialSynchronization <- initialSynchronization[F](getIsSynced)
@@ -144,6 +151,7 @@ object StatusInfo {
         genesisBlock           <- genesisBlock[F](genesis)
         checklist = CheckList(
           database = database,
+          validator = validator,
           peers = peers,
           bootstrap = bootstrap,
           initialSynchronization = initialSynchronization,
@@ -162,6 +170,19 @@ object StatusInfo {
       import doobie.implicits._
       sql"""select 1""".query[Int].unique.transact(readXa).map { _ =>
         Check[Unit](ok = true, message = "Database is readable.")
+      }
+    }
+
+    def validator[F[_]: Sync](maybeValidatorId: Option[ValidatorIdentity]) = Check {
+      maybeValidatorId match {
+        case None =>
+          Check[ValidatorDetails](ok = true, "Running in read-only mode.").pure[F]
+        case Some(id) =>
+          Check(
+            ok = true,
+            "Running in validating mode.",
+            details = ValidatorDetails(id.publicKeyHashBS.show).some
+          ).pure[F]
       }
     }
 
@@ -242,8 +263,7 @@ object StatusInfo {
         )
       }
 
-    // Only returning basic info so as not to reveal the validator identity by process of elimination,
-    // i.e. which validator's block is it that this node _never_ says it received.
+    // Returning the block hash can reveal the validator identity by process of elimination.
     def lastReceivedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         conf: Configuration,
         chainSpec: ChainSpec,
@@ -258,18 +278,18 @@ object StatusInfo {
         }
         latest   = findLatest(received)
         isTooOld <- isTooOld(chainSpec, latest)
-
-      } yield Check[Unit](
+      } yield Check[BlockDetails](
         ok = !isTooOld,
         message =
           if (isTooOld) "Last block was received too long ago."
           else if (latest.nonEmpty) "Received a block not too long ago."
           else if (conf.casper.standalone) "Running in standalone mode."
-          else "Haven't received a block yet."
+          else "Haven't received a block yet.",
+        details = latest.map(BlockDetails(_))
       )
     }
 
-    // Returning basic info so as not to reveal the validator identity through the block ID.
+    // Returning the block hash reveals the validator identity.
     def lastCreatedBlock[F[_]: Sync: Time: DagStorage: Consensus](
         chainSpec: ChainSpec,
         maybeValidatorId: Option[ValidatorIdentity]
@@ -284,13 +304,14 @@ object StatusInfo {
                   }
         latest   = findLatest(created)
         isTooOld <- isTooOld(chainSpec, latest)
-      } yield Check[Unit](
+      } yield Check[BlockDetails](
         ok = !isTooOld,
         message =
           if (isTooOld) "The last created block was too long ago."
           else if (maybeValidatorId.isEmpty) "Running in read-only mode."
           else if (latest.isEmpty) "Haven't created any blocks yet."
-          else "Created a block not too long ago."
+          else "Created a block not too long ago.",
+        details = latest.map(BlockDetails(_))
       )
     }
 
