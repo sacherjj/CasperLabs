@@ -78,29 +78,18 @@ casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
 
 ##### Step 5: Start the Node (Read Only Node)
 The node requires a bootstrap server in order to connect to the network & peer up.  The command below lists the 3 bootstrap servers provided by CasperLabs.
-If you wish to run a read only node, this start command is sufficient.  Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
+If you wish to run a read only node, this start command is sufficient.  **Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
+
 In a separate terminal, run:
 ```
-casperlabs-node run \
-    --tls-key ./keys/node.key.pem \
-    --tls-certificate ./keys/node.certificate.pem \
-    --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-validator-public-key-path ./keys/validator-public.pem \
-    --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404  casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404"
+casperlabs-node run --tls-key ./keys/node.key.pem --tls-certificate ./keys/node.certificate.pem --casper-validator-private-key-path ./keys/validator-private.pem --casper-validator-public-key-path ./keys/validator-public.pem --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404"
 ```
 
 ##### Step 6: Start the Node - Validator with Highway Parameters for Testnet
-If the validator keys have been added to Testnet genesis block, use this command line to start the node.  These options are part of the `run` command for the node.
+If the validator keys have been added to Testnet genesis block, use this command line to start the node.  These options are part of the `run` command for the node. **Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
 
 ```
-casperlabs-node run \
-    --tls-key ./keys/node.key.pem \
-    --tls-certificate ./keys/node.certificate.pem \
-    --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-validator-public-key-path ./keys/validator-public.pem \
-    --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404  casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404  casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404" \ 
---highway-init-round-exponent 19 --server-relay-factor 5 --server-init-sync-min-successful 5 --highway-omega-message-time-start 0.1 \
---highway-omega-message-time-end 0.9 --highway-omega-blocks-enabled --server-deploy-gossip-enabled
+casperlabs-node run --tls-key ./keys/node.key.pem --tls-certificate ./keys/node.certificate.pem --casper-validator-private-key-path ./keys/validator-private.pem --casper-validator-public-key-path ./keys/validator-public.pem --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404  casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404" --highway-init-round-exponent 19 --server-relay-factor 5 --server-init-sync-min-successful 5 --highway-omega-message-time-start 0.1 --highway-omega-message-time-end 0.9 --highway-omega-blocks-enabled --server-deploy-gossip-enabled
 ```
 
 #### Checking Status
