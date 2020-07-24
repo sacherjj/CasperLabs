@@ -43,11 +43,11 @@ CasperLabs is building a permissionless public blockchain.  However, in the curr
 ### Running a Node on the Casper Testnet
 It's possible to run a Read only node on the testnet.  The configuration of a read only node is exactly the same as a bonded node at this time.  Read only nodes process all state updates and receive all blocks just as bonded nodes.  Read only nodes are not permitted to propose blocks or participate in consensus.
 
-##### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
+#### Step 1: Create an account at [clarity.casperlabs.io](https://clarity.casperlabs.io)
 
 From within the interface, create an account, which automatically creates a new keypair.  ***Download the files from Clarity. You will need these files for the node***   This keypair should be placed on the machine running the node software. Please keep your private keys secure at all times.
 
-##### Step 2: Get the ChainSpec
+#### Step 2: Get the ChainSpec
 
 The first block in the blockchain is the Genesis block.  The nodes must have the same Genesis block in order to be on the same chain. This information is known as the Chain specification (Chainspec). The Chainspec is comprised of a list of Genesis validators, stored in the `accounts.csv` file and a `manifest.toml`, which contains protocol parameters.  These files need to be placed in the `chainspec/genesis` directory on the node.
 
@@ -63,44 +63,42 @@ cd ~/.casperlabs/chainspec/genesis
 curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/accounts.csv
 curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/manifest.toml
 ```
+##### These files need to be placed in the `/.casperlabs/chainspec/genesis` directory on the node.
 
-##### Step 3: Create Node keys and TLS Certificate
+#### Step 3: Create Node keys and TLS Certificate
 
 The node uses a separate set of keys for its' TLS certificate. These keys are separate from validator keys- which happen to be the same as account keys (created via Clarity).  In this step, create the Node keys and TLS Certificate as described [here](KEYS.md#generating-node-keys-and-validator-keys).
 
-##### Step 4: Start the Execution Engine
+The following instructions apply only for Linux OS.  Running the system using Docker requires adapting the commands for Docker. 
 
-Note: The following instructions apply only for Linux OS.  Running the system using Docker requires adapting the commands for Docker.
 
-```
-casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock
-```
+#### Step 4: Start the Node 
+The system can run in either Read Only mode or Validator mode.  The difference is whether the public validator key that are specified at node startup is in the accounts.csv file at Genesis.  The matching of the public key & private key is what bonds the node to the network at this time.
 
-##### Step 5: Start the Node (Read Only Node)
 The node requires a bootstrap server in order to connect to the network & peer up.  The command below lists the 3 bootstrap servers provided by CasperLabs.
-If you wish to run a read only node, this start command is sufficient.  Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
-In a separate terminal, run:
-```
-casperlabs-node run \
-    --tls-key ./keys/node.key.pem \
-    --tls-certificate ./keys/node.certificate.pem \
-    --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-validator-public-key-path ./keys/validator-public.pem \
-    --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 \ casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 \ casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404"
-```
+ 
+**Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
 
-##### Step 6: Start the Node - Validator with Highway Parameters for Testnet
-If the validator keys have been added to Testnet genesis block, use this command line to start the node.  These options are part of the `run` command for the node.
+##### Read Only Mode 
+If you wish to run a read only node, this start command is sufficient. No validator keys are required.
+
+This starts the engine and node with nohup. You may choose to start it another way if you want (systemd, scripts, etc.).
 
 ```
-casperlabs-node run \
-    --tls-key ./keys/node.key.pem \
-    --tls-certificate ./keys/node.certificate.pem \
-    --casper-validator-private-key-path ./keys/validator-private.pem \
-    --casper-validator-public-key-path ./keys/validator-public.pem \
-    --server-bootstrap "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 \ casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 \ casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404" \ 
---highway-init-round-exponent 19 --server-relay-factor 5 --server-init-sync-min-successful 5 --highway-omega-message-time-start 0.1 \
---highway-omega-message-time-end 0.9 --highway-omega-blocks-enabled --server-deploy-gossip-enabled
+nohup casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock &
+
+nohup casperlabs-node run --metrics-prometheus --log-json-path <path to where you want to log> --server-data-dir ~/.casperlabs -b "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404" --tls-certificate <PATH_TO_TLS_CERT> --tls-key <PATH_TO_TLS_KEY> &
+```
+
+##### Validator Mode with Highway Parameters for Testnet
+If the validator keys have been added to Testnet genesis block, use this command line to start the node.  These options are part of the `run` command for the node. **Note: the paths to the keys should be adjusted to reflect the location of keys on the system.
+
+This starts the engine and node with nohup. You may choose to start it another way if you want (systemd, scripts, etc.).
+
+```
+nohup casperlabs-engine-grpc-server ~/.casperlabs/.casper-node.sock &
+
+nohup casperlabs-node run --metrics-prometheus --log-json-path <path to where you want to log> --server-data-dir ~/.casperlabs -b "casperlabs://7dae5a7981bc9694616b5aac8fb7786797ce98ed@13.57.226.23?protocol=40400&discovery=40404 casperlabs://f2a46587e227428f38fa6f1e8f3c4749e8543783@52.53.252.92?protocol=40400&discovery=40404 casperlabs://4bd89b7dfa3eceea71f928ee895fbb2bf77481a9@13.52.217.79?protocol=40400&discovery=40404" --tls-certificate <PATH_TO_TLS_CERT> --tls-key <PATH_TO_TLS_KEY> --casper-validator-private-key-path <PATH_TO_PRIVATE_KEY> --highway-init-round-exponent 19 --server-relay-factor 5 --server-init-sync-min-successful 5 --highway-omega-message-time-start 0.1 --highway-omega-message-time-end 0.9 --highway-omega-blocks-enabled --server-deploy-gossip-enabled &
 ```
 
 #### Checking Status
