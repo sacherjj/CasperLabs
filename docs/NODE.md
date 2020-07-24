@@ -63,6 +63,7 @@ cd ~/.casperlabs/chainspec/genesis
 curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/accounts.csv
 curl -O https://raw.githubusercontent.com/CasperLabs/CasperLabs/dev/testnet/manifest.toml
 ```
+##### These files need to be placed in the `/.casperlabs/chainspec/genesis` directory on the node.
 
 #### Step 3: Create Node keys and TLS Certificate
 
