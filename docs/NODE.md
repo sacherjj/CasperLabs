@@ -134,7 +134,7 @@ Common errors to be looked at when having an issue:
 * Before rejoining the network, check that the data directory (global_state and sqlite.db from ~/.casperlabs) has been cleared out before starting the engine & node. 
 
 #### Getting Help
-* Join [Discord/validators channel](https://discord.gg/xeU7szA) and send queries for help with any issues. 
+* Join [Discord/validators channel](https://discordapp.com/invite/Q38s3Vh) and send queries for help with any issues. 
 * Capture the logs (dafault location /var/logs/casperlabs which can be changed by setting CL_LOG_JSON_PATH to any other directory), zip and share with us. jq can be used to parse the json logs. 
 
 ---
