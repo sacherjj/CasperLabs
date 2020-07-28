@@ -23,21 +23,21 @@ const publicKeyHashUtil = (signatureAlgorithm: string) => {
 
 // Based on SignatureAlgorithm.scala
 export class Ed25519 {
-  name: string = 'ed25519';
-
   /**
    * Generating a new key pair
    */
   public static newKeyPair() {
     return nacl.sign_keyPair();
-  }
+ }
 
   /**
    * Compute a unique hash from the algorithm name(Ed25519 here) and a public key, used for accounts.
    */
   public static publicKeyHash: (
     publicKey: ByteArray
-  ) => ByteArray = publicKeyHashUtil(Ed25519.name);
+  ) => ByteArray = publicKeyHashUtil(
+    'ed25519'
+  );
 
   /**
    * Parse the key pair from publicKey file and privateKey file
