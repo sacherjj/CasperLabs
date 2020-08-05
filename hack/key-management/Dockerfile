@@ -1,17 +1,17 @@
 FROM ubuntu:18.04 as build
 
-RUN apt update && \
-    apt install -y git make g++; \
+# Using git reset and checkout to pin to given commits/tags to assure reproducable builds.
+RUN apt-get update && \
+    apt-get install -y git make g++; \
     cd /tmp; \
     git clone https://github.com/maandree/libkeccak.git; \
     git clone https://github.com/maandree/sha3sum.git; \
     cd /tmp/libkeccak; git checkout 1.2; make install; ldconfig;  \
-    cd /tmp/sha3sum; make;
-
-RUN cd /tmp; \
+    cd /tmp/sha3sum; git checkout 1.1.5; make; \
+    cd /tmp; \
     git clone https://github.com/BLAKE2/BLAKE2.git; \
+    cd /tmp/BLAKE2; git reset --hard 'b52178a376ca85a8ffe50492263c2a5bc0fa4f46'; \
     cd /tmp/BLAKE2/b2sum; make;
-
 
 
 FROM ubuntu:18.04
